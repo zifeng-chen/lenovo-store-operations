@@ -10,7 +10,7 @@ const projectRoot = path.resolve(currentDir, '../../..');
 const dataRoot = path.join(projectRoot, 'data');
 const webDist = path.join(projectRoot, 'apps/web/dist');
 const host = process.env.HOST || '0.0.0.0';
-const port = Number(process.env.PORT) || 8890;
+const port = Number(process.env.PORT) || 8900;
 const app = express();
 
 app.disable('x-powered-by');
