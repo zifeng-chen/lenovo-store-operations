@@ -32,7 +32,7 @@ import { STORE_MODULES } from '@lenovo-store/shared';
 
       <div class="sidebar-footer">
         <span class="status-dot"></span>
-        <span>统一工程骨架 v0.1.0</span>
+        <span>统一运营套件 v1.0.0</span>
       </div>
     </aside>
 
@@ -42,7 +42,7 @@ import { STORE_MODULES } from '@lenovo-store/shared';
           <strong>Lenovo Store Operations</strong>
           <span>一个入口，三个独立业务模块</span>
         </div>
-        <span class="phase-badge">第一阶段 · 工程整合</span>
+        <span class="phase-badge">生产套件 · 三模块已集成</span>
       </header>
       <main class="suite-main">
         <RouterView />

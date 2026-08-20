@@ -9,11 +9,14 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "check": "node --check src/server.js"
+    "check": "node --check src/server.js && node --check src/modules/computer-labels/database.js && node --check src/modules/computer-labels/router.js && node --check src/modules/price-labels/database.js && node --check src/modules/price-labels/router.js && node --check src/modules/receipt-assistant/database.js && node --check src/modules/receipt-assistant/baidu-ocr.js && node --check src/modules/receipt-assistant/ocr-storage.js && node --check src/modules/receipt-assistant/router.js"
   },
   "dependencies": {
     "@lenovo-store/shared": "1.0.0",
+    "better-sqlite3": "12.0.0",
     "cors": "2.8.5",
-    "express": "5.1.0"
+    "express": "5.1.0",
+    "multer": "2.2.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }

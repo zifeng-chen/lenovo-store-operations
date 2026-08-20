@@ -27,7 +27,7 @@ import { STORE_MODULES } from '@lenovo-store/shared';
       <RouterLink v-for="(module, index) in STORE_MODULES" :key="module.id" class="module-card" :to="module.route">
         <div class="module-card-top">
           <span class="module-index">0{{ index + 1 }}</span>
-          <span class="module-stage">待迁移</span>
+          <span class="module-stage ready-stage">已就绪</span>
         </div>
         <span class="module-mark" :style="{ background: module.accent }">{{ module.shortName.slice(0, 1) }}</span>
         <h3>{{ module.name }}</h3>

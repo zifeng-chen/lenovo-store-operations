@@ -4,6 +4,21 @@ import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
 import { STORE_MODULES } from '@lenovo-store/shared';
+import computerLabelsRouter, {
+  apiBase as computerLabelsApiBase,
+  DATABASE_PATH as computerLabelsDatabasePath,
+  initializeDatabase as initializeComputerLabelsDatabase
+} from './modules/computer-labels/index.js';
+import priceLabelsRouter, {
+  apiBase as priceLabelsApiBase,
+  DATABASE_PATH as priceLabelsDatabasePath,
+  initializeDatabase as initializePriceLabelsDatabase
+} from './modules/price-labels/index.js';
+import receiptAssistantRouter, {
+  apiBase as receiptAssistantApiBase,
+  DATABASE_PATH as receiptAssistantDatabasePath,
+  initializeDatabase as initializeReceiptAssistantDatabase
+} from './modules/receipt-assistant/index.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(currentDir, '../../..');
@@ -13,29 +28,72 @@ const host = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.PORT) || 8900;
 const app = express();
 
+const moduleRuntimes = new Map([
+  ['computer-labels', {
+    apiBase: computerLabelsApiBase,
+    router: computerLabelsRouter,
+    databasePath: computerLabelsDatabasePath,
+    initializeDatabase: initializeComputerLabelsDatabase,
+    jsonParser: express.json({ limit: '1mb' })
+  }],
+  ['price-labels', {
+    apiBase: priceLabelsApiBase,
+    router: priceLabelsRouter,
+    databasePath: priceLabelsDatabasePath,
+    initializeDatabase: initializePriceLabelsDatabase
+  }],
+  ['receipt-assistant', {
+    apiBase: receiptAssistantApiBase,
+    router: receiptAssistantRouter,
+    databasePath: receiptAssistantDatabasePath,
+    initializeDatabase: initializeReceiptAssistantDatabase
+  }]
+]);
+const databaseStatuses = new Map();
+
 app.disable('x-powered-by');
+app.enable('strict routing');
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
 
 function success(res, data, msg = 'success') {
   res.json({ code: 0, data, msg });
 }
 
+function initializeDatabases() {
+  for (const module of STORE_MODULES) {
+    const runtime = moduleRuntimes.get(module.id);
+    try {
+      runtime.initializeDatabase();
+      databaseStatuses.set(module.id, { connected: true, error: null });
+    } catch (error) {
+      console.error(`${module.name}数据库初始化失败：${error.message}`);
+      databaseStatuses.set(module.id, { connected: false, error: error.message });
+    }
+  }
+}
+
 function moduleStatus(module) {
+  const runtime = moduleRuntimes.get(module.id);
   const dataDirectory = path.join(dataRoot, module.id);
+  const moduleDist = path.join(projectRoot, 'apps', module.id, 'dist', 'index.html');
+  const databaseStatus = databaseStatuses.get(module.id);
   return {
     ...module,
-    apiReady: true,
+    apiReady: Boolean(runtime),
+    moduleReady: fs.existsSync(moduleDist),
     dataDirectoryReady: fs.existsSync(dataDirectory),
-    databaseConnected: false
+    databaseConnected: Boolean(databaseStatus?.connected && fs.existsSync(runtime.databasePath)),
+    databaseError: databaseStatus?.error || null
   };
 }
+
+initializeDatabases();
 
 app.get('/api/system/health', (_req, res) => {
   success(res, {
     status: 'ok',
     service: 'lenovo-store-operations',
-    version: '0.1.0',
+    version: '1.0.0',
     uptimeSeconds: Math.floor(process.uptime()),
     modules: STORE_MODULES.map(moduleStatus)
   });
@@ -47,11 +105,34 @@ for (const module of STORE_MODULES) {
   });
 }
 
+for (const runtime of moduleRuntimes.values()) {
+  const middleware = runtime.jsonParser
+    ? [runtime.jsonParser, runtime.router]
+    : [runtime.router];
+  app.use(runtime.apiBase, ...middleware);
+}
+
+for (const module of STORE_MODULES) {
+  const moduleDist = path.join(projectRoot, 'apps', module.id, 'dist');
+  const moduleIndex = path.join(moduleDist, 'index.html');
+  const moduleBase = module.moduleBase;
+  const moduleBaseWithoutSlash = moduleBase.replace(/\/$/, '');
+
+  app.get(moduleBaseWithoutSlash, (_req, res) => res.redirect(308, moduleBase));
+  if (!fs.existsSync(moduleIndex)) continue;
+
+  app.use(moduleBase, express.static(moduleDist));
+  app.use(moduleBase, (req, res, next) => {
+    if (req.method !== 'GET' || path.extname(req.path) || !req.accepts('html')) return next();
+    return res.sendFile(moduleIndex);
+  });
+}
+
 if (fs.existsSync(path.join(webDist, 'index.html'))) {
   app.use(express.static(webDist));
   app.use((req, res, next) => {
-    if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
-    res.sendFile(path.join(webDist, 'index.html'));
+    if (req.method !== 'GET' || req.path.startsWith('/api/') || req.path.startsWith('/modules/')) return next();
+    return res.sendFile(path.join(webDist, 'index.html'));
   });
 }
 
@@ -59,9 +140,14 @@ app.use('/api', (_req, res) => {
   res.status(404).json({ code: 1, data: null, msg: '接口不存在' });
 });
 
+app.use((_req, res) => {
+  res.status(404).send('页面不存在');
+});
+
 app.use((error, _req, res, _next) => {
   console.error(error);
-  res.status(500).json({ code: 1, data: null, msg: error.message || '服务器内部错误' });
+  const status = Number.isInteger(error.status) ? error.status : 500;
+  res.status(status).json({ code: 1, data: null, msg: error.message || '服务器内部错误' });
 });
 
 app.listen(port, host, () => {

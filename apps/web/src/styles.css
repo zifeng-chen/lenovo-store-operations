@@ -124,3 +124,12 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
   .module-card { min-height: 220px; }
   .workspace-grid { grid-template-columns: 1fr; }
 }
+
+.ready-stage, .ready-badge { background: #eaf7f1; color: #26775a; }
+.ready-badge { padding: 5px 9px; border-radius: 20px; font-size: 9px; font-weight: 700; }
+.module-embed-page { gap: 14px; }
+.module-embed-header { min-height: 112px; padding: 18px 22px; }
+.module-embed-header .module-large-mark { width: 48px; height: 48px; font-size: 19px; }
+.module-embed-header h1 { margin: 3px 0 5px; font-size: 20px; }
+.module-header-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.module-frame { width: 100%; min-height: calc(100vh - 238px); border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 8px 24px rgba(35,55,80,.045); }

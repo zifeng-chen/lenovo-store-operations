@@ -29,7 +29,7 @@ onMounted(loadHealth);
       <div>
         <span class="eyebrow">SYSTEM STATUS</span>
         <h1>系统状态</h1>
-        <p>检查统一服务和三个业务模块的工程准备情况。</p>
+        <p>检查统一服务、业务模块、数据目录和独立数据库的运行状态。</p>
       </div>
       <el-button :loading="loading" @click="loadHealth">刷新状态</el-button>
     </div>
@@ -49,10 +49,10 @@ onMounted(loadHealth);
         <tbody>
           <tr v-for="module in health?.modules || []" :key="module.id">
             <td><span class="table-module-mark" :style="{ background: module.accent }"></span><strong>{{ module.name }}</strong></td>
-            <td><span class="status-value ready">已就绪</span></td>
+            <td><span :class="['status-value', module.apiReady ? 'ready' : 'waiting']">{{ module.apiReady ? '已就绪' : '异常' }}</span></td>
             <td><span :class="['status-value', module.dataDirectoryReady ? 'ready' : 'waiting']">{{ module.dataDirectoryReady ? '已创建' : '未创建' }}</span></td>
-            <td><span class="status-value waiting">未连接</span></td>
-            <td><span class="status-value waiting">待迁移</span></td>
+            <td><span :class="['status-value', module.databaseConnected ? 'ready' : 'waiting']" :title="module.databaseError || ''">{{ module.databaseConnected ? '已连接' : '连接失败' }}</span></td>
+            <td><span :class="['status-value', module.stage === 'migrated' ? 'ready' : 'waiting']">{{ module.stage === 'migrated' ? '已迁移' : '待迁移' }}</span></td>
           </tr>
         </tbody>
       </table>
