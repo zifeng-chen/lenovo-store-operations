@@ -166,3 +166,69 @@ body.print-preview-open { overflow: hidden; }
   .label-price { flex: 0 0 auto; color: #e2001a; font-size: 8mm; font-weight: 900; line-height: 1; letter-spacing: 2px; text-align: right; white-space: nowrap; }
   .label-name { position: absolute; right: 2.5mm; bottom: 3mm; left: 2.5mm; display: block; overflow: hidden; font-size: 5mm; font-weight: 800; line-height: 1; text-overflow: clip; white-space: nowrap; }
 }
+
+@media screen {
+  :root {
+    --lenovo-red: #e2231a;
+    --lenovo-red-dark: #bd1712;
+    --ink: var(--ls-color-text);
+    --muted: var(--ls-color-text-muted);
+    --line: var(--ls-color-border);
+    --surface: var(--ls-color-surface);
+  }
+  html, body { background: var(--ls-color-canvas); }
+  .app-shell { --ls-accent: var(--lenovo-red); background: var(--ls-color-canvas); }
+  .app-header {
+    color: var(--ls-color-text);
+    border-bottom: 1px solid var(--ls-color-border);
+    background: var(--ls-color-surface);
+    box-shadow: 0 5px 20px rgba(30, 48, 72, .045);
+  }
+  .header-inner { width: min(1320px, calc(100% - 40px)); min-height: 94px; gap: 18px; }
+  .brand-mark { flex-basis: 92px !important; width: 92px !important; }
+  .system-version { margin-bottom: 4px; font-size: 10px; }
+  .app-header h1 { color: var(--ls-color-text-strong); font-size: 23px; letter-spacing: -.02em; }
+  .header-description { margin-top: 5px; color: var(--ls-color-text-muted); font-size: 12px; }
+  .page-content { width: min(1320px, calc(100% - 40px)); padding: 22px 0 126px; }
+  .card { border-color: var(--ls-color-border); border-radius: var(--ls-radius-md); box-shadow: var(--ls-shadow-sm); }
+  .data-tools { margin-bottom: 16px; padding: 18px 22px; }
+  .data-tools h2 { color: var(--ls-color-text-strong); font-size: 18px; }
+  .product-form-card { padding: 22px; }
+  .section-heading { margin-bottom: 18px; }
+  .section-heading h2 { color: var(--ls-color-text-strong); font-size: 19px; }
+  .system-version, .eyebrow, .add-category-button { color: var(--ls-accent); }
+  .product-form { gap: 12px; }
+  .field > span, .field-label-row > label { color: #4f6074; }
+  .category-creator { border-color: var(--ls-color-border); border-radius: var(--ls-radius-sm); background: var(--ls-color-surface-subtle); }
+  .category-creator input, .field input, .field select, .search-box input {
+    height: var(--ls-control-height);
+    border-color: var(--ls-color-border-strong);
+    border-radius: var(--ls-radius-sm);
+    background: var(--ls-color-surface);
+  }
+  .category-creator input:focus, .field input:focus, .field select:focus, .search-box input:focus { border-color: var(--ls-accent); box-shadow: 0 0 0 3px rgba(226, 35, 26, .1); }
+  .primary-button, .secondary-button { min-height: var(--ls-control-height); border-radius: var(--ls-radius-sm); font-weight: 700; }
+  .secondary-button { border-color: var(--ls-color-border-strong); color: #34465b; }
+  .secondary-button:not(:disabled):hover { border-color: var(--ls-accent); color: var(--ls-accent); }
+  .filter-section { margin: 22px 0 16px; }
+  .category-tab { min-height: 36px; border-color: var(--ls-color-border); color: #536378; }
+  .category-tab:hover { border-color: var(--ls-color-border-strong); }
+  .category-tab.active { border-color: var(--ls-accent); background: var(--ls-accent); }
+  .list-heading { padding: 20px 22px 17px; }
+  .product-table th, .product-table td { padding: 15px 18px; border-color: #e9edf2; }
+  .product-table th { background: var(--ls-color-surface-subtle); color: #5b6a7c; }
+  .product-table tbody tr:hover { background: #f8fafc; }
+  .category-badge { border-radius: var(--ls-radius-pill); background: #eef2f6; color: #506074; }
+  .price-cell { color: var(--ls-accent); }
+  .print-actions { border-top: 3px solid var(--ls-accent); background: rgba(20, 35, 55, .97); }
+  .selection-count { border-radius: var(--ls-radius-sm); background: var(--ls-accent); }
+  .print-preview-dialog { border-top-color: var(--ls-accent); border-radius: var(--ls-radius-md); }
+  .print-preview-close, .toast { border-radius: var(--ls-radius-sm); }
+}
+
+@media screen and (max-width: 620px) {
+  .header-inner { min-height: 84px; }
+  .brand-mark { flex-basis: 64px !important; width: 64px !important; }
+  .app-header h1 { font-size: 19px; }
+  .page-content { padding-top: 16px; }
+}

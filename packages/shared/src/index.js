@@ -20,7 +20,7 @@ export const STORE_MODULES = Object.freeze([
     moduleBase: '/modules/price-labels/',
     apiBase: '/api/price-labels',
     sourceProject: 'lenovo-price-label',
-    accent: '#c62828',
+    accent: '#e2231a',
     stage: 'migrated'
   },
   {
@@ -32,7 +32,7 @@ export const STORE_MODULES = Object.freeze([
     moduleBase: '/modules/receipt-assistant/',
     apiBase: '/api/receipt-assistant',
     sourceProject: 'Lenovo POS System',
-    accent: '#805ad5',
+    accent: '#1a5e9c',
     stage: 'migrated'
   }
 ]);

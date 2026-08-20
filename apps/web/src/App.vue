@@ -3,7 +3,7 @@ import { STORE_MODULES } from '@lenovo-store/shared';
 </script>
 
 <template>
-  <div class="suite-shell">
+  <div class="suite-shell ls-theme">
     <aside class="suite-sidebar">
       <RouterLink class="suite-brand" to="/">
         <span class="brand-mark">L</span>

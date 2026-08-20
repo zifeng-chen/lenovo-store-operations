@@ -1,5 +1,5 @@
 <template>
-  <main class="app-shell">
+  <main class="app-shell ls-theme">
     <aside class="control-panel">
       <header class="brand-header"><div class="brand-icon">票</div><div><h1>付款凭证打印助手</h1><p>Lenovo Store Receipt Studio</p></div></header>
       <section class="today-card">

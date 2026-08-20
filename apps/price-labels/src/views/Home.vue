@@ -225,7 +225,7 @@ onMounted(loadData)
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell ls-theme">
     <div class="management-ui">
       <header class="app-header">
         <div class="header-inner">

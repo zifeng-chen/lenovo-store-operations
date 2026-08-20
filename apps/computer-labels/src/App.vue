@@ -286,7 +286,7 @@ onMounted(initialize);
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell ls-theme">
     <AppHeader :product-count="products.length" :label-count="labels.length" />
     <main class="main-content">
       <LeftPanel
