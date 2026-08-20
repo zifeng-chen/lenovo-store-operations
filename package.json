@@ -1,0 +1,22 @@
+{
+  "name": "lenovo-store-operations",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n web,server -c cyan,magenta \"npm run dev --workspace @lenovo-store/web\" \"npm run dev --workspace @lenovo-store/server\"",
+    "build": "npm run build --workspace @lenovo-store/web",
+    "start": "npm run start --workspace @lenovo-store/server",
+    "check": "npm run check --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "9.0.0"
+  }
+}
