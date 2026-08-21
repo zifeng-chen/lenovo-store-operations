@@ -1,7 +1,7 @@
 <template>
   <main class="app-shell ls-theme">
     <aside class="control-panel">
-      <header class="brand-header"><div class="brand-icon">票</div><div><h1>付款凭证打印助手</h1><p>Lenovo Store Receipt Studio</p></div></header>
+      <header class="brand-header"><img class="brand-logo ls-brand-logo" :src="logoUrl" alt="联想" /><div><h1>联想付款凭证</h1><p>存根、小票与销售记录</p></div></header>
       <section class="today-card">
         <div class="today-card__header"><span class="section-eyebrow">今日销售</span><span class="today-date">{{ displayToday }}</span></div>
         <div class="today-metrics"><div class="metric"><span class="metric__label">销售笔数</span><strong>{{ todayStats.count }}</strong><span class="metric__unit">笔</span></div><div class="metric-divider"></div><div class="metric metric--amount"><span class="metric__label">销售总额</span><strong>{{ money(todayStats.total) }}</strong></div></div>
@@ -43,6 +43,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import logoUrl from '@lenovo-store/shared/lenovo-logo.svg'
 import { ApiError, request } from './api.js'
 
 const images=reactive({stub:null,receipt:null}); const decoded=reactive({stub:null,receipt:null}); const readVersions=reactive({stub:0,receipt:0})

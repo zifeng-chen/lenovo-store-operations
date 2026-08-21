@@ -61,8 +61,16 @@ function success(res, data, msg = 'success') {
 
 function initializeDatabases() {
   for (const module of STORE_MODULES) {
+    if (module.persistence === 'none') {
+      databaseStatuses.set(module.id, { connected: null, error: null });
+      continue;
+    }
+
     const runtime = moduleRuntimes.get(module.id);
     try {
+      if (!runtime?.initializeDatabase || !runtime?.databasePath) {
+        throw new Error('模块缺少数据库运行时配置');
+      }
       runtime.initializeDatabase();
       databaseStatuses.set(module.id, { connected: true, error: null });
     } catch (error) {
@@ -74,16 +82,19 @@ function initializeDatabases() {
 
 function moduleStatus(module) {
   const runtime = moduleRuntimes.get(module.id);
+  const usesDatabase = module.persistence === 'sqlite';
   const dataDirectory = path.join(dataRoot, module.id);
   const moduleDist = path.join(projectRoot, 'apps', module.id, 'dist', 'index.html');
   const databaseStatus = databaseStatuses.get(module.id);
   return {
     ...module,
-    apiReady: Boolean(runtime),
+    apiReady: module.apiBase ? Boolean(runtime?.router) : null,
     moduleReady: fs.existsSync(moduleDist),
-    dataDirectoryReady: fs.existsSync(dataDirectory),
-    databaseConnected: Boolean(databaseStatus?.connected && fs.existsSync(runtime.databasePath)),
-    databaseError: databaseStatus?.error || null
+    dataDirectoryReady: usesDatabase ? fs.existsSync(dataDirectory) : null,
+    databaseConnected: usesDatabase
+      ? Boolean(databaseStatus?.connected && runtime?.databasePath && fs.existsSync(runtime.databasePath))
+      : null,
+    databaseError: usesDatabase ? databaseStatus?.error || null : null
   };
 }
 
@@ -100,6 +111,7 @@ app.get('/api/system/health', (_req, res) => {
 });
 
 for (const module of STORE_MODULES) {
+  if (!module.apiBase) continue;
   app.get(`${module.apiBase}/health`, (_req, res) => {
     success(res, moduleStatus(module));
   });
@@ -151,5 +163,5 @@ app.use((error, _req, res, _next) => {
 });
 
 app.listen(port, host, () => {
-  console.log(`Lenovo Store Operations running at http://${host}:${port}`);
+  console.log(`联想门店运营系统运行于 http://${host}:${port}`);
 });

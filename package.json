@@ -11,8 +11,8 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "concurrently -k -n portal,computer,price,receipt,server -c cyan,blue,red,magenta,green \"npm run dev --workspace @lenovo-store/web\" \"npm run dev --workspace @lenovo-store/computer-labels\" \"npm run dev --workspace @lenovo-store/price-labels\" \"npm run dev --workspace @lenovo-store/receipt-assistant\" \"npm run dev --workspace @lenovo-store/server\"",
-    "build": "npm run build --workspace @lenovo-store/web && npm run build --workspace @lenovo-store/computer-labels && npm run build --workspace @lenovo-store/price-labels && npm run build --workspace @lenovo-store/receipt-assistant",
+    "dev": "concurrently -k -n portal,computer,price,receipt,badge,server -c cyan,blue,red,magenta,yellow,green \"npm run dev --workspace @lenovo-store/web\" \"npm run dev --workspace @lenovo-store/computer-labels\" \"npm run dev --workspace @lenovo-store/price-labels\" \"npm run dev --workspace @lenovo-store/receipt-assistant\" \"npm run dev --workspace @lenovo-store/employee-badges\" \"npm run dev --workspace @lenovo-store/server\"",
+    "build": "npm run build --workspace @lenovo-store/web && npm run build --workspace @lenovo-store/computer-labels && npm run build --workspace @lenovo-store/price-labels && npm run build --workspace @lenovo-store/receipt-assistant && npm run build --workspace @lenovo-store/employee-badges",
     "start": "npm run start --workspace @lenovo-store/server",
     "check": "npm run check --workspaces --if-present",
     "migrate:data": "node scripts/migrate-legacy-data.js"

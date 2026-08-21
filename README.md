@@ -1,24 +1,26 @@
-# Lenovo Store Operations
+# 联想门店运营系统
 
-联想门店运营工具套件，将三个业务彼此独立的门店工具统一到一个入口、一个服务进程和一个维护仓库中：
+联想门店运营系统将四个业务边界彼此独立的门店工具统一到一个品牌、一个入口、一个服务进程和一个维护仓库中：
 
-1. 电脑商品标签管理与打印；
-2. 电脑、手机、平板及周边商品的价格标签管理与打印；
-3. 客户付款后的存根、小票合成及付款凭证打印。
+1. 联想电脑商品标签管理与打印；
+2. 联想电脑、手机、平板及周边商品价格标签管理与打印；
+3. 联想客户付款后的存根、小票合成及付款凭证打印；
+4. 联想门店员工工牌信息录入与二维码预览。
 
-项目默认通过 `http://localhost:8900` 提供统一 Portal、三个独立 SPA 和全部 API。
+项目默认通过 `http://localhost:8900` 提供统一 Portal 和四个独立 SPA。前三个业务板块拥有独立 API 与 SQLite 数据库；员工工牌板块完全在浏览器内运行，不创建 API、数据库或本地持久化数据。
 
-> 本项目只统一入口、部署、健康检查和维护方式，不合并三个业务的数据模型。每个模块继续使用独立的前端应用、API 命名空间、SQLite 数据库和打印样式，避免商品、价格和付款凭证之间产生错误关联。
+> 本项目只统一联想品牌、入口、部署、健康检查和维护方式，不合并各业务的数据模型。三个既有业务继续使用独立前端、API、SQLite 数据库和打印流程；员工工牌仅共享屏幕设计系统，不接触其他板块数据。
 
-## 模块说明
+## 板块说明
 
-| 模块 | 业务用途 | Portal 路由 | 独立 SPA | API | 数据库 | 打印规格 |
+| 业务板块 | 业务用途 | Portal 路由 | 独立 SPA | API | 数据库 | 当前输出能力 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 电脑商品标签 | 管理电脑 SKU、名称、配置、颜色和备注 | `/computer-labels` | `/modules/computer-labels/` | `/api/computer-labels` | `data/computer-labels/database.sqlite` | 46mm × 45mm，A4 纵向，24 张/页 |
-| 商品价格标签 | 管理电脑、手机、平板及周边商品的品类、名称和价格 | `/price-labels` | `/modules/price-labels/` | `/api/price-labels` | `data/price-labels/database.sqlite` | 70mm × 28mm，A4 横向，28 张/页 |
-| 付款凭证打印 | 将商务存根和购物小票合成到一张 A4，识别并记录付款金额 | `/receipt-assistant` | `/modules/receipt-assistant/` | `/api/receipt-assistant` | `data/receipt-assistant/database.sqlite` | 存根 + 小票，A4 打印或 PNG 下载 |
+| 联想电脑商品标签 | 管理电脑 SKU、名称、配置、颜色和备注 | `/computer-labels` | `/modules/computer-labels/` | `/api/computer-labels` | `data/computer-labels/database.sqlite` | 46mm × 45mm，A4 纵向，24 张/页 |
+| 联想商品价格标签 | 管理电脑、手机、平板及周边商品的品类、名称和价格 | `/price-labels` | `/modules/price-labels/` | `/api/price-labels` | `data/price-labels/database.sqlite` | 70mm × 28mm，A4 横向，28 张/页 |
+| 联想付款凭证 | 将商务存根和购物小票合成到一张 A4，识别并记录付款金额 | `/receipt-assistant` | `/modules/receipt-assistant/` | `/api/receipt-assistant` | `data/receipt-assistant/database.sqlite` | 存根 + 小票，A4 打印或 PNG 下载 |
+| 联想员工工牌 | 输入员工姓名、岗位并上传二维码，在当前页面实时预览 | `/employee-badges` | `/modules/employee-badges/` | 无 | 无 | 基础屏幕预览，物理尺寸与打印规格待补充 |
 
-### 电脑商品标签
+### 联想电脑商品标签
 
 - 商品新增、编辑、删除和批量删除；
 - 按 SKU、名称和配置实时模糊搜索；
@@ -31,7 +33,7 @@
 
 电脑商品标签不保存销售价格，其 SKU 模型不会与价格标签模块合并。
 
-### 商品价格标签
+### 联想商品价格标签
 
 - 商品和品类管理；
 - 商品搜索、品类筛选和当前筛选结果全选；
@@ -42,7 +44,7 @@
 
 该模块覆盖电脑、手机、平板和周边商品价格，不要求电脑 SKU，也不复用电脑商品标签数据库。
 
-### 付款凭证打印
+### 联想付款凭证
 
 - 商务存根和购物小票两张图片上传或拖放；
 - A4 Canvas 合成、预览、打印和 PNG 下载；
@@ -56,6 +58,19 @@
 
 付款凭证只记录付款与打印信息，不关联商品标签或价格标签数据。
 
+### 联想员工工牌
+
+- 输入员工姓名，最长 20 个字符；
+- 输入岗位，最长 30 个字符；
+- 支持点击选择或拖放 PNG、JPG、WEBP、SVG 二维码图片；
+- 二维码图片限制为 5MB，并在显示前执行浏览器图片解码校验；
+- 支持替换、移除二维码和一键清空全部内容；
+- 姓名、岗位和二维码实时显示在基础工牌预览中；
+- 页面关闭或刷新后数据自动消失，不调用 API，不使用 localStorage、sessionStorage、IndexedDB 或数据库；
+- 当前不提供打印按钮，也没有预设毫米尺寸、DPI 或 `@page` 规则，待工牌尺寸和版式细节确认后再补充。
+
+二维码通过临时 Object URL 在浏览器内显示，替换、清除或离开页面时会主动释放。员工资料不会发送到服务器，也不会进入其他三个板块。
+
 ## 系统架构
 
 ```text
@@ -64,13 +79,14 @@ Browser
   | http://localhost:8900
   v
 Express 5 unified server
-  |-- /                         Portal SPA
-  |-- /modules/computer-labels  Computer Label SPA
-  |-- /modules/price-labels     Price Label SPA
-  |-- /modules/receipt-assistant Receipt Assistant SPA
-  |-- /api/computer-labels      Computer Label API
-  |-- /api/price-labels         Price Label API
-  `-- /api/receipt-assistant    Receipt Assistant API
+  |-- /                          Portal SPA
+  |-- /modules/computer-labels   联想电脑商品标签 SPA
+  |-- /modules/price-labels      联想商品价格标签 SPA
+  |-- /modules/receipt-assistant 联想付款凭证 SPA
+  |-- /modules/employee-badges   联想员工工牌 SPA（纯浏览器状态）
+  |-- /api/computer-labels       电脑商品标签 API
+  |-- /api/price-labels          商品价格标签 API
+  `-- /api/receipt-assistant     付款凭证 API
          |
          |-- data/computer-labels/database.sqlite
          |-- data/price-labels/database.sqlite
@@ -78,11 +94,11 @@ Express 5 unified server
          `-- data/secrets/receipt-ocr.key
 ```
 
-Portal 通过同源 iframe 加载三个独立 SPA。这样既保留统一导航，也能隔离三套 `@page`、`@media print` 和页面样式，防止打印规则互相污染。
+Portal 通过同源 iframe 加载四个独立 SPA。前三套打印实现继续在独立文档中维护各自的 `@page`、`@media print` 或 Canvas 流程；员工工牌当前只有屏幕预览，不包含打印规则。
 
 ## 前端视觉与打印隔离
 
-四个前端通过 `@lenovo-store/shared/theme.css` 使用同一套屏幕设计令牌，统一字体、画布、色板、间距、圆角、阴影、卡片、表单和按钮。Portal 将模块工具栏与 iframe 组合成一个完整工作区，三个业务应用仍可通过各自地址独立开发和打开。
+五个前端（Portal + 四个业务 SPA）通过 `@lenovo-store/shared/theme.css` 使用同一套屏幕设计令牌，并共享用户指定的红色联想 SVG Logo，统一字体、画布、色板、间距、圆角、阴影、卡片、表单和按钮。Portal 将板块工具栏与 iframe 组合成一个完整工作区，四个业务 SPA 仍可通过各自地址独立开发和打开。
 
 共享主题遵循以下边界：
 
@@ -113,10 +129,11 @@ lenovo-store-operations/
 │   ├── web/                    # 统一 Portal
 │   ├── computer-labels/        # 电脑商品标签 SPA
 │   ├── price-labels/           # 商品价格标签 SPA
-│   ├── receipt-assistant/      # 付款凭证 SPA
-│   └── server/                 # Express 服务和三个独立后端模块
+│   ├── receipt-assistant/      # 联想付款凭证 SPA
+│   ├── employee-badges/        # 联想员工工牌 SPA（无持久化）
+│   └── server/                 # Express 服务和三个持久化后端模块
 ├── packages/
-│   └── shared/                 # 模块元数据与前端共享屏幕主题
+│   └── shared/                 # 板块元数据、共享屏幕主题与联想 Logo
 ├── data/
 │   ├── computer-labels/        # 电脑商品标签数据库
 │   ├── price-labels/           # 商品价格标签数据库
@@ -174,9 +191,10 @@ HOST=127.0.0.1 PORT=8900 npm start
 
 - Portal：`http://localhost:8900/`
 - 系统状态：`http://localhost:8900/system`
-- 电脑商品标签：`http://localhost:8900/computer-labels`
-- 商品价格标签：`http://localhost:8900/price-labels`
-- 付款凭证打印：`http://localhost:8900/receipt-assistant`
+- 联想电脑商品标签：`http://localhost:8900/computer-labels`
+- 联想商品价格标签：`http://localhost:8900/price-labels`
+- 联想付款凭证：`http://localhost:8900/receipt-assistant`
+- 联想员工工牌：`http://localhost:8900/employee-badges`
 - 系统健康接口：`http://localhost:8900/api/system/health`
 
 ## 开发模式
@@ -185,14 +203,15 @@ HOST=127.0.0.1 PORT=8900 npm start
 npm run dev
 ```
 
-该命令同时启动统一后端、Portal 和三个业务模块开发服务器：
+该命令同时启动统一后端、Portal 和四个业务板块开发服务器：
 
 | 服务 | 开发地址 |
 | --- | --- |
 | Portal | `http://localhost:5173/` |
-| 电脑商品标签 | `http://localhost:5174/modules/computer-labels/` |
-| 商品价格标签 | `http://localhost:5175/modules/price-labels/` |
-| 付款凭证打印 | `http://localhost:5176/modules/receipt-assistant/` |
+| 联想电脑商品标签 | `http://localhost:5174/modules/computer-labels/` |
+| 联想商品价格标签 | `http://localhost:5175/modules/price-labels/` |
+| 联想付款凭证 | `http://localhost:5176/modules/receipt-assistant/` |
+| 联想员工工牌 | `http://localhost:5177/modules/employee-badges/` |
 | API 服务 | `http://localhost:8900/` |
 
 开发模式下应使用上表中的独立 Vite 地址调试业务模块。需要验证统一 Portal iframe、静态托管和生产路径时，请执行 `npm run build && npm start`，并通过 8900 端口访问。
@@ -243,11 +262,12 @@ npm run migrate:data
 
 ## 数据备份与恢复
 
-三个模块必须分别备份，不应合并为一个数据库：
+三个持久化板块必须分别备份，不应合并为一个数据库；员工工牌不保存数据，因此没有数据库备份：
 
-- 电脑商品标签：使用模块内的 Excel 导出或 SQLite 备份；SQLite 恢复会替换该模块数据库；
-- 商品价格标签：使用模块内 JSON 导出；导入时先校验，确认后在单事务中全量恢复；
-- 付款凭证：备份 `data/receipt-assistant/database.sqlite` 时，必须同时备份 `data/secrets/receipt-ocr.key`。
+- 联想电脑商品标签：使用板块内的 Excel 导出或 SQLite 备份；SQLite 恢复会替换该板块数据库；
+- 联想商品价格标签：使用板块内 JSON 导出；导入时先校验，确认后在单事务中全量恢复；
+- 联想付款凭证：备份 `data/receipt-assistant/database.sqlite` 时，必须同时备份 `data/secrets/receipt-ocr.key`；
+- 联想员工工牌：页面刷新或关闭后自动清空，若需要保存员工资料，应等待后续持久化需求明确后再设计。
 
 付款凭证数据库中的 OCR 凭据是密文。只有配套的 `receipt-ocr.key` 才能解密；丢失密钥后不能从数据库恢复原凭据，需要在页面重新配置。
 
@@ -270,10 +290,10 @@ npm run migrate:data
 
 | 命令 | 用途 |
 | --- | --- |
-| `npm run dev` | 同时启动四个前端开发服务器和统一后端 |
-| `npm run build` | 构建 Portal 和三个业务 SPA |
+| `npm run dev` | 同时启动五个前端开发服务器和统一后端 |
+| `npm run build` | 构建 Portal 和四个业务 SPA |
 | `npm start` | 启动 8900 统一生产服务 |
-| `npm run check` | 构建检查三个业务 SPA并检查后端 JavaScript 语法 |
+| `npm run check` | 构建检查四个业务 SPA并检查后端 JavaScript 语法 |
 | `npm run migrate:data` | 一次性迁移三个旧项目数据库和 OCR 密钥 |
 
 ## 构建与健康检查
@@ -293,13 +313,14 @@ npm audit
 curl http://127.0.0.1:8900/api/system/health
 ```
 
-健康接口会报告每个模块的以下状态：
+健康接口会报告每个业务板块的以下状态：
 
-- API 是否挂载；
 - SPA 构建产物是否存在；
-- 数据目录是否存在；
-- SQLite 数据库是否成功连接；
-- 模块是否完成迁移。
+- 有 API 的板块是否已挂载；
+- 使用 SQLite 的板块是否已有数据目录并成功连接数据库；
+- 板块处于“已迁移”或“已就绪”状态。
+
+联想员工工牌在健康接口中会返回 `apiReady: null`、`dataDirectoryReady: null` 和 `databaseConnected: null`，表示这些能力不适用，而不是运行异常。
 
 ## 打印验收
 
@@ -313,6 +334,8 @@ curl http://127.0.0.1:8900/api/system/health
 6. 浏览器打印缩放是否为 100%，是否关闭页眉页脚；
 7. 打印机驱动的纸张尺寸、方向、边距和缩放是否与浏览器一致。
 
+联想员工工牌当前没有打印功能，不参与上述实体打印验收。在员工工牌的物理尺寸、横竖方向、出血、二维码尺寸、照片或门店信息等细节确认后，应新增独立打印实现和对应验收清单。
+
 ## 常见问题
 
 ### 8900 端口被占用
@@ -323,7 +346,7 @@ curl http://127.0.0.1:8900/api/system/health
 PORT=8910 npm start
 ```
 
-对应的 Vite API 代理默认仍指向 8900。长期修改开发端口时，需要同步调整四个 `vite.config.js`。
+对应的 Vite API 代理默认仍指向 8900。长期修改开发端口时，需要同步调整使用 API 代理的四个 `vite.config.js`；员工工牌没有 API 代理。
 
 ### `better-sqlite3` 原生模块架构不匹配
 
@@ -358,12 +381,14 @@ data/secrets/receipt-ocr.key
 
 ## 项目状态
 
-三个业务模块已完成迁移并统一运行在 8900 端口：
+四个联想业务板块已统一运行在 8900 端口：
 
-- 独立 SPA、API 和 SQLite 数据库已接入；
+- 三个既有板块的独立 SPA、API 和 SQLite 数据库已接入；
+- 联想员工工牌基础板块已接入，支持姓名、岗位和二维码的纯浏览器预览，不持久化员工信息；
+- 用户指定的联想 SVG Logo 已作为共享屏幕品牌资产，Portal 和四个业务 SPA 的中文命名已统一；
 - 旧数据库及 OCR 密钥支持一致性迁移；
 - Portal、健康检查、构建和生产静态托管已完成；
-- Portal 和三个业务 SPA 已接入共享屏幕设计令牌，模块工作区、页头、卡片、表单和按钮风格保持一致；
-- 三套打印实现继续独立维护，视觉统一不会合并或覆盖打印 CSS；
+- Portal 和四个业务 SPA 已接入共享屏幕设计令牌，板块工作区、页头、卡片、表单和按钮风格保持一致；
+- 三套既有打印实现继续独立维护，品牌统一不会合并或覆盖打印 CSS；
 - 数据查询、导出、备份和 OCR 配置解密已通过无破坏冒烟验证；
-- 实体标签和 A4 付款凭证仍需在实际打印机上验收。
+- 实体标签和 A4 付款凭证仍需在实际打印机上验收；员工工牌打印规格等待后续需求。

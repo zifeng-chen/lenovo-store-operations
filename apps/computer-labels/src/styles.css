@@ -262,3 +262,7 @@ button, input, textarea { font: inherit; }
   .el-table { border-color: var(--ls-color-border); border-radius: var(--ls-radius-sm); --el-table-header-bg-color: var(--ls-color-surface-subtle); --el-table-row-hover-bg-color: #f2f7fb; }
   .el-dialog { border-radius: var(--ls-radius-md); }
 }
+
+@media screen {
+  .brand .brand-logo { width: 100px; flex: 0 0 auto; }
+}

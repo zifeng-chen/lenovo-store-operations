@@ -1,12 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import logoUrl from '@lenovo-store/shared/lenovo-logo.svg'
 import { apiUrl, requestJson } from '../api.js'
 import CategoryTabs from '../components/CategoryTabs.vue'
 import PrintPanel from '../components/PrintPanel.vue'
 import ProductForm from '../components/ProductForm.vue'
 import ProductList from '../components/ProductList.vue'
 
-const logoUrl = `${import.meta.env.BASE_URL}lenovo-logo.svg`
 const products = ref([])
 const categories = ref([])
 const activeCategory = ref('全部')
@@ -231,8 +231,8 @@ onMounted(loadData)
         <div class="header-inner">
           <img class="brand-mark" :src="logoUrl" alt="Lenovo 联想" />
           <div>
-            <p class="system-version">PRICE LABEL SYSTEM · V2.0</p>
-            <h1>联想价格标签打印系统</h1>
+            <p class="system-version">联想门店运营系统</p>
+            <h1>联想商品价格标签</h1>
             <p class="header-description">快速管理商品，并生成精确尺寸的 A4 价格标签</p>
           </div>
         </div>

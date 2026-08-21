@@ -129,3 +129,7 @@ button, input { font: inherit; }
   .ocr-detail-grid > div, .ocr-detail-block { border-color: var(--ls-color-border); border-radius: var(--ls-radius-sm); background: var(--ls-color-surface-subtle); }
   .el-dialog { border-radius: var(--ls-radius-md); }
 }
+
+@media screen {
+  .brand-header .brand-logo { width: 96px; flex: 0 0 auto; }
+}
