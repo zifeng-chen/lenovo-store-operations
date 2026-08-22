@@ -39,9 +39,9 @@ body { color: #172033; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI
 .employee-badge--default .badge-name-divider { display: none; }
 .employee-badge--default .badge-content p { position: absolute; top: 24.5mm; left: 4mm; width: 46mm; max-height: 7mm; margin: 0; color: #211f20; font-size: 4mm; font-weight: 400; line-height: 1.25; }
 .employee-badge--default .badge-content p.is-long { font-size: 2.6mm; }
-.employee-badge--default .badge-code-block { position: absolute; top: 42.5mm; left: 12mm; width: 30mm; height: 39mm; }
+.employee-badge--default .badge-code-block { position: absolute; top: 42.5mm; left: 12mm; width: 30mm; height: 41.5mm; }
 .employee-badge--default .badge-qr { width: 30mm; height: 30mm; padding: 0.8mm; border: 0.2mm solid #4b4b4b; border-radius: 1mm; background: #fff; }
-.employee-badge--default .badge-footer-copy { position: absolute; top: 31.5mm; left: 50%; width: 42mm; height: 7.5mm; color: #211f20; font-size: 3mm; font-weight: 500; line-height: 1.35; transform: translateX(-50%); }
+.employee-badge--default .badge-footer-copy { position: absolute; top: 33mm; left: 50%; width: 42mm; height: 8.5mm; color: #211f20; font-size: 3mm; font-weight: 500; line-height: 1.35; transform: translateX(-50%); }
 .employee-badge--default .badge-footer-copy span:first-child { font-weight: 600; }
 
 .employee-badge--lenovo-red .badge-background { inset: -2mm; width: calc(100% + 4mm); height: calc(100% + 4mm); }

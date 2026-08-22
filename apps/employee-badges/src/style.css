@@ -76,10 +76,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 
   .preview-card { min-height: 0; display: flex; flex-direction: column; }
   .a4-preview-viewport { flex: 1 1 auto; min-height: 0; padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 32px; overflow: auto; border-radius: var(--ls-radius-md); background: #e8edf3; }
-  .a4-preview-shell { position: relative; width: min(760px, 100%); flex: 0 0 auto; margin: 0 auto; filter: drop-shadow(0 10px 22px rgba(28, 43, 62, .16)); }
-  .a4-preview-page { position: relative; width: 100%; aspect-ratio: 297 / 210; padding: 6.734007% 4.545455%; overflow: hidden; background: #fff; }
-  .preview-badge-grid { width: 100%; height: 100%; display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(2, 1fr); gap: 0; }
-  .preview-badge-slot { position: relative; min-width: 0; min-height: 0; outline: 1px solid #aab2bd; outline-offset: -0.5px; }
+  .a4-preview-shell { position: relative; width: min(760px, 100%); flex: 0 0 auto; margin: 0 auto; }
+  .a4-preview-page { position: relative; width: 100%; aspect-ratio: 297 / 210; overflow: hidden; background: #fff; box-shadow: 0 10px 22px rgba(28, 43, 62, .16); }
+  .preview-badge-grid { position: absolute; top: 9.52381%; left: 4.545455%; width: 90.909091%; height: 80.952381%; display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(2, 1fr); gap: 0; }
+  .preview-badge-slot { position: relative; min-width: 0; min-height: 0; aspect-ratio: 54 / 85; outline: 1px solid #778391; outline-offset: -0.5px; box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .7); }
   .a4-preview-page .employee-badge { position: relative; width: 100%; height: 100%; container-type: inline-size; overflow: hidden; background: #fff; }
   .a4-preview-page .badge-background { position: absolute; display: block; object-fit: cover; }
   .a4-preview-page .badge-content { position: absolute; }
@@ -93,9 +93,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .a4-preview-page .employee-badge--default .badge-name-divider { display: none; }
   .a4-preview-page .employee-badge--default .badge-content p { position: absolute; top: 45.37037cqw; left: 7.407407cqw; width: 85.185185cqw; max-height: 12.962963cqw; margin: 0; color: #211f20; font-size: 7.407407cqw; font-weight: 400; line-height: 1.25; }
   .a4-preview-page .employee-badge--default .badge-content p.is-long { font-size: 4.814815cqw; }
-  .a4-preview-page .employee-badge--default .badge-code-block { position: absolute; top: 78.703704cqw; left: 22.222222cqw; width: 55.555556cqw; height: 72.222222cqw; }
+  .a4-preview-page .employee-badge--default .badge-code-block { position: absolute; top: 78.703704cqw; left: 22.222222cqw; width: 55.555556cqw; height: 76.851852cqw; }
   .a4-preview-page .employee-badge--default .badge-qr { width: 55.555556cqw; height: 55.555556cqw; padding: 1.481481cqw; border: .2mm solid #4b4b4b; border-radius: 1.851852cqw; background: #fff; }
-  .a4-preview-page .employee-badge--default .badge-footer-copy { position: absolute; top: 58.333333cqw; left: 50%; width: 77.777778cqw; height: 13.888889cqw; color: #211f20; font-size: 5.555556cqw; font-weight: 500; line-height: 1.35; transform: translateX(-50%); }
+  .a4-preview-page .employee-badge--default .badge-footer-copy { position: absolute; top: 61.111111cqw; left: 50%; width: 77.777778cqw; height: 15.740741cqw; color: #211f20; font-size: 5.555556cqw; font-weight: 500; line-height: 1.35; transform: translateX(-50%); }
   .a4-preview-page .employee-badge--default .badge-footer-copy span:first-child { font-weight: 600; }
 
   .a4-preview-page .employee-badge--lenovo-red .badge-background { inset: -3.703704cqw; width: calc(100% + 7.407407cqw); height: calc(100% + 7.407407cqw); }

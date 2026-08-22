@@ -16,7 +16,7 @@ const previewPages = computed(() => (props.pages.length ? props.pages : [[]]));
         <p class="ls-eyebrow">A4 实时预览</p>
         <h2 id="badge-preview-title">员工工牌打印排版</h2>
       </div>
-      <span class="layout-badge">5 × 2 / 10 张</span>
+      <span class="layout-badge">A4 297×210 · 工牌 54×85mm</span>
     </div>
 
     <div class="a4-preview-viewport">
