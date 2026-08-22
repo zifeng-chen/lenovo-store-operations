@@ -201,13 +201,23 @@ HOST=127.0.0.1 PORT=8900 npm start
 
 ### 常用入口
 
+Portal 使用 hash 路由，`#` 后的业务路径只由浏览器解析，刷新时服务器始终收到根路径请求：
+
 - Portal：`http://localhost:8900/`
-- 系统状态：`http://localhost:8900/system`
-- 联想电脑商品标签：`http://localhost:8900/computer-labels`
-- 联想商品价格标签：`http://localhost:8900/price-labels`
-- 联想付款凭证：`http://localhost:8900/receipt-assistant`
-- 联想员工工牌：`http://localhost:8900/employee-badges`
+- 系统状态：`http://localhost:8900/#/system`
+- 联想电脑商品标签：`http://localhost:8900/#/computer-labels`
+- 联想商品价格标签：`http://localhost:8900/#/price-labels`
+- 联想付款凭证：`http://localhost:8900/#/receipt-assistant`
+- 联想员工工牌：`http://localhost:8900/#/employee-badges`
 - 系统健康接口：`http://localhost:8900/api/system/health`
+
+服务器仍兼容 `/system`、`/computer-labels`、`/price-labels`、`/receipt-assistant` 和 `/employee-badges` 旧直链，并使用 `308` 跳转到对应 hash 地址；新链接统一使用 hash 地址，避免部署环境未配置 history rewrite 时刷新落入 API 404。
+
+### 反向代理与刷新
+
+生产反向代理应将 `/`、`/assets/`、`/modules/` 和 `/api/` 保留原始路径转发到统一服务的 `8900` 端口，不要把未命中的页面路径改写到 `/api`，也不要对 API 或缺失的 JavaScript/CSS 使用全局 `index.html` 回退。Portal 的 hash 路由不依赖代理层 SPA rewrite；未知 API 始终返回 JSON 404，缺失资源和未知页面返回普通页面 404。
+
+如果部署后仍返回英文 `{"code":1,"data":null,"msg":"Not Found"}`，说明请求未进入当前 Express 服务或服务器仍运行旧版本；请核对反向代理 upstream、实际启动命令、部署提交哈希和进程重启状态。
 
 ## 开发模式
 

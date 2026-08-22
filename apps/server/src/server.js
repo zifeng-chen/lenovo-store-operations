@@ -124,6 +124,10 @@ for (const runtime of moduleRuntimes.values()) {
   app.use(runtime.apiBase, ...middleware);
 }
 
+app.use('/api', (_req, res) => {
+  res.status(404).json({ code: 1, data: null, msg: '接口不存在' });
+});
+
 for (const module of STORE_MODULES) {
   const moduleDist = path.join(projectRoot, 'apps', module.id, 'dist');
   const moduleIndex = path.join(moduleDist, 'index.html');
@@ -140,17 +144,17 @@ for (const module of STORE_MODULES) {
   });
 }
 
-if (fs.existsSync(path.join(webDist, 'index.html'))) {
+const webIndex = path.join(webDist, 'index.html');
+if (fs.existsSync(webIndex)) {
   app.use(express.static(webDist));
-  app.use((req, res, next) => {
-    if (req.method !== 'GET' || req.path.startsWith('/api/') || req.path.startsWith('/modules/')) return next();
-    return res.sendFile(path.join(webDist, 'index.html'));
-  });
+  const legacyPortalRoutes = ['/system', ...STORE_MODULES.map((module) => module.route)];
+  for (const legacyRoute of legacyPortalRoutes) {
+    app.get(legacyRoute, (req, res, next) => {
+      if (!req.accepts('html')) return next();
+      return res.redirect(308, `/#${legacyRoute}`);
+    });
+  }
 }
-
-app.use('/api', (_req, res) => {
-  res.status(404).json({ code: 1, data: null, msg: '接口不存在' });
-});
 
 app.use((_req, res) => {
   res.status(404).send('页面不存在');

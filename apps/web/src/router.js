@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHashHistory } from 'vue-router';
 import { STORE_MODULES } from '@lenovo-store/shared';
 import DashboardView from './views/DashboardView.vue';
 import ModuleView from './views/ModuleView.vue';
@@ -17,7 +17,7 @@ const routes = [
 ];
 
 export default createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes,
   scrollBehavior: () => ({ top: 0 })
 });
