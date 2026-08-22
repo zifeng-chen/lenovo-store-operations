@@ -39,4 +39,6 @@ body { color: #172033; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI
 .badge-content p.is-long { font-size: 2.6mm; }
 .badge-qr { width: 24mm; height: 24mm; margin-top: 4.5mm; padding: 0.8mm; flex: 0 0 auto; background: #fff; }
 .badge-qr img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.badge-footer-copy { position: absolute; right: 9mm; bottom: 7mm; left: 11mm; display: flex; flex-direction: column; align-items: center; color: #565d68; font-size: 2mm; font-weight: 600; line-height: 1.45; text-align: center; white-space: nowrap; }
+.badge-footer-copy span:first-child { font-weight: 700; }
 @media print { body { width: 296mm; } }

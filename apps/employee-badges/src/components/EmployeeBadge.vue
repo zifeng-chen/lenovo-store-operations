@@ -17,5 +17,9 @@ const props = defineProps({
         <img :src="props.employee.qrUrl" :alt="`${props.employee.name}的二维码`" />
       </div>
     </div>
+    <div class="badge-footer-copy">
+      <span>联想官方体验店</span>
+      <span>请您添加企业微信</span>
+    </div>
   </article>
 </template>
