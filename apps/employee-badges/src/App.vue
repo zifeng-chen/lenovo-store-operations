@@ -18,9 +18,24 @@ const draftQrIsNew = ref(false);
 const printSource = ref(null);
 let uploadVersion = 0;
 
+function normalizeQuantity(value) {
+  const quantity = Number.parseInt(value, 10);
+  return Number.isFinite(quantity) ? Math.min(99, Math.max(1, quantity)) : 1;
+}
+
+const printItems = computed(() => employees.value.flatMap((employee) => {
+  const quantity = normalizeQuantity(employee.quantity);
+  return Array.from({ length: quantity }, (_, copyIndex) => ({
+    ...employee,
+    printKey: `${employee.id}:${copyIndex + 1}`
+  }));
+}));
+
+const totalBadgeCount = computed(() => printItems.value.length);
+
 const pages = computed(() => {
   const result = [];
-  for (let index = 0; index < employees.value.length; index += 10) result.push(employees.value.slice(index, index + 10));
+  for (let index = 0; index < printItems.value.length; index += 10) result.push(printItems.value.slice(index, index + 10));
   return result;
 });
 
@@ -111,7 +126,7 @@ function saveEmployee() {
     Object.assign(employee, { name, position, qrUrl: draft.qrUrl, qrFileName: draft.qrFileName });
     if (draftQrIsNew.value && previousQrUrl !== draft.qrUrl) URL.revokeObjectURL(previousQrUrl);
   } else {
-    employees.value.push({ id: createId(), name, position, qrUrl: draft.qrUrl, qrFileName: draft.qrFileName });
+    employees.value.push({ id: createId(), name, position, quantity: 1, qrUrl: draft.qrUrl, qrFileName: draft.qrFileName });
   }
 
   draftQrIsNew.value = false;
@@ -135,6 +150,11 @@ function editEmployee(id) {
   draft.qrFileName = employee.qrFileName;
   draftQrIsNew.value = false;
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateQuantity(id, value) {
+  const employee = employees.value.find((item) => item.id === id);
+  if (employee) employee.quantity = normalizeQuantity(value);
 }
 
 function removeEmployee(id) {
@@ -197,6 +217,7 @@ onBeforeUnmount(() => {
         :dragging="dragging"
         :editing="Boolean(editingId)"
         :employees="employees"
+        :badge-count="totalBadgeCount"
         :page-count="pages.length"
         :printing="printing"
         @select-qr="useQrFile"
@@ -205,6 +226,7 @@ onBeforeUnmount(() => {
         @save="saveEmployee"
         @cancel="clearDraft"
         @edit="editEmployee"
+        @update-quantity="updateQuantity"
         @remove="removeEmployee"
         @clear-all="clearEmployees"
         @print="printAll"
@@ -215,7 +237,7 @@ onBeforeUnmount(() => {
     <div ref="printSource" class="print-source" aria-hidden="true">
       <section v-for="(page, pageIndex) in pages" :key="pageIndex" class="badge-page">
         <div class="badge-grid">
-          <div v-for="employee in page" :key="employee.id" class="badge-slot">
+          <div v-for="employee in page" :key="employee.printKey" class="badge-slot">
             <EmployeeBadge :employee="employee" />
           </div>
         </div>

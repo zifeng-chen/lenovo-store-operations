@@ -27,7 +27,7 @@ const previewPages = computed(() => (props.pages.length ? props.pages : [[]]));
             <span>添加员工后将在此按 5 列 × 2 行排版</span>
           </div>
           <div class="preview-badge-grid">
-            <div v-for="employee in page" :key="employee.id" class="preview-badge-slot">
+            <div v-for="employee in page" :key="employee.printKey" class="preview-badge-slot">
               <EmployeeBadge :employee="employee" />
             </div>
           </div>

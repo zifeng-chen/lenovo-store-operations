@@ -10,6 +10,7 @@ const props = defineProps({
   dragging: { type: Boolean, default: false },
   editing: { type: Boolean, default: false },
   employees: { type: Array, default: () => [] },
+  badgeCount: { type: Number, default: 0 },
   pageCount: { type: Number, default: 0 },
   printing: { type: Boolean, default: false }
 });
@@ -23,6 +24,7 @@ const emit = defineEmits([
   'save',
   'cancel',
   'edit',
+  'update-quantity',
   'remove',
   'clear-all',
   'print'
@@ -112,7 +114,7 @@ function dropFile(event) {
       <div class="queue-heading">
         <div>
           <strong>打印列表</strong>
-          <span>{{ props.employees.length }} 人 · {{ props.pageCount }} 页</span>
+          <span>{{ props.employees.length }} 人 · {{ props.badgeCount }} 张 · {{ props.pageCount }} 页</span>
         </div>
         <button v-if="props.employees.length" type="button" class="text-button" @click="emit('clear-all')">清空列表</button>
       </div>
@@ -120,10 +122,22 @@ function dropFile(event) {
       <div v-if="props.employees.length" class="queue-list">
         <div v-for="(employee, index) in props.employees" :key="employee.id" class="queue-item">
           <span class="queue-index">{{ index + 1 }}</span>
-          <div>
+          <div class="queue-person">
             <strong>{{ employee.name }}</strong>
             <small>{{ employee.position }}</small>
           </div>
+          <label class="queue-quantity">
+            <span>份数</span>
+            <input
+              type="number"
+              min="1"
+              max="99"
+              step="1"
+              :value="employee.quantity"
+              :aria-label="`${employee.name}的打印份数`"
+              @change="emit('update-quantity', employee.id, $event.target.value)"
+            />
+          </label>
           <div class="queue-actions">
             <button type="button" @click="emit('edit', employee.id)">编辑</button>
             <button type="button" class="danger" @click="emit('remove', employee.id)">删除</button>
@@ -132,8 +146,8 @@ function dropFile(event) {
       </div>
       <p v-else class="queue-empty">填写完整资料后添加员工，右侧会自动生成 A4 排版。</p>
 
-      <button type="button" class="ls-button ls-button--primary print-button" :disabled="!props.employees.length || props.printing" @click="emit('print')">
-        {{ props.printing ? '正在准备打印…' : `打印全部工牌（${props.employees.length}）` }}
+      <button type="button" class="ls-button ls-button--primary print-button" :disabled="!props.badgeCount || props.printing" @click="emit('print')">
+        {{ props.printing ? '正在准备打印…' : `打印全部工牌（${props.badgeCount} 张）` }}
       </button>
       <p class="print-tip">A4 横向 · 54mm × 85mm · 每页 10 张 · 打印缩放请选择 100%</p>
     </div>
