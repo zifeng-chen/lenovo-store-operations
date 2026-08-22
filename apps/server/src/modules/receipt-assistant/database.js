@@ -1,13 +1,14 @@
 import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
+import {
+  RECEIPT_ASSISTANT_DATA_DIR,
+  RECEIPT_ASSISTANT_DATABASE_PATH,
+  RECEIPT_OCR_KEY_PATH,
+} from '../../config/data-paths.js'
 
-const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
-const projectRoot = path.resolve(currentDirectory, '../../../../..')
-const databaseDirectory = path.join(projectRoot, 'data', 'receipt-assistant')
-export const DATABASE_PATH = path.join(databaseDirectory, 'database.sqlite')
-export const OCR_KEY_PATH = path.join(projectRoot, 'data', 'secrets', 'receipt-ocr.key')
+const databaseDirectory = RECEIPT_ASSISTANT_DATA_DIR
+export const DATABASE_PATH = RECEIPT_ASSISTANT_DATABASE_PATH
+export const OCR_KEY_PATH = RECEIPT_OCR_KEY_PATH
 
 let database
 

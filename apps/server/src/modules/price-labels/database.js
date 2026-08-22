@@ -1,13 +1,13 @@
 import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
+import {
+  PRICE_LABELS_DATA_DIR,
+  PRICE_LABELS_DATABASE_PATH,
+} from '../../config/data-paths.js'
 
 const DEFAULT_CATEGORIES = ['背包', '键鼠', '耳机', '充电器', '支架', '电脑配件', '音响', '打印机']
-const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
-const projectRoot = path.resolve(currentDirectory, '../../../../..')
-const databaseDirectory = path.join(projectRoot, 'data', 'price-labels')
-export const DATABASE_PATH = path.join(databaseDirectory, 'database.sqlite')
+const databaseDirectory = PRICE_LABELS_DATA_DIR
+export const DATABASE_PATH = PRICE_LABELS_DATABASE_PATH
 
 let database
 

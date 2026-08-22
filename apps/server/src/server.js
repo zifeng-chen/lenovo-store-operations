@@ -19,10 +19,15 @@ import receiptAssistantRouter, {
   DATABASE_PATH as receiptAssistantDatabasePath,
   initializeDatabase as initializeReceiptAssistantDatabase
 } from './modules/receipt-assistant/index.js';
+import {
+  DATA_ROOT,
+  DATA_ROOT_SOURCE,
+  EXTERNAL_DATA_ROOT_CONFIGURED
+} from './config/data-paths.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(currentDir, '../../..');
-const dataRoot = path.join(projectRoot, 'data');
+const dataRoot = DATA_ROOT;
 const webDist = path.join(projectRoot, 'apps/web/dist');
 const host = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.PORT) || 8900;
@@ -106,6 +111,7 @@ app.get('/api/system/health', (_req, res) => {
     service: 'lenovo-store-operations',
     version: '1.0.0',
     uptimeSeconds: Math.floor(process.uptime()),
+    persistentDataConfigured: EXTERNAL_DATA_ROOT_CONFIGURED,
     modules: STORE_MODULES.map(moduleStatus)
   });
 });
@@ -168,4 +174,5 @@ app.use((error, _req, res, _next) => {
 
 app.listen(port, host, () => {
   console.log(`联想门店运营系统运行于 http://${host}:${port}`);
+  console.log(`持久化数据目录：${dataRoot}（${DATA_ROOT_SOURCE}）`);
 });

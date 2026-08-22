@@ -3,6 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
+import {
+  COMPUTER_LABELS_DATABASE_PATH,
+  PRICE_LABELS_DATABASE_PATH,
+  RECEIPT_ASSISTANT_DATABASE_PATH,
+  RECEIPT_OCR_KEY_PATH
+} from '../apps/server/src/config/data-paths.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(currentDir, '..');
@@ -11,26 +17,26 @@ const migrations = [
   {
     name: '电脑商品标签',
     source: process.env.LEGACY_COMPUTER_DB || path.resolve(projectRoot, '../backend/db/database.sqlite'),
-    target: path.join(projectRoot, 'data/computer-labels/database.sqlite'),
+    target: COMPUTER_LABELS_DATABASE_PATH,
     counts: ['products']
   },
   {
     name: '商品价格标签',
     source: process.env.LEGACY_PRICE_DB || path.join(os.homedir(), 'lenovo-price-label/data/database.db'),
-    target: path.join(projectRoot, 'data/price-labels/database.sqlite'),
+    target: PRICE_LABELS_DATABASE_PATH,
     counts: ['categories', 'products']
   },
   {
     name: '付款凭证',
     source: process.env.LEGACY_RECEIPT_DB || path.join(os.homedir(), 'Lenovo POS System/backend/db/database.sqlite'),
-    target: path.join(projectRoot, 'data/receipt-assistant/database.sqlite'),
+    target: RECEIPT_ASSISTANT_DATABASE_PATH,
     counts: ['sales', 'ocr_config', 'ocr_history']
   }
 ];
 
 const keyMigration = {
   source: process.env.LEGACY_RECEIPT_OCR_KEY || path.join(os.homedir(), 'Lenovo POS System/backend/.local/ocr-config.key'),
-  target: path.join(projectRoot, 'data/secrets/receipt-ocr.key')
+  target: RECEIPT_OCR_KEY_PATH
 };
 
 function assertPreconditions() {

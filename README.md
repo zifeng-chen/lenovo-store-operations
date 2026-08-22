@@ -15,10 +15,12 @@
 
 | 业务板块 | 业务用途 | Portal 路由 | 独立 SPA | API | 数据库 | 当前输出能力 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 联想电脑商品标签 | 管理电脑 SKU、名称、配置、颜色和备注 | `/computer-labels` | `/modules/computer-labels/` | `/api/computer-labels` | `data/computer-labels/database.sqlite` | 46mm × 45mm，A4 纵向，24 张/页 |
-| 联想商品价格标签 | 管理电脑、手机、平板及周边商品的品类、名称和价格 | `/price-labels` | `/modules/price-labels/` | `/api/price-labels` | `data/price-labels/database.sqlite` | 70mm × 28mm，A4 横向，28 张/页 |
-| 联想付款凭证 | 将商务存根和购物小票合成到一张 A4，识别并记录付款金额 | `/receipt-assistant` | `/modules/receipt-assistant/` | `/api/receipt-assistant` | `data/receipt-assistant/database.sqlite` | 存根 + 小票，A4 打印或 PNG 下载 |
+| 联想电脑商品标签 | 管理电脑 SKU、名称、配置、颜色和备注 | `/computer-labels` | `/modules/computer-labels/` | `/api/computer-labels` | `$LENOVO_STORE_DATA_DIR/computer-labels/database.sqlite` | 46mm × 45mm，A4 纵向，24 张/页 |
+| 联想商品价格标签 | 管理电脑、手机、平板及周边商品的品类、名称和价格 | `/price-labels` | `/modules/price-labels/` | `/api/price-labels` | `$LENOVO_STORE_DATA_DIR/price-labels/database.sqlite` | 70mm × 28mm，A4 横向，28 张/页 |
+| 联想付款凭证 | 将商务存根和购物小票合成到一张 A4，识别并记录付款金额 | `/receipt-assistant` | `/modules/receipt-assistant/` | `/api/receipt-assistant` | `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` | 存根 + 小票，A4 打印或 PNG 下载 |
 | 联想员工工牌 | 批量录入员工姓名、岗位和二维码，生成 A4 工牌排版 | `/employee-badges` | `/modules/employee-badges/` | 无 | 无 | 54mm × 85mm，A4 横向，10 张/页 |
+
+仅在 `npm run dev`、`NODE_ENV=development` 或测试模式下，未设置 `LENOVO_STORE_DATA_DIR` 才会使用仓库内的 `data/`；生产启动缺少该变量会直接失败，防止新 release 静默创建空库。
 
 ### 联想电脑商品标签
 
@@ -99,10 +101,10 @@ Express 5 unified server
   |-- /api/price-labels          商品价格标签 API
   `-- /api/receipt-assistant     付款凭证 API
          |
-         |-- data/computer-labels/database.sqlite
-         |-- data/price-labels/database.sqlite
-         |-- data/receipt-assistant/database.sqlite
-         `-- data/secrets/receipt-ocr.key
+         |-- $LENOVO_STORE_DATA_DIR/computer-labels/database.sqlite
+         |-- $LENOVO_STORE_DATA_DIR/price-labels/database.sqlite
+         |-- $LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite
+         `-- $LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key
 ```
 
 Portal 通过同源 iframe 加载四个独立 SPA。四套打印实现分别维护自己的纸张方向、毫米尺寸、分页和资源加载流程；员工工牌使用独立 iframe 打印 A4 横向页面，不向其他模块注入打印样式。
@@ -179,11 +181,17 @@ node --version
 
 ## 安装与生产运行
 
+生产环境必须将数据目录放在 Git checkout、release 目录和容器临时层之外。以下示例中的目录应由实际服务账号拥有并保持持久化：
+
 ```bash
+export LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations
+export LENOVO_STORE_BACKUP_DIR=/var/backups/lenovo-store-operations
 npm ci
 npm run build
 npm start
 ```
+
+`LENOVO_STORE_DATA_DIR` 必须是代码目录之外的绝对路径；显式指向项目 checkout、符号链接回项目目录或文件系统根目录都会拒绝启动。只有开发和测试模式允许回退到仓库内 `data/`，`npm start` 漏配变量会直接失败。systemd、PM2、Docker 或服务器面板中必须永久配置此变量，容器部署还必须把该目录挂载为持久卷。
 
 服务默认监听：
 
@@ -194,10 +202,40 @@ http://localhost:8900
 可通过环境变量修改监听地址和端口：
 
 ```bash
-HOST=127.0.0.1 PORT=8900 npm start
+HOST=127.0.0.1 PORT=8900 LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations npm start
 ```
 
-统一服务需要先完成 `npm run build`，因为 Express 会直接托管四个应用的 `dist` 目录。
+统一服务需要先完成 `npm run build`，因为 Express 会直接托管四个应用的 `dist` 目录。启动日志会输出当前实际使用的数据根目录及其来源。
+
+### 现有服务器一次性无损迁移
+
+如果服务器目前仍使用仓库内 `data/`，应在下一次拉取或切换 release 前完成一次迁移：
+
+1. 停止 Node/PM2/systemd/容器服务，确保没有 SQLite 写入；
+2. 将当前仓库的整个 `data/` 目录额外备份到独立位置；
+3. 创建代码目录之外的持久化目录，并将 `data/` 内全部内容原样复制过去，付款凭证数据库与 `secrets/receipt-ocr.key` 必须成对迁移；
+4. 为实际服务账号设置目录读写权限，并在进程管理器中永久配置 `LENOVO_STORE_DATA_DIR`；
+5. 拉取代码、执行 `npm ci && npm run build`，然后启动服务；
+6. 从启动日志确认实际数据目录，再检查健康接口及三个板块的记录数量和最新记录。
+
+示例（请将 `<repo>` 和 `<service-user>` 替换为服务器实际值；目标或 staging 已存在时命令会停止，不会合并覆盖）：
+
+```bash
+# 先停服，再执行复制；不要在SQLite仍写入时只复制主数据库文件
+TARGET=/var/lib/lenovo-store-operations
+STAGING="${TARGET}.staging"
+test ! -e "$TARGET" || { echo "目标已存在，停止迁移：$TARGET" >&2; exit 1; }
+test ! -e "$STAGING" || { echo "staging已存在，停止迁移：$STAGING" >&2; exit 1; }
+sudo install -d -m 0750 -o <service-user> -g <service-user> "$(dirname "$TARGET")"
+sudo cp -a <repo>/data "$STAGING"
+sudo test -f "$STAGING/computer-labels/database.sqlite"
+sudo test -f "$STAGING/price-labels/database.sqlite"
+sudo test -f "$STAGING/receipt-assistant/database.sqlite"
+sudo chown -R <service-user>:<service-user> "$STAGING"
+sudo mv "$STAGING" "$TARGET"
+```
+
+迁移成功并完成独立备份前不要删除旧 `data/`。以后可以更换 checkout、切换 release 或重建应用容器，但所有版本必须指向同一个外部持久化目录。部署脚本禁止使用会删除 ignored 文件的 `git clean -fdx` 处理数据目录。
 
 ### 常用入口
 
@@ -251,13 +289,13 @@ npm run dev
 | 付款凭证 | `~/Lenovo POS System/backend/db/database.sqlite` |
 | OCR 密钥 | `~/Lenovo POS System/backend/.local/ocr-config.key` |
 
-首次迁移前先安装依赖，但不要先启动新服务：
+首次迁移前先安装依赖，但不要先启动新服务。生产目标应通过外部数据根目录指定：
 
 ```bash
 npm ci
-npm run migrate:data
+LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations npm run migrate:data
 npm run build
-npm start
+LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations npm start
 ```
 
 迁移脚本会：
@@ -273,6 +311,7 @@ npm start
 如果旧项目不在默认位置，可通过环境变量指定：
 
 ```bash
+LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations \
 LEGACY_COMPUTER_DB="/absolute/path/computer.sqlite" \
 LEGACY_PRICE_DB="/absolute/path/price.db" \
 LEGACY_RECEIPT_DB="/absolute/path/receipt.sqlite" \
@@ -288,12 +327,22 @@ npm run migrate:data
 
 - 联想电脑商品标签：使用板块内的 Excel 导出或 SQLite 备份；SQLite 恢复会替换该板块数据库；
 - 联想商品价格标签：使用板块内 JSON 导出；导入时先校验，确认后在单事务中全量恢复；
-- 联想付款凭证：备份 `data/receipt-assistant/database.sqlite` 时，必须同时备份 `data/secrets/receipt-ocr.key`；
+- 联想付款凭证：备份 `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` 时，必须同时备份 `$LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key`；
 - 联想员工工牌：页面刷新或关闭后自动清空，若需要保存员工资料，应等待后续持久化需求明确后再设计。
+
+推荐使用统一在线备份命令，并将备份目录放在数据根目录之外：
+
+```bash
+LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations \
+LENOVO_STORE_BACKUP_DIR=/var/backups/lenovo-store-operations \
+npm run backup:data
+```
+
+该命令通过 SQLite backup API 分别创建三个一致性快照，执行 `PRAGMA integrity_check`，记录各表数量、文件大小和 SHA-256，同时备份当前实际使用的 32 字节 OCR 加密密钥并验证它能够解密快照中的凭据，最后生成 `manifest.json`。无论运行时密钥来自本机文件还是 `OCR_CONFIG_ENCRYPTION_KEY`，备份内都统一保存为权限 `0600` 的 `secrets/receipt-ocr.key`；无法确认可恢复时整个备份会失败。备份先写入 staging 目录，全部成功后再发布为时间戳目录，不会覆盖已有备份。`LENOVO_STORE_BACKUP_DIR` 必须是绝对普通目录，不能是符号链接，也不能与代码目录或数据目录重叠。
 
 付款凭证数据库中的 OCR 凭据是密文。只有配套的 `receipt-ocr.key` 才能解密；丢失密钥后不能从数据库恢复原凭据，需要在页面重新配置。
 
-备份或复制运行中的 SQLite 数据库时，不要只复制主 `.sqlite` 文件。应停止服务后复制数据库及相关 WAL/SHM 文件，或使用 SQLite backup API 生成一致性备份。
+不要在 SQLite 正在写入时只复制主 `.sqlite` 文件，否则 WAL 中已提交的数据可能丢失。优先使用 `npm run backup:data`；手工冷备份时必须先停服，再复制完整数据目录。每次部署前应先生成一份外部备份，并定期在隔离目录做恢复演练。
 
 ## OCR 配置与安全
 
@@ -315,8 +364,9 @@ npm run migrate:data
 | `npm run dev` | 同时启动五个前端开发服务器和统一后端 |
 | `npm run build` | 构建 Portal 和四个业务 SPA |
 | `npm start` | 启动 8900 统一生产服务 |
-| `npm run check` | 构建检查四个业务 SPA并检查后端 JavaScript 语法 |
-| `npm run migrate:data` | 一次性迁移三个旧项目数据库和 OCR 密钥 |
+| `npm run check` | 构建检查四个业务 SPA、后端与数据脚本语法 |
+| `npm run migrate:data` | 一次性迁移三个旧项目数据库和 OCR 密钥，目标由 `LENOVO_STORE_DATA_DIR` 决定 |
+| `npm run backup:data` | 在线一致性备份三套 SQLite、OCR 密钥和校验清单 |
 
 ## 构建与健康检查
 
@@ -335,9 +385,10 @@ npm audit
 curl http://127.0.0.1:8900/api/system/health
 ```
 
-健康接口会报告每个业务板块的以下状态：
+健康接口会报告：
 
-- SPA 构建产物是否存在；
+- `persistentDataConfigured` 是否已使用外部持久化数据根；生产探针应要求该值为 `true`；
+- 每个业务板块的 SPA 构建产物是否存在；
 - 有 API 的板块是否已挂载；
 - 使用 SQLite 的板块是否已有数据目录并成功连接数据库；
 - 板块处于“已迁移”或“已就绪”状态。
@@ -396,8 +447,8 @@ npm ci
 确认以下文件来自同一套旧系统备份：
 
 ```text
-data/receipt-assistant/database.sqlite
-data/secrets/receipt-ocr.key
+$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite
+$LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key
 ```
 
 如果密钥不匹配或已丢失，请在付款凭证页面重新填写百度 OCR 凭据。

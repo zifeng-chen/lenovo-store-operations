@@ -1,14 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
+import {
+  COMPUTER_LABELS_DATA_DIR,
+  COMPUTER_LABELS_DATABASE_PATH
+} from '../../config/data-paths.js';
 
-const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(currentDir, '../../../../..');
-const databaseDir = path.join(projectRoot, 'data', 'computer-labels');
+const databaseDir = COMPUTER_LABELS_DATA_DIR;
 
-export const DATABASE_PATH = path.join(databaseDir, 'database.sqlite');
+export const DATABASE_PATH = COMPUTER_LABELS_DATABASE_PATH;
 
 let database;
 
