@@ -43,7 +43,7 @@ export const STORE_MODULES = Object.freeze([
     name: '联想员工工牌',
     shortName: '联想员工工牌',
     iconText: '员',
-    description: '输入员工姓名和岗位、上传二维码，在浏览器内实时制作工牌预览。',
+    description: '录入多名员工的姓名、岗位和二维码，生成 54mm × 85mm 工牌并按 A4 横向批量打印。',
     route: '/employee-badges',
     moduleBase: '/modules/employee-badges/',
     apiBase: null,

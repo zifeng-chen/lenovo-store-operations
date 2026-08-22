@@ -1,46 +1,41 @@
 <script setup>
-import logoUrl from '@lenovo-store/shared/lenovo-logo.svg';
+import { computed } from 'vue';
+import EmployeeBadge from './EmployeeBadge.vue';
 
-defineProps({
-  name: { type: String, default: '' },
-  position: { type: String, default: '' },
-  qrUrl: { type: String, default: '' }
+const props = defineProps({
+  pages: { type: Array, default: () => [] }
 });
+
+const previewPages = computed(() => (props.pages.length ? props.pages : [[]]));
 </script>
 
 <template>
   <section class="preview-card ls-card" aria-labelledby="badge-preview-title">
     <div class="preview-heading">
       <div>
-        <p class="ls-eyebrow">实时预览</p>
-        <h2 id="badge-preview-title">员工工牌基础版式</h2>
+        <p class="ls-eyebrow">A4 实时预览</p>
+        <h2 id="badge-preview-title">员工工牌打印排版</h2>
       </div>
-      <span class="layout-badge">版式待补充</span>
+      <span class="layout-badge">5 × 2 / 10 张</span>
     </div>
 
-    <div class="badge-stage">
-      <article class="employee-badge">
-        <div class="badge-brand">
-          <img :src="logoUrl" alt="联想" />
-          <span>联想门店</span>
-        </div>
-        <div class="badge-divider"></div>
-        <div class="badge-person">
-          <p class="badge-label">员工姓名</p>
-          <h3>{{ name.trim() || '员工姓名' }}</h3>
-          <p class="badge-position">{{ position.trim() || '岗位名称' }}</p>
-        </div>
-        <div class="badge-qr">
-          <img v-if="qrUrl" :src="qrUrl" alt="员工二维码" />
-          <div v-else class="badge-qr-placeholder">
-            <span>二维码</span>
-            <small>上传后显示</small>
+    <div class="a4-preview-viewport">
+      <div v-for="(page, pageIndex) in previewPages" :key="pageIndex" class="a4-preview-shell">
+        <div class="a4-preview-page">
+          <div v-if="!page.length" class="empty-page-hint">
+            <strong>A4 工牌预览</strong>
+            <span>添加员工后将在此按 5 列 × 2 行排版</span>
+          </div>
+          <div class="preview-badge-grid">
+            <div v-for="employee in page" :key="employee.id" class="preview-badge-slot">
+              <EmployeeBadge :employee="employee" />
+            </div>
           </div>
         </div>
-        <p class="badge-footer">联想门店员工工牌</p>
-      </article>
+        <span class="page-number">第 {{ pageIndex + 1 }} / {{ previewPages.length }} 页</span>
+      </div>
     </div>
 
-    <p class="preview-note">当前仅用于确认信息和视觉方向，不代表最终物理尺寸或打印效果。</p>
+    <p class="preview-note">灰色细线为裁切边界；打印时请选择 A4、横向、实际大小（100%），并关闭页眉页脚。</p>
   </section>
 </template>

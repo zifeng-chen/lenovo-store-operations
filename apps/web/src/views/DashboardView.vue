@@ -40,7 +40,7 @@ import { STORE_MODULES } from '@lenovo-store/shared';
       <div class="principle-icon">界</div>
       <div>
         <h3>统一联想品牌，保持业务边界独立</h3>
-        <p>商品标签、价格标签和付款凭证继续使用独立数据库、API 与打印流程；员工工牌仅在浏览器内生成预览，不保存员工信息。</p>
+        <p>商品标签、价格标签和付款凭证继续使用独立数据库、API 与打印流程；员工工牌在浏览器内生成 A4 排版并打印，不保存员工信息。</p>
       </div>
     </div>
   </section>
