@@ -27,6 +27,19 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .form-field > span { color: #4c5d72; font-size: 13px; font-weight: 700; }
   .form-field > small { position: absolute; right: 3px; bottom: -16px; color: #9aa6b5; font-size: 10px; }
   .form-field .ls-input { width: 100%; height: 44px; padding: 0 13px; }
+  .theme-field { min-width: 0; padding: 0; border: 0; }
+  .theme-field legend { margin-bottom: 8px; color: #4c5d72; font-size: 13px; font-weight: 700; }
+  .theme-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .theme-option { position: relative; min-width: 0; min-height: 68px; padding: 9px 10px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--ls-color-border-strong); border-radius: 8px; background: #fff; cursor: pointer; transition: border-color var(--ls-transition), box-shadow var(--ls-transition), background var(--ls-transition); }
+  .theme-option:hover, .theme-option.is-selected { border-color: var(--ls-accent); background: #fff9f8; box-shadow: 0 0 0 2px rgba(210, 56, 47, .08); }
+  .theme-option:focus-within { outline: 2px solid #1a5e9c; outline-offset: 2px; }
+  .theme-option input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .theme-option > span:last-child { min-width: 0; display: grid; gap: 3px; }
+  .theme-option strong { color: var(--ls-color-text-strong); font-size: 11px; white-space: nowrap; }
+  .theme-option small { color: var(--ls-color-text-muted); font-size: 9px; white-space: nowrap; }
+  .theme-swatch { width: 26px; height: 40px; flex: 0 0 auto; border: 1px solid #cfd6df; border-radius: 3px; box-shadow: 0 2px 5px rgba(28, 43, 62, .1); }
+  .theme-swatch--default { background: linear-gradient(#fff, #fff); }
+  .theme-swatch--lenovo-red { border-color: #e6b1ad; background: linear-gradient(105deg, #d90016 0 28%, #f33d43 29% 34%, #fff 35%); }
   .qr-dropzone { min-height: 126px; padding: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 1px dashed #b9c6d5; border-radius: var(--ls-radius-md); background: var(--ls-color-surface-subtle); color: #53657a; transition: border-color var(--ls-transition), background var(--ls-transition), box-shadow var(--ls-transition); }
   .qr-dropzone:hover, .qr-dropzone.is-dragging { border-color: var(--ls-accent); background: #fff8f7; box-shadow: 0 0 0 3px rgba(210, 56, 47, .09); }
   .qr-dropzone.has-file { border-style: solid; border-color: #8dcab1; background: #f4fbf7; }
@@ -68,24 +81,40 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .preview-badge-grid { width: 100%; height: 100%; display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(2, 1fr); gap: 0; }
   .preview-badge-slot { position: relative; min-width: 0; min-height: 0; outline: 1px solid #aab2bd; outline-offset: -0.5px; }
   .a4-preview-page .employee-badge { position: relative; width: 100%; height: 100%; container-type: inline-size; overflow: hidden; background: #fff; }
-  .a4-preview-page .badge-background { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; }
-  .a4-preview-page .badge-content { position: absolute; inset: 0 16.666667% 0 20.37037%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-  .a4-preview-page .badge-content h3 { width: 100%; max-height: 24.074074cqw; margin: 0; overflow: hidden; color: #161b25; font-size: 9.62963cqw; font-weight: 700; line-height: 1.18; overflow-wrap: anywhere; }
-  .a4-preview-page .badge-content h3.is-long { font-size: 7.592593cqw; }
-  .a4-preview-page .badge-name-divider { width: 20cqw; height: .925926cqw; margin: 5.185185cqw 0; flex: 0 0 auto; border-radius: 999px; background: #d2382f; }
-  .a4-preview-page .badge-content p { width: 100%; max-height: 16.666667cqw; margin: 0; overflow: hidden; color: #596474; font-size: 5.740741cqw; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
-  .a4-preview-page .badge-content p.is-long { font-size: 4.814815cqw; }
-  .a4-preview-page .badge-code-block { position: relative; width: 44.444444cqw; height: 44.444444cqw; margin-top: 8.333333cqw; flex: 0 0 auto; }
-  .a4-preview-page .badge-qr { position: absolute; top: 5%; left: 5%; box-sizing: border-box; width: 90%; height: 90%; padding: 1.481481cqw; border: .5px solid #d2382f; border-radius: 0; background: #fff; transform: translateY(5.87963cqw); }
+  .a4-preview-page .badge-background { position: absolute; display: block; object-fit: cover; }
+  .a4-preview-page .badge-content { position: absolute; }
+  .a4-preview-page .badge-content h3, .a4-preview-page .badge-content p { overflow: hidden; overflow-wrap: anywhere; }
   .a4-preview-page .badge-qr img { display: block; width: 100%; height: 100%; object-fit: contain; }
-  .a4-preview-page .badge-footer-copy { position: absolute; top: calc(95% + 10.779321cqw); left: 50%; width: 62.962963cqw; height: 10cqw; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; color: #565d68; font-size: 3.333333cqw; font-weight: 600; line-height: 1.45; text-align: center; white-space: nowrap; transform: translateX(-50%); }
-  .a4-preview-page .badge-footer-copy span:first-child { font-weight: 700; }
+  .a4-preview-page .badge-footer-copy { display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; white-space: nowrap; }
+
+  .a4-preview-page .employee-badge--default .badge-content { inset: 0; color: #211f20; text-align: center; }
+  .a4-preview-page .employee-badge--default .badge-content h3 { position: absolute; top: 28.703704cqw; left: 7.407407cqw; width: 85.185185cqw; max-height: 16.666667cqw; margin: 0; color: #211f20; font-size: 11.481481cqw; font-weight: 800; line-height: 1.15; }
+  .a4-preview-page .employee-badge--default .badge-content h3.is-long { top: 25cqw; max-height: 18.518519cqw; font-size: 7.592593cqw; }
+  .a4-preview-page .employee-badge--default .badge-name-divider { display: none; }
+  .a4-preview-page .employee-badge--default .badge-content p { position: absolute; top: 45.37037cqw; left: 7.407407cqw; width: 85.185185cqw; max-height: 12.962963cqw; margin: 0; color: #211f20; font-size: 7.407407cqw; font-weight: 400; line-height: 1.25; }
+  .a4-preview-page .employee-badge--default .badge-content p.is-long { font-size: 4.814815cqw; }
+  .a4-preview-page .employee-badge--default .badge-code-block { position: absolute; top: 78.703704cqw; left: 22.222222cqw; width: 55.555556cqw; height: 72.222222cqw; }
+  .a4-preview-page .employee-badge--default .badge-qr { width: 55.555556cqw; height: 55.555556cqw; padding: 1.481481cqw; border: .2mm solid #4b4b4b; border-radius: 1.851852cqw; background: #fff; }
+  .a4-preview-page .employee-badge--default .badge-footer-copy { position: absolute; top: 58.333333cqw; left: 50%; width: 77.777778cqw; height: 13.888889cqw; color: #211f20; font-size: 5.555556cqw; font-weight: 500; line-height: 1.35; transform: translateX(-50%); }
+  .a4-preview-page .employee-badge--default .badge-footer-copy span:first-child { font-weight: 600; }
+
+  .a4-preview-page .employee-badge--lenovo-red .badge-background { inset: -3.703704cqw; width: calc(100% + 7.407407cqw); height: calc(100% + 7.407407cqw); }
+  .a4-preview-page .employee-badge--lenovo-red .badge-content { inset: 0 16.666667% 0 20.37037%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .a4-preview-page .employee-badge--lenovo-red .badge-content h3 { width: 100%; max-height: 24.074074cqw; margin: 0; color: #161b25; font-size: 9.62963cqw; font-weight: 700; line-height: 1.18; }
+  .a4-preview-page .employee-badge--lenovo-red .badge-content h3.is-long { font-size: 7.592593cqw; }
+  .a4-preview-page .employee-badge--lenovo-red .badge-name-divider { width: 20cqw; height: .925926cqw; margin: 5.185185cqw 0; flex: 0 0 auto; border-radius: 999px; background: #d2382f; }
+  .a4-preview-page .employee-badge--lenovo-red .badge-content p { width: 100%; max-height: 16.666667cqw; margin: 0; color: #596474; font-size: 5.740741cqw; font-weight: 600; line-height: 1.25; }
+  .a4-preview-page .employee-badge--lenovo-red .badge-content p.is-long { font-size: 4.814815cqw; }
+  .a4-preview-page .employee-badge--lenovo-red .badge-code-block { position: relative; width: 44.444444cqw; height: 44.444444cqw; margin-top: 8.333333cqw; flex: 0 0 auto; }
+  .a4-preview-page .employee-badge--lenovo-red .badge-qr { position: absolute; top: 5%; left: 5%; width: 90%; height: 90%; padding: 1.481481cqw; border: .5px solid #d2382f; background: #fff; transform: translateY(5.87963cqw); }
+  .a4-preview-page .employee-badge--lenovo-red .badge-footer-copy { position: absolute; top: calc(95% + 10.779321cqw); left: 50%; width: 62.962963cqw; height: 10cqw; color: #565d68; font-size: 3.333333cqw; font-weight: 600; line-height: 1.45; transform: translateX(-50%); }
+  .a4-preview-page .employee-badge--lenovo-red .badge-footer-copy span:first-child { font-weight: 700; }
   .empty-page-hint { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #9aa6b5; text-align: center; }
   .empty-page-hint strong { font-size: clamp(18px, 2.2vw, 26px); }
   .empty-page-hint span { font-size: clamp(10px, 1.2vw, 14px); }
   .page-number { position: static; display: block; margin-top: 8px; color: #637286; font-size: 10px; text-align: center; filter: none; }
   .preview-note { margin: 14px 0 0; color: var(--ls-color-text-muted); font-size: 10px; line-height: 1.6; text-align: center; }
-  .print-source { position: fixed; top: 0; left: -10000mm; width: 296mm; pointer-events: none; visibility: hidden; }
+  .print-source { position: fixed; top: 0; left: -10000mm; width: 297mm; pointer-events: none; visibility: hidden; }
 }
 
 @media screen and (max-width: 1080px) {

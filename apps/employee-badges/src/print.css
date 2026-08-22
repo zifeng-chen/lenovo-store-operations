@@ -1,15 +1,12 @@
-@page { size: A4 landscape; margin: 0; }
+@page { size: 297mm 210mm; margin: 0; }
 
 * { box-sizing: border-box; }
-html, body { width: 296mm; margin: 0; padding: 0; background: #fff; }
+html, body { width: 297mm; margin: 0; padding: 0; background: #fff; }
 body { color: #172033; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
-.print-source { display: block; width: 296mm; }
+.print-source { display: block; width: 297mm; }
 .badge-page {
-  position: relative;
-  left: 0.5mm;
-  top: 0.5mm;
-  width: 296mm;
-  height: 209mm;
+  width: 297mm;
+  height: 210mm;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -30,16 +27,33 @@ body { color: #172033; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI
 }
 .badge-slot { position: relative; width: 54mm; height: 85mm; outline: 0.1mm solid #9ca3ad; outline-offset: -0.05mm; break-inside: avoid; }
 .employee-badge { position: relative; width: 54mm; height: 85mm; overflow: hidden; background: #fff; }
-.badge-background { position: absolute; inset: 0; display: block; width: 54mm; height: 85mm; object-fit: contain; }
-.badge-content { position: absolute; inset: 0 9mm 0 11mm; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-.badge-content h3 { width: 100%; max-height: 13mm; margin: 0; overflow: hidden; color: #161b25; font-size: 5.2mm; font-weight: 700; line-height: 1.18; overflow-wrap: anywhere; }
-.badge-content h3.is-long { font-size: 4.1mm; }
-.badge-name-divider { width: 10.8mm; height: 0.5mm; margin: 2.8mm 0; flex: 0 0 auto; border-radius: 99mm; background: #d2382f; }
-.badge-content p { width: 100%; max-height: 9mm; margin: 0; overflow: hidden; color: #596474; font-size: 3.1mm; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
-.badge-content p.is-long { font-size: 2.6mm; }
-.badge-code-block { position: relative; width: 24mm; height: 24mm; margin-top: 4.5mm; flex: 0 0 auto; }
-.badge-qr { position: absolute; top: 5%; left: 5%; box-sizing: border-box; width: 90%; height: 90%; padding: 0.8mm; border: 0.5px solid #d2382f; border-radius: 0; background: #fff; transform: translateY(12px); }
+.badge-background { position: absolute; display: block; object-fit: cover; }
+.badge-content { position: absolute; }
+.badge-content h3, .badge-content p { overflow: hidden; overflow-wrap: anywhere; }
 .badge-qr img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.badge-footer-copy { position: absolute; top: calc(95% + 22px); left: 50%; width: 34mm; height: 5.4mm; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; color: #565d68; font-size: 1.8mm; font-weight: 600; line-height: 1.45; text-align: center; white-space: nowrap; transform: translateX(-50%); }
-.badge-footer-copy span:first-child { font-weight: 700; }
-@media print { body { width: 296mm; } }
+.badge-footer-copy { display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; white-space: nowrap; }
+
+.employee-badge--default .badge-content { inset: 0; color: #211f20; text-align: center; }
+.employee-badge--default .badge-content h3 { position: absolute; top: 15.5mm; left: 4mm; width: 46mm; max-height: 9mm; margin: 0; color: #211f20; font-size: 6.2mm; font-weight: 800; line-height: 1.15; }
+.employee-badge--default .badge-content h3.is-long { top: 13.5mm; max-height: 10mm; font-size: 4.1mm; }
+.employee-badge--default .badge-name-divider { display: none; }
+.employee-badge--default .badge-content p { position: absolute; top: 24.5mm; left: 4mm; width: 46mm; max-height: 7mm; margin: 0; color: #211f20; font-size: 4mm; font-weight: 400; line-height: 1.25; }
+.employee-badge--default .badge-content p.is-long { font-size: 2.6mm; }
+.employee-badge--default .badge-code-block { position: absolute; top: 42.5mm; left: 12mm; width: 30mm; height: 39mm; }
+.employee-badge--default .badge-qr { width: 30mm; height: 30mm; padding: 0.8mm; border: 0.2mm solid #4b4b4b; border-radius: 1mm; background: #fff; }
+.employee-badge--default .badge-footer-copy { position: absolute; top: 31.5mm; left: 50%; width: 42mm; height: 7.5mm; color: #211f20; font-size: 3mm; font-weight: 500; line-height: 1.35; transform: translateX(-50%); }
+.employee-badge--default .badge-footer-copy span:first-child { font-weight: 600; }
+
+.employee-badge--lenovo-red .badge-background { inset: -2mm; width: calc(100% + 4mm); height: calc(100% + 4mm); }
+.employee-badge--lenovo-red .badge-content { inset: 0 9mm 0 11mm; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.employee-badge--lenovo-red .badge-content h3 { width: 100%; max-height: 13mm; margin: 0; color: #161b25; font-size: 5.2mm; font-weight: 700; line-height: 1.18; }
+.employee-badge--lenovo-red .badge-content h3.is-long { font-size: 4.1mm; }
+.employee-badge--lenovo-red .badge-name-divider { width: 10.8mm; height: 0.5mm; margin: 2.8mm 0; flex: 0 0 auto; border-radius: 99mm; background: #d2382f; }
+.employee-badge--lenovo-red .badge-content p { width: 100%; max-height: 9mm; margin: 0; color: #596474; font-size: 3.1mm; font-weight: 600; line-height: 1.25; }
+.employee-badge--lenovo-red .badge-content p.is-long { font-size: 2.6mm; }
+.employee-badge--lenovo-red .badge-code-block { position: relative; width: 24mm; height: 24mm; margin-top: 4.5mm; flex: 0 0 auto; }
+.employee-badge--lenovo-red .badge-qr { position: absolute; top: 5%; left: 5%; width: 90%; height: 90%; padding: 0.8mm; border: 0.5px solid #d2382f; background: #fff; transform: translateY(12px); }
+.employee-badge--lenovo-red .badge-footer-copy { position: absolute; top: calc(95% + 22px); left: 50%; width: 34mm; height: 5.4mm; color: #565d68; font-size: 1.8mm; font-weight: 600; line-height: 1.45; transform: translateX(-50%); }
+.employee-badge--lenovo-red .badge-footer-copy span:first-child { font-weight: 700; }
+
+@media print { html, body { width: 297mm; } }

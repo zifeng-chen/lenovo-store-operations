@@ -4,6 +4,7 @@ import { ref } from 'vue';
 const props = defineProps({
   name: { type: String, default: '' },
   position: { type: String, default: '' },
+  theme: { type: String, default: 'default' },
   qrFileName: { type: String, default: '' },
   qrError: { type: String, default: '' },
   formError: { type: String, default: '' },
@@ -18,6 +19,7 @@ const props = defineProps({
 const emit = defineEmits([
   'update:name',
   'update:position',
+  'update:theme',
   'select-qr',
   'clear-qr',
   'update:dragging',
@@ -54,6 +56,40 @@ function dropFile(event) {
       </div>
       <span class="local-badge">仅当前页面</span>
     </div>
+
+    <fieldset class="form-field theme-field">
+      <legend>打印主题</legend>
+      <div class="theme-options">
+        <label :class="['theme-option', { 'is-selected': props.theme === 'default' }]">
+          <input
+            type="radio"
+            name="badge-theme"
+            value="default"
+            :checked="props.theme === 'default'"
+            @change="emit('update:theme', 'default')"
+          />
+          <span class="theme-swatch theme-swatch--default" aria-hidden="true"></span>
+          <span>
+            <strong>默认工牌</strong>
+            <small>纯白简约布局</small>
+          </span>
+        </label>
+        <label :class="['theme-option', { 'is-selected': props.theme === 'lenovo-red' }]">
+          <input
+            type="radio"
+            name="badge-theme"
+            value="lenovo-red"
+            :checked="props.theme === 'lenovo-red'"
+            @change="emit('update:theme', 'lenovo-red')"
+          />
+          <span class="theme-swatch theme-swatch--lenovo-red" aria-hidden="true"></span>
+          <span>
+            <strong>联想红工牌</strong>
+            <small>经典联想红背景</small>
+          </span>
+        </label>
+      </div>
+    </fieldset>
 
     <label class="form-field">
       <span>员工姓名</span>
@@ -124,7 +160,7 @@ function dropFile(event) {
           <span class="queue-index">{{ index + 1 }}</span>
           <div class="queue-person">
             <strong>{{ employee.name }}</strong>
-            <small>{{ employee.position }}</small>
+            <small>{{ employee.position }} · {{ employee.theme === 'lenovo-red' ? '联想红工牌' : '默认工牌' }}</small>
           </div>
           <label class="queue-quantity">
             <span>份数</span>
@@ -149,7 +185,7 @@ function dropFile(event) {
       <button type="button" class="ls-button ls-button--primary print-button" :disabled="!props.badgeCount || props.printing" @click="emit('print')">
         {{ props.printing ? '正在准备打印…' : `打印全部工牌（${props.badgeCount} 张）` }}
       </button>
-      <p class="print-tip">A4 横向 · 54mm × 85mm · 每页 10 张 · 打印缩放请选择 100%</p>
+      <p class="print-tip">A4 横向 · 实际大小（100%）· 禁用“适合页面” · 裁切格 54mm × 85mm</p>
     </div>
   </section>
 </template>

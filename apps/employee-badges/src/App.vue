@@ -9,7 +9,7 @@ import { printBadgePages } from './printBadges.js';
 const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']);
 const employees = ref([]);
 const editingId = ref(null);
-const draft = reactive({ name: '', position: '', qrUrl: '', qrFileName: '' });
+const draft = reactive({ name: '', position: '', theme: 'default', qrUrl: '', qrFileName: '' });
 const qrError = ref('');
 const formError = ref('');
 const dragging = ref(false);
@@ -21,6 +21,10 @@ let uploadVersion = 0;
 function normalizeQuantity(value) {
   const quantity = Number.parseInt(value, 10);
   return Number.isFinite(quantity) ? Math.min(99, Math.max(1, quantity)) : 1;
+}
+
+function normalizeTheme(value) {
+  return value === 'lenovo-red' ? 'lenovo-red' : 'default';
 }
 
 const printItems = computed(() => employees.value.flatMap((employee) => {
@@ -64,6 +68,7 @@ function clearDraft({ keepEditing = false } = {}) {
   releaseDraftQr();
   draft.name = '';
   draft.position = '';
+  draft.theme = 'default';
   qrError.value = '';
   formError.value = '';
   dragging.value = false;
@@ -110,6 +115,7 @@ function clearQr() {
 function saveEmployee() {
   const name = draft.name.trim();
   const position = draft.position.trim();
+  const theme = normalizeTheme(draft.theme);
   formError.value = '';
   if (!name || !position || !draft.qrUrl) {
     formError.value = '请填写员工姓名、岗位并上传二维码';
@@ -123,10 +129,10 @@ function saveEmployee() {
       return;
     }
     const previousQrUrl = employee.qrUrl;
-    Object.assign(employee, { name, position, qrUrl: draft.qrUrl, qrFileName: draft.qrFileName });
+    Object.assign(employee, { name, position, theme, qrUrl: draft.qrUrl, qrFileName: draft.qrFileName });
     if (draftQrIsNew.value && previousQrUrl !== draft.qrUrl) URL.revokeObjectURL(previousQrUrl);
   } else {
-    employees.value.push({ id: createId(), name, position, quantity: 1, qrUrl: draft.qrUrl, qrFileName: draft.qrFileName });
+    employees.value.push({ id: createId(), name, position, theme, quantity: 1, qrUrl: draft.qrUrl, qrFileName: draft.qrFileName });
   }
 
   draftQrIsNew.value = false;
@@ -134,6 +140,7 @@ function saveEmployee() {
   draft.qrFileName = '';
   draft.name = '';
   draft.position = '';
+  draft.theme = 'default';
   editingId.value = null;
   qrError.value = '';
   formError.value = '';
@@ -146,6 +153,7 @@ function editEmployee(id) {
   editingId.value = id;
   draft.name = employee.name;
   draft.position = employee.position;
+  draft.theme = normalizeTheme(employee.theme);
   draft.qrUrl = employee.qrUrl;
   draft.qrFileName = employee.qrFileName;
   draftQrIsNew.value = false;
@@ -211,6 +219,7 @@ onBeforeUnmount(() => {
       <BadgeForm
         v-model:name="draft.name"
         v-model:position="draft.position"
+        v-model:theme="draft.theme"
         :qr-file-name="draft.qrFileName"
         :qr-error="qrError"
         :form-error="formError"
