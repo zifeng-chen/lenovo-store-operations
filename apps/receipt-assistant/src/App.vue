@@ -1,7 +1,7 @@
 <template>
   <main class="app-shell ls-theme">
     <aside class="control-panel">
-      <header class="brand-header"><img class="brand-logo ls-brand-logo" :src="logoUrl" alt="联想" /><div><h1>联想付款凭证</h1><p>存根、小票与销售记录</p></div></header>
+      <header class="brand-header"><img class="brand-logo ls-brand-logo" :src="logoUrl" alt="联想" /><div><h1>付款凭证打印</h1><p>存根、小票与销售记录</p></div></header>
       <section class="today-card">
         <div class="today-card__header"><span class="section-eyebrow">今日销售</span><span class="today-date">{{ displayToday }}</span></div>
         <div class="today-metrics"><div class="metric"><span class="metric__label">销售笔数</span><strong>{{ todayStats.count }}</strong><span class="metric__unit">笔</span></div><div class="metric-divider"></div><div class="metric metric--amount"><span class="metric__label">销售总额</span><strong>{{ money(todayStats.total) }}</strong></div></div>
@@ -25,7 +25,46 @@
           <el-table-column label="操作" width="66" align="right"><template #default="scope"><el-button link :type="scope.row.status===1?'danger':'primary'" @click="toggleSale(scope.row)">{{ scope.row.status===1?'撤销':'恢复' }}</el-button></template></el-table-column>
         </el-table>
       </section>
-      <section class="panel-section chart-section"><div class="section-heading section-heading--compact"><div><span class="section-eyebrow section-eyebrow--dark">销售趋势</span><h2>近 30 天销售额</h2></div></div><div class="trend-chart"><svg viewBox="0 0 420 150" preserveAspectRatio="none" role="img" aria-label="近30天销售额趋势图"><line v-for="y in [25,75,125]" :key="y" x1="0" :y1="y" x2="420" :y2="y" class="chart-grid"/><polyline :points="trendPoints" class="chart-line"/><circle v-for="point in trendCoordinates" :key="point.date" :cx="point.x" :cy="point.y" r="5" class="chart-point" tabindex="0" :aria-label="`${point.date}，${money(point.total)}`"><title>{{ point.date }}：{{ money(point.total) }}</title></circle></svg><div class="chart-axis"><span>{{ trend[0]?.date?.slice(5) || '' }}</span><span>{{ trend[14]?.date?.slice(5) || '' }}</span><span>{{ trend[29]?.date?.slice(5) || '' }}</span></div></div></section>
+      <section class="panel-section chart-section">
+        <div class="section-heading section-heading--compact">
+          <div><span class="section-eyebrow section-eyebrow--dark">销售趋势</span><h2>近 30 天销售额与笔数</h2></div>
+          <span class="chart-click-hint">点击图表或选择日期查看明细</span>
+        </div>
+        <div class="trend-summary" aria-label="近30天销售汇总">
+          <div><span>累计销售额</span><strong>{{ money(trendSummary.total) }}</strong></div>
+          <div><span>有效销售</span><strong>{{ trendSummary.count }} 笔</strong></div>
+        </div>
+        <div class="trend-chart">
+          <template v-if="hasTrendData">
+            <div class="chart-legend" aria-hidden="true"><span><i class="is-amount"></i>销售额</span><span><i class="is-count"></i>销售笔数</span></div>
+            <svg class="is-interactive" viewBox="0 0 420 170" preserveAspectRatio="xMidYMid meet" role="img" aria-label="近30天销售额与销售笔数趋势图；点击图表按横向位置查看最近日期明细" @click="openTrendFromPointer">
+              <title>近30天累计销售额 {{ money(trendSummary.total) }}，有效销售 {{ trendSummary.count }} 笔</title>
+              <g v-for="tick in trendAxisTicks" :key="tick.y" aria-hidden="true">
+                <line x1="54" :y1="tick.y" x2="366" :y2="tick.y" class="chart-grid"/>
+                <text x="49" :y="tick.y + 3" text-anchor="end" class="chart-scale chart-scale--amount">{{ tick.amount }}</text>
+                <text x="371" :y="tick.y + 3" class="chart-scale chart-scale--count">{{ tick.count }}</text>
+              </g>
+              <text x="8" y="12" class="chart-axis-title chart-axis-title--amount" aria-hidden="true">金额</text>
+              <text x="412" y="12" text-anchor="end" class="chart-axis-title chart-axis-title--count" aria-hidden="true">笔数</text>
+              <polyline :points="amountTrendPoints" class="chart-line chart-line--amount" aria-hidden="true"/>
+              <polyline :points="countTrendPoints" class="chart-line chart-line--count" aria-hidden="true"/>
+              <g v-for="point in trendCoordinates" :key="point.date" :class="['chart-day',{ 'is-selected':selectedTrendDate===point.date }]" aria-hidden="true">
+                <circle :cx="point.x" :cy="point.amountY" r="3.5" class="chart-point chart-point--amount"/>
+                <circle :cx="point.x" :cy="point.countY" r="3.5" class="chart-point chart-point--count"/>
+              </g>
+            </svg>
+            <div class="chart-axis" aria-hidden="true"><span>{{ trend[0]?.date?.slice(5) || '' }}</span><span>{{ trend[14]?.date?.slice(5) || '' }}</span><span>{{ trend[29]?.date?.slice(5) || '' }}</span></div>
+          </template>
+          <div v-else class="chart-empty" role="status"><strong>近 30 天暂无有效销售</strong><span>保存销售记录后，这里会显示销售额和笔数趋势。</span></div>
+          <label class="trend-date-picker">
+            <span>按日期查看明细</span>
+            <select :value="selectedTrendDate || ''" aria-label="选择销售趋势日期" @change="selectTrendDate">
+              <option value="">请选择日期</option>
+              <option v-for="item in trend" :key="item.date" :value="item.date">{{ item.date }} · {{ money(item.total) }} · {{ item.count || 0 }} 笔</option>
+            </select>
+          </label>
+        </div>
+      </section>
     </aside>
     <section class="preview-workspace">
       <header class="preview-header"><div><span class="section-eyebrow section-eyebrow--blue">打印预览</span><h2>A4 组合排版</h2><p>将存根与购物小票并排放置，图片会自动等比缩放</p></div><div class="paper-badge"><span></span>A4 · 210 × 297 mm</div></header>
@@ -34,6 +73,22 @@
       </div></div>
       <input ref="stubInput" type="file" accept="image/*" hidden @change="selected('stub',$event)"/><input ref="receiptInput" type="file" accept="image/*" hidden @change="selected('receipt',$event)"/>
     </section>
+    <el-dialog v-model="trendDetailVisible" :title="trendDetailTitle" width="min(760px,94vw)" @closed="closeTrendDetail">
+      <div class="trend-detail-summary">
+        <div><span>有效销售额</span><strong>{{ money(selectedTrend?.total) }}</strong></div>
+        <div><span>有效销售</span><strong>{{ selectedTrend?.count || 0 }} 笔</strong></div>
+        <div><span>全部记录</span><strong>{{ selectedTrendSales.length }} 条</strong></div>
+        <div><span>已撤销</span><strong>{{ selectedCancelledSales.length }} 条</strong></div>
+      </div>
+      <p class="trend-detail-note">趋势汇总只统计状态为“正常”的记录；下表同时列出当日已撤销记录。</p>
+      <el-table :data="selectedTrendSales" max-height="420" row-key="id" empty-text="当日暂无销售记录" class="trend-detail-table">
+        <el-table-column prop="id" label="编号" width="76"><template #default="scope">#{{ scope.row.id }}</template></el-table-column>
+        <el-table-column label="记录时间" min-width="168"><template #default="scope">{{ historyTime(scope.row.created_at) }}</template></el-table-column>
+        <el-table-column label="金额" min-width="116"><template #default="scope"><span :class="['table-amount',{ 'is-cancelled':scope.row.status===0 }]">{{ money(scope.row.amount) }}</span></template></el-table-column>
+        <el-table-column label="状态" width="84" align="center"><template #default="scope"><span :class="['status-pill',scope.row.status===1?'status-pill--active':'status-pill--cancelled']">{{ scope.row.status===1?'正常':'已撤销' }}</span></template></el-table-column>
+        <el-table-column label="操作" width="76" align="right"><template #default="scope"><el-button link :type="scope.row.status===1?'danger':'primary'" @click.stop="toggleSale(scope.row)">{{ scope.row.status===1?'撤销':'恢复' }}</el-button></template></el-table-column>
+      </el-table>
+    </el-dialog>
     <el-dialog v-model="configVisible" title="配置百度智能云文字识别" width="min(500px,92vw)" :close-on-click-modal="!configSaving" @close="resetConfigForm"><div class="ocr-config-dialog-summary"><span :class="['ocr-config-state',{ 'is-ready':ocrConfig.configured }]">{{ ocrConfig.configured?'当前已配置':'当前未配置' }}</span><span v-if="ocrConfig.configured">{{ ocrConfig.apiKeyMasked }}</span></div><el-alert title="凭据仅发送到当前门店后端，Secret Key 不会回显；留空字段将保留现有值。" type="info" :closable="false" show-icon/><el-form label-position="top" class="ocr-config-form"><el-form-item label="API Key"><el-input v-model="configForm.apiKey" :placeholder="ocrConfig.configured?'留空以保留当前 API Key':'请输入 API Key'"/></el-form-item><el-form-item label="Secret Key"><el-input v-model="configForm.secretKey" type="password" show-password autocomplete="new-password" :placeholder="ocrConfig.hasSecretKey?'留空以保留当前 Secret Key':'请输入 Secret Key'"/></el-form-item></el-form><p class="ocr-config-security-note">保存前会向百度验证凭据；数据库仅保存 AES-256-GCM 密文。此系统无登录功能，只能部署在可信门店内网。</p><template #footer><el-button @click="configVisible=false">取消</el-button><el-button type="primary" :loading="configSaving" @click="saveConfig">验证并保存</el-button></template></el-dialog>
     <el-dialog v-model="historyVisible" title="OCR 识别记录" width="min(860px,94vw)" @close="cancelHistory"><el-table v-loading="historyLoading" :data="history.items" height="420" row-key="id" @row-click="row=>openHistoryDetail(row.id)"><el-table-column label="时间" min-width="155"><template #default="s">{{ historyTime(s.row.createdAt) }}</template></el-table-column><el-table-column label="状态" width="84"><template #default="s"><span :class="['history-status',`history-status--${s.row.status}`]">{{ statusLabel(s.row.status) }}</span></template></el-table-column><el-table-column label="金额" width="110"><template #default="s">{{ s.row.amount?money(s.row.amount):'—' }}</template></el-table-column><el-table-column prop="matchedText" label="命中文本" min-width="180" show-overflow-tooltip/><el-table-column label="耗时" width="86"><template #default="s">{{ s.row.durationMs }}ms</template></el-table-column></el-table><div class="ocr-history-pagination"><el-pagination background layout="total, prev, pager, next" :total="history.total" :page-size="history.pageSize" :current-page="history.page" @current-change="loadHistory"/></div></el-dialog>
     <el-dialog v-model="detailVisible" title="识别结果详情" width="min(680px,94vw)" @close="cancelDetail"><div v-loading="detailLoading" class="ocr-detail"><template v-if="detail"><div class="ocr-detail-grid"><div><span>记录编号</span><strong>#{{ detail.id }}</strong></div><div><span>识别时间</span><strong>{{ historyTime(detail.createdAt) }}</strong></div><div><span>状态</span><strong>{{ statusLabel(detail.status) }}</strong></div><div><span>耗时</span><strong>{{ detail.durationMs }}ms</strong></div><div><span>识别金额</span><strong>{{ detail.amount?money(detail.amount):'—' }}</strong></div><div><span>文字行数</span><strong>{{ detail.wordsCount }}</strong></div></div><div v-if="detail.matchedText" class="ocr-detail-block"><span>金额命中文本</span><p>{{ detail.matchedText }}</p></div><div v-if="detail.errorMessage" class="ocr-detail-block ocr-detail-block--error"><span>失败原因（{{ detail.errorCode||detail.httpStatus }}）</span><p>{{ detail.errorMessage }}</p></div><div class="ocr-detail-block"><span>百度 OCR 识别文字</span><pre>{{ detail.recognizedText||'未返回可保存的识别文字' }}</pre></div></template></div></el-dialog>
@@ -51,21 +106,39 @@ const stubInput=ref(); const receiptInput=ref(); const draggingSide=ref(null); c
 const loading=ref(false); const saving=ref(false); const downloading=ref(false); const recognizing=ref(false); const ocrMessage=ref('上传两张图片后自动识别销售金额'); const ocrMessageType=ref('neutral'); const currentHistoryId=ref(null)
 const ocrConfig=ref({configured:false,apiKeyMasked:'',hasSecretKey:false,source:'none',version:0,updatedAt:null,storageError:false}); const configVisible=ref(false); const configSaving=ref(false); const configForm=reactive({apiKey:'',secretKey:''})
 const historyVisible=ref(false); const historyLoading=ref(false); const history=ref({items:[],total:0,page:1,pageSize:10,totalPages:1}); const detailVisible=ref(false); const detailLoading=ref(false); const detail=ref(null)
+const trendDetailVisible=ref(false); const selectedTrendDate=ref(null)
 let ocrController=null, ocrRequestId=0, amountEditVersion=0, amountManuallyEdited=false, historyController=null, historyRequestId=0, detailController=null, detailRequestId=0, releasePrint=null
 const displayToday=new Intl.DateTimeFormat('zh-CN',{month:'long',day:'numeric',weekday:'short'}).format(new Date())
 const money=value=>new Intl.NumberFormat('zh-CN',{style:'currency',currency:'CNY',minimumFractionDigits:2}).format(Number(value)||0)
 const ocrConfigSourceLabel=computed(()=>ocrConfig.value.source==='database'?'页面持久化配置':ocrConfig.value.source==='environment'?'后端环境配置':'未配置')
-const trendCoordinates=computed(()=>{const values=trend.value.map(item=>Number(item.total)||0);const max=Math.max(1,...values);return trend.value.map((item,index)=>({date:item.date,total:Number(item.total)||0,x:index*(420/29),y:140-values[index]/max*125}))})
-const trendPoints=computed(()=>trendCoordinates.value.map(point=>`${point.x},${point.y}`).join(' '))
+const CHART_LEFT=58,CHART_RIGHT=362,CHART_TOP=22,CHART_BOTTOM=145
+const compactMoney=value=>{const amount=Math.max(0,Number(value)||0);if(amount>=10000){const scaled=amount/10000;return `¥${scaled>=10?scaled.toFixed(0):scaled.toFixed(1)}万`}return `¥${new Intl.NumberFormat('zh-CN',{maximumFractionDigits:amount<100?2:0}).format(amount)}`}
+const trendSummary=computed(()=>trend.value.reduce((summary,item)=>({total:summary.total+(Number(item.total)||0),count:summary.count+(Number(item.count)||0)}),{total:0,count:0}))
+const hasTrendData=computed(()=>trendSummary.value.count>0)
+const trendAmountMax=computed(()=>Math.max(0,...trend.value.map(item=>Number(item.total)||0)))
+const trendCountMax=computed(()=>Math.max(0,...trend.value.map(item=>Number(item.count)||0)))
+const trendCoordinates=computed(()=>{const amountScale=Math.max(1,trendAmountMax.value),countScale=Math.max(1,trendCountMax.value),range=CHART_BOTTOM-CHART_TOP,step=(CHART_RIGHT-CHART_LEFT)/Math.max(trend.value.length-1,1);return trend.value.map((item,index)=>{const total=Number(item.total)||0,count=Number(item.count)||0;return{date:item.date,total,count,x:CHART_LEFT+index*step,amountY:CHART_BOTTOM-total/amountScale*range,countY:CHART_BOTTOM-count/countScale*range}})})
+const amountTrendPoints=computed(()=>trendCoordinates.value.map(point=>`${point.x},${point.amountY}`).join(' '))
+const countTrendPoints=computed(()=>trendCoordinates.value.map(point=>`${point.x},${point.countY}`).join(' '))
+const trendAxisTicks=computed(()=>[{y:CHART_TOP,amount:compactMoney(trendAmountMax.value),count:trendCountMax.value},{y:(CHART_TOP+CHART_BOTTOM)/2,amount:compactMoney(trendAmountMax.value/2),count:Math.ceil(trendCountMax.value/2)},{y:CHART_BOTTOM,amount:'¥0',count:0}])
+const selectedTrend=computed(()=>trend.value.find(item=>item.date===selectedTrendDate.value)||null)
+const selectedTrendSales=computed(()=>sales.value.filter(item=>item.sale_date===selectedTrendDate.value))
+const selectedCancelledSales=computed(()=>selectedTrendSales.value.filter(item=>item.status===0))
+const trendDetailTitle=computed(()=>selectedTrendDate.value?`${selectedTrendDate.value} 销售趋势详情`:'销售趋势详情')
 const statusLabel=status=>status==='success'?'成功':status==='cancelled'?'已取消':'失败'
 const historyTime=value=>{if(!value)return '—';const date=new Date(`${String(value).replace(' ','T')}Z`);return Number.isNaN(date.getTime())?value:new Intl.DateTimeFormat('zh-CN',{dateStyle:'short',timeStyle:'medium',hour12:false}).format(date)}
 const message=(error,fallback)=>error instanceof ApiError?error.message:fallback
 const markAmountEdited=()=>{amountManuallyEdited=true;amountEditVersion+=1}
+function openTrendDetail(date){if(!date)return;selectedTrendDate.value=date;trendDetailVisible.value=true}
+function selectTrendDate(event){openTrendDetail(event.target.value)}
+function openTrendFromPointer(event){if(!trend.value.length)return;const bounds=event.currentTarget.getBoundingClientRect();if(!bounds.width)return;const viewX=(event.clientX-bounds.left)/bounds.width*420;const clampedX=Math.min(CHART_RIGHT,Math.max(CHART_LEFT,viewX));const index=Math.round((clampedX-CHART_LEFT)/(CHART_RIGHT-CHART_LEFT)*Math.max(trend.value.length-1,0));openTrendDetail(trend.value[index]?.date)}
+function closeTrendDetail(){selectedTrendDate.value=null}
+function applySaleStatusChange(originalStatus,updated){if(originalStatus===updated.status)return;const direction=updated.status===1?1:-1,amount=Number(updated.amount)||0;trend.value=trend.value.map(item=>item.date===updated.sale_date?{...item,count:Math.max(0,(Number(item.count)||0)+direction),total:Math.max(0,Math.round(((Number(item.total)||0)+direction*amount)*100)/100)}:item);const todayDate=trend.value.at(-1)?.date;if(updated.sale_date===todayDate)todayStats.value={count:Math.max(0,(Number(todayStats.value.count)||0)+direction),total:Math.max(0,Math.round(((Number(todayStats.value.total)||0)+direction*amount)*100)/100)}}
 
 async function fetchConfig(){ocrConfig.value=await request('/ocr/config')}
 async function refresh(){const [all,today,last30]=await Promise.all([request('/sales'),request('/sales/today'),request('/sales/trend')]);sales.value=all;todayStats.value=today;trend.value=last30}
 async function saveSale(){const amount=Number(saleAmount.value);if(!Number.isFinite(amount)||amount<=0)return ElMessage.warning('请输入大于 0 的销售金额');saving.value=true;try{await request('/sales',{method:'POST',body:{amount}});saleAmount.value=null;amountManuallyEdited=false;ElMessage.success('销售记录已保存')}catch(e){ElMessage.error(message(e,'保存失败，请检查后端服务'));saving.value=false;return}try{await refresh()}catch{ElMessage.warning('记录已保存，但统计刷新失败，请稍后刷新页面')}finally{saving.value=false}}
-async function toggleSale(sale){const originalStatus=sale.status;try{const updated=await request(`/sales/${sale.id}/toggle`,{method:'PUT'});Object.assign(sale,updated);ElMessage.success(originalStatus===1?'记录已撤销':'记录已恢复')}catch(e){ElMessage.error(message(e,'操作失败，请稍后重试'));return}try{await refresh()}catch{ElMessage.warning('状态已更新，但统计刷新失败，请稍后刷新页面')}}
+async function toggleSale(sale){const originalStatus=sale.status;try{const updated=await request(`/sales/${sale.id}/toggle`,{method:'PUT'});Object.assign(sale,updated);applySaleStatusChange(originalStatus,updated);ElMessage.success(originalStatus===1?'记录已撤销':'记录已恢复')}catch(e){ElMessage.error(message(e,'操作失败，请稍后重试'));return}try{await refresh()}catch{ElMessage.warning('状态已更新，本页汇总已同步；服务器统计刷新失败，请稍后重试')}}
 function pick(side){(side==='stub'?stubInput.value:receiptInput.value)?.click()}
 function drop(side,event){draggingSide.value=null;readImage(side,event.dataTransfer.files[0])}
 function selected(side,event){readImage(side,event.target.files[0]);event.target.value=''}

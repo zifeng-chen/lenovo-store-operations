@@ -261,16 +261,27 @@ export function createReceiptAssistantRouter() {
   })
 
   router.get('/sales/trend', (_request, response) => {
-    const startDate = new Date()
-    startDate.setHours(0, 0, 0, 0)
+    const endDate = new Date()
+    endDate.setHours(0, 0, 0, 0)
+    const startDate = new Date(endDate)
     startDate.setDate(startDate.getDate() - 29)
-    const rows = getRuntime().db.prepare('SELECT sale_date AS date, ROUND(SUM(amount), 2) AS total FROM sales WHERE status = 1 AND sale_date >= ? GROUP BY sale_date ORDER BY sale_date ASC').all(toLocalISODate(startDate))
-    const totals = new Map(rows.map(row => [row.date, row.total]))
+    const rows = getRuntime().db.prepare(`
+      SELECT sale_date AS date, COUNT(*) AS count, ROUND(SUM(amount), 2) AS total
+      FROM sales
+      WHERE status = 1 AND sale_date BETWEEN ? AND ?
+      GROUP BY sale_date
+      ORDER BY sale_date ASC
+    `).all(toLocalISODate(startDate), toLocalISODate(endDate))
+    const summaries = new Map(rows.map(row => [row.date, {
+      count: Number(row.count) || 0,
+      total: Number(row.total) || 0,
+    }]))
     return response.json(Array.from({ length: 30 }, (_, index) => {
       const date = new Date(startDate)
       date.setDate(startDate.getDate() + index)
       const dateString = toLocalISODate(date)
-      return { date: dateString, total: totals.get(dateString) || 0 }
+      const summary = summaries.get(dateString)
+      return { date: dateString, total: summary?.total || 0, count: summary?.count || 0 }
     }))
   })
 

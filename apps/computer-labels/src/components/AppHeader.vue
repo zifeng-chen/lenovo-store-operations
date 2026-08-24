@@ -12,7 +12,7 @@ defineProps({
     <div class="brand">
       <img class="brand-logo ls-brand-logo" :src="logoUrl" alt="联想" />
       <div>
-        <h1>联想电脑商品标签</h1>
+        <h1>仓库货品标签</h1>
         <p>电脑 SKU、配置与颜色标签管理</p>
       </div>
     </div>

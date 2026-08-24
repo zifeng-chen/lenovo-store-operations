@@ -232,7 +232,7 @@ onMounted(loadData)
           <img class="brand-mark" :src="logoUrl" alt="Lenovo 联想" />
           <div>
             <p class="system-version">联想门店运营系统</p>
-            <h1>联想商品价格标签</h1>
+            <h1>周边货品价签</h1>
             <p class="header-description">快速管理商品，并生成精确尺寸的 A4 价格标签</p>
           </div>
         </div>

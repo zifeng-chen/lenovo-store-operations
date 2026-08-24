@@ -2,10 +2,10 @@
 
 联想门店运营系统将四个业务边界彼此独立的门店工具统一到一个品牌、一个入口、一个服务进程和一个维护仓库中：
 
-1. 联想电脑商品标签管理与打印；
-2. 联想电脑、手机、平板及周边商品价格标签管理与打印；
-3. 联想客户付款后的存根、小票合成及付款凭证打印；
-4. 联想门店员工工牌批量制作、A4 排版与打印。
+1. 仓库货品标签：管理并打印仓库电脑 SKU、配置和颜色标签；
+2. 周边货品价签：管理并打印电脑、手机、平板及周边商品价格标签；
+3. 付款凭证打印：合成客户付款后的商务存根和购物小票，辅助识别并记录金额；
+4. 员工工牌制作：批量制作员工工牌并完成 A4 排版与打印。
 
 项目默认通过 `http://localhost:8900` 提供统一 Portal 和四个独立 SPA。前三个业务板块拥有独立 API 与 SQLite 数据库；员工工牌板块完全在浏览器内运行，不创建 API、数据库或本地持久化数据。
 
@@ -15,14 +15,14 @@
 
 | 业务板块 | 业务用途 | Portal 路由 | 独立 SPA | API | 数据库 | 当前输出能力 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 联想电脑商品标签 | 管理电脑 SKU、名称、配置、颜色和备注 | `/computer-labels` | `/modules/computer-labels/` | `/api/computer-labels` | `$LENOVO_STORE_DATA_DIR/computer-labels/database.sqlite` | 46mm × 45mm，A4 纵向，24 张/页 |
-| 联想商品价格标签 | 管理电脑、手机、平板及周边商品的品类、名称和价格 | `/price-labels` | `/modules/price-labels/` | `/api/price-labels` | `$LENOVO_STORE_DATA_DIR/price-labels/database.sqlite` | 70mm × 28mm，A4 横向，28 张/页 |
-| 联想付款凭证 | 将商务存根和购物小票合成到一张 A4，识别并记录付款金额 | `/receipt-assistant` | `/modules/receipt-assistant/` | `/api/receipt-assistant` | `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` | 存根 + 小票，A4 打印或 PNG 下载 |
-| 联想员工工牌 | 批量录入员工姓名、岗位和二维码，生成 A4 工牌排版 | `/employee-badges` | `/modules/employee-badges/` | 无 | 无 | 54mm × 85mm，A4 横向，10 张/页 |
+| 仓库货品标签 | 管理电脑 SKU、名称、配置、颜色和备注 | `/computer-labels` | `/modules/computer-labels/` | `/api/computer-labels` | `$LENOVO_STORE_DATA_DIR/computer-labels/database.sqlite` | 46mm × 45mm，A4 纵向，24 张/页 |
+| 周边货品价签 | 管理电脑、手机、平板及周边商品的品类、名称和价格 | `/price-labels` | `/modules/price-labels/` | `/api/price-labels` | `$LENOVO_STORE_DATA_DIR/price-labels/database.sqlite` | 70mm × 28mm，A4 横向，28 张/页 |
+| 付款凭证打印 | 将商务存根和购物小票合成到一张 A4，识别并记录付款金额 | `/receipt-assistant` | `/modules/receipt-assistant/` | `/api/receipt-assistant` | `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` | 存根 + 小票，A4 打印或 PNG 下载 |
+| 员工工牌制作 | 批量录入员工姓名、岗位和二维码，生成 A4 工牌排版 | `/employee-badges` | `/modules/employee-badges/` | 无 | 无 | 54mm × 85mm，A4 横向，10 张/页 |
 
 仅在 `npm run dev`、`NODE_ENV=development` 或测试模式下，未设置 `LENOVO_STORE_DATA_DIR` 才会使用仓库内的 `data/`；生产启动缺少该变量会直接失败，防止新 release 静默创建空库。
 
-### 联想电脑商品标签
+### 仓库货品标签
 
 - 商品新增、编辑、删除和批量删除；
 - 按 SKU、名称和配置实时模糊搜索；
@@ -35,7 +35,7 @@
 
 电脑商品标签不保存销售价格，其 SKU 模型不会与价格标签模块合并。
 
-### 联想商品价格标签
+### 周边货品价签
 
 - 商品和品类管理；
 - 商品搜索、品类筛选和当前筛选结果全选；
@@ -46,7 +46,7 @@
 
 该模块覆盖电脑、手机、平板和周边商品价格，不要求电脑 SKU，也不复用电脑商品标签数据库。
 
-### 联想付款凭证
+### 付款凭证打印
 
 - 商务存根和购物小票两张图片上传或拖放；
 - A4 Canvas 合成、预览、打印和 PNG 下载；
@@ -54,13 +54,14 @@
 - OCR 结果人工覆盖保护；
 - OCR 凭据配置和识别历史；
 - 销售金额保存、撤销和恢复；
-- 今日统计和最近 30 天销售趋势；
+- 今日统计，以及最近 30 天销售额/有效笔数双指标趋势；趋势图常驻显示累计金额、笔数、双轴刻度和图例；
+- 可用鼠标或触屏点击图表横向位置选择最近日期，也可使用支持键盘操作的日期下拉选择器；弹窗显示当日有效销售额、有效笔数、全部记录、撤销记录、记录时间和状态，并可直接撤销或恢复；
 - OCR 请求超时、重试、并发限制和频率限制；
 - OCR 凭据使用 AES-256-GCM 加密保存。
 
 付款凭证只记录付款与打印信息，不关联商品标签或价格标签数据。
 
-### 联想员工工牌
+### 员工工牌制作
 
 - 可连续添加多名员工，并在打印列表中编辑或删除；
 - 每名员工默认打印 1 份，可在打印列表中独立设置 1–99 份；列表同时显示员工人数、工牌总张数和 A4 页数；
@@ -89,10 +90,10 @@ Browser
   v
 Express 5 unified server
   |-- /                          Portal SPA
-  |-- /modules/computer-labels   联想电脑商品标签 SPA
-  |-- /modules/price-labels      联想商品价格标签 SPA
-  |-- /modules/receipt-assistant 联想付款凭证 SPA
-  |-- /modules/employee-badges   联想员工工牌 SPA（纯浏览器状态）
+  |-- /modules/computer-labels   仓库货品标签 SPA
+  |-- /modules/price-labels      周边货品价签 SPA
+  |-- /modules/receipt-assistant 付款凭证打印 SPA
+  |-- /modules/employee-badges   员工工牌制作 SPA（纯浏览器状态）
   |-- /api/computer-labels       电脑商品标签 API
   |-- /api/price-labels          商品价格标签 API
   `-- /api/receipt-assistant     付款凭证 API
@@ -139,8 +140,8 @@ lenovo-store-operations/
 │   ├── web/                    # 统一 Portal
 │   ├── computer-labels/        # 电脑商品标签 SPA
 │   ├── price-labels/           # 商品价格标签 SPA
-│   ├── receipt-assistant/      # 联想付款凭证 SPA
-│   ├── employee-badges/        # 联想员工工牌 SPA（无持久化）
+│   ├── receipt-assistant/      # 付款凭证打印 SPA
+│   ├── employee-badges/        # 员工工牌制作 SPA（无持久化）
 │   └── server/                 # Express 服务和三个持久化后端模块
 ├── packages/
 │   └── shared/                 # 板块元数据、共享屏幕主题与联想 Logo
@@ -241,10 +242,10 @@ Portal 使用 hash 路由，`#` 后的业务路径只由浏览器解析，刷新
 
 - Portal：`http://localhost:8900/`
 - 系统状态：`http://localhost:8900/#/system`
-- 联想电脑商品标签：`http://localhost:8900/#/computer-labels`
-- 联想商品价格标签：`http://localhost:8900/#/price-labels`
-- 联想付款凭证：`http://localhost:8900/#/receipt-assistant`
-- 联想员工工牌：`http://localhost:8900/#/employee-badges`
+- 仓库货品标签：`http://localhost:8900/#/computer-labels`
+- 周边货品价签：`http://localhost:8900/#/price-labels`
+- 付款凭证打印：`http://localhost:8900/#/receipt-assistant`
+- 员工工牌制作：`http://localhost:8900/#/employee-badges`
 - 系统健康接口：`http://localhost:8900/api/system/health`
 
 服务器仍兼容 `/system`、`/computer-labels`、`/price-labels`、`/receipt-assistant` 和 `/employee-badges` 旧直链，并使用 `308` 跳转到对应 hash 地址；新链接统一使用 hash 地址，避免部署环境未配置 history rewrite 时刷新落入 API 404。
@@ -266,10 +267,10 @@ npm run dev
 | 服务 | 开发地址 |
 | --- | --- |
 | Portal | `http://localhost:5173/` |
-| 联想电脑商品标签 | `http://localhost:5174/modules/computer-labels/` |
-| 联想商品价格标签 | `http://localhost:5175/modules/price-labels/` |
-| 联想付款凭证 | `http://localhost:5176/modules/receipt-assistant/` |
-| 联想员工工牌 | `http://localhost:5177/modules/employee-badges/` |
+| 仓库货品标签 | `http://localhost:5174/modules/computer-labels/` |
+| 周边货品价签 | `http://localhost:5175/modules/price-labels/` |
+| 付款凭证打印 | `http://localhost:5176/modules/receipt-assistant/` |
+| 员工工牌制作 | `http://localhost:5177/modules/employee-badges/` |
 | API 服务 | `http://localhost:8900/` |
 
 开发模式下应使用上表中的独立 Vite 地址调试业务模块。需要验证统一 Portal iframe、静态托管和生产路径时，请执行 `npm run build && npm start`，并通过 8900 端口访问。
@@ -323,10 +324,10 @@ npm run migrate:data
 
 三个持久化板块必须分别备份，不应合并为一个数据库；员工工牌不保存数据，因此没有数据库备份：
 
-- 联想电脑商品标签：使用板块内的 Excel 导出或 SQLite 备份；SQLite 恢复会替换该板块数据库；
-- 联想商品价格标签：使用板块内 JSON 导出；导入时先校验，确认后在单事务中全量恢复；
-- 联想付款凭证：备份 `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` 时，必须同时备份 `$LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key`；
-- 联想员工工牌：页面刷新或关闭后自动清空，若需要保存员工资料，应等待后续持久化需求明确后再设计。
+- 仓库货品标签：使用板块内的 Excel 导出或 SQLite 备份；SQLite 恢复会替换该板块数据库；
+- 周边货品价签：使用板块内 JSON 导出；导入时先校验，确认后在单事务中全量恢复；
+- 付款凭证打印：备份 `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` 时，必须同时备份 `$LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key`；
+- 员工工牌制作：页面刷新或关闭后自动清空，若需要保存员工资料，应等待后续持久化需求明确后再设计。
 
 推荐使用统一在线备份命令，并将备份目录放在数据根目录之外：
 
@@ -391,7 +392,7 @@ curl http://127.0.0.1:8900/api/system/health
 - 使用 SQLite 的板块是否已有数据目录并成功连接数据库；
 - 板块处于“已迁移”或“已就绪”状态。
 
-联想员工工牌在健康接口中会返回 `apiReady: null`、`dataDirectoryReady: null` 和 `databaseConnected: null`，表示这些能力不适用，而不是运行异常。
+员工工牌制作在健康接口中会返回 `apiReady: null`、`dataDirectoryReady: null` 和 `databaseConnected: null`，表示这些能力不适用，而不是运行异常。
 
 ## 打印验收
 
@@ -460,7 +461,7 @@ $LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key
 四个联想业务板块已统一运行在 8900 端口：
 
 - 三个既有板块的独立 SPA、API 和 SQLite 数据库已接入；
-- 联想员工工牌支持多员工录入、每人独立设置 1–99 打印份数及默认工牌/联想红工牌主题，使用真实 54mm × 85mm 裁切格、2mm 裁剪通道和完整 A4 横向页面完成 10 张/页预览与打印，不持久化员工信息；
+- 员工工牌制作支持多员工录入、每人独立设置 1–99 打印份数及默认工牌/联想红工牌主题，使用真实 54mm × 85mm 裁切格、2mm 裁剪通道和完整 A4 横向页面完成 10 张/页预览与打印，不持久化员工信息；
 - 用户指定的联想 SVG Logo 已作为共享屏幕品牌资产，Portal 和四个业务 SPA 的中文命名已统一；
 - 旧数据库及 OCR 密钥支持一致性迁移；
 - Portal、健康检查、构建和生产静态托管已完成；

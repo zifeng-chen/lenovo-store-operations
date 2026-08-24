@@ -208,7 +208,7 @@ onBeforeUnmount(() => {
       <div class="badge-app-brand">
         <img class="ls-brand-logo" :src="logoUrl" alt="联想" />
         <div>
-          <h1>联想员工工牌</h1>
+          <h1>员工工牌制作</h1>
           <p>54mm × 85mm 竖版工牌，A4 横向每页打印 10 张</p>
         </div>
       </div>

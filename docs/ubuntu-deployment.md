@@ -14,12 +14,12 @@
 
 | 板块 | 数据文件 |
 | --- | --- |
-| 联想电脑商品标签 | `$LENOVO_STORE_DATA_DIR/computer-labels/database.sqlite` |
-| 联想商品价格标签 | `$LENOVO_STORE_DATA_DIR/price-labels/database.sqlite` |
-| 联想付款凭证 | `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` |
+| 仓库货品标签 | `$LENOVO_STORE_DATA_DIR/computer-labels/database.sqlite` |
+| 周边货品价签 | `$LENOVO_STORE_DATA_DIR/price-labels/database.sqlite` |
+| 付款凭证打印 | `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` |
 | 付款凭证 OCR 密钥 | `$LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key` |
 
-员工工牌不会将姓名、岗位或二维码发送到服务器，也没有 SQLite 数据库。刷新或关闭员工工牌页面后，当前录入内容会清空。
+员工工牌制作模块不会将姓名、岗位或二维码发送到服务器，也没有 SQLite 数据库。刷新或关闭员工工牌制作页面后，当前录入内容会清空。
 
 SQLite 使用 WAL 模式时，运行目录中可能同时出现 `database.sqlite-wal` 和 `database.sqlite-shm`。在线备份应使用项目提供的 `npm run backup:data`；手工复制必须先停服并复制整个数据目录，不能只复制主数据库文件。
 
