@@ -10,7 +10,7 @@ function createStorageError(message, code) {
   return error
 }
 
-function decodeEnvironmentKey(value) {
+export function decodeEnvironmentKey(value) {
   const normalized = String(value || '').trim()
   if (!normalized) return null
   const key = /^[a-f\d]{64}$/i.test(normalized) ? Buffer.from(normalized, 'hex') : Buffer.from(normalized, 'base64')
@@ -18,32 +18,56 @@ function decodeEnvironmentKey(value) {
   return key
 }
 
-function loadOrCreateLocalKey(filePath) {
+export function loadOrCreateLocalKey(filePath, { create = true } = {}) {
   const directoryPath = path.dirname(filePath)
-  if (fs.existsSync(directoryPath)) {
+  if (!fs.existsSync(directoryPath)) {
+    if (!create) throw createStorageError('本机 OCR 凭据加密密钥不存在', 'LOCAL_KEY_NOT_FOUND')
+    fs.mkdirSync(directoryPath, { recursive: true, mode: 0o700 })
+  } else {
     const stats = fs.lstatSync(directoryPath)
     if (!stats.isDirectory() || stats.isSymbolicLink()) throw createStorageError('OCR 本机密钥目录必须是普通目录', 'INVALID_LOCAL_KEY_DIRECTORY')
-  } else {
-    fs.mkdirSync(directoryPath, { recursive: true, mode: 0o700 })
   }
   if (process.platform !== 'win32') {
-    fs.chmodSync(directoryPath, 0o700)
+    if (create) fs.chmodSync(directoryPath, 0o700)
     const stats = fs.lstatSync(directoryPath)
     if (!stats.isDirectory() || stats.isSymbolicLink() || (stats.mode & 0o777) !== 0o700) throw createStorageError('OCR 本机密钥目录权限必须为 0700', 'INSECURE_LOCAL_KEY_DIRECTORY_MODE')
   }
   if (!fs.existsSync(filePath)) {
+    if (!create) throw createStorageError('本机 OCR 凭据加密密钥不存在', 'LOCAL_KEY_NOT_FOUND')
     try { fs.writeFileSync(filePath, crypto.randomBytes(32), { flag: 'wx', mode: 0o600 }) }
     catch (error) { if (error.code !== 'EEXIST') throw error }
   }
   const stats = fs.lstatSync(filePath)
   if (!stats.isFile() || stats.isSymbolicLink()) throw createStorageError('本机 OCR 凭据加密密钥必须是普通文件', 'INVALID_LOCAL_KEY_FILE')
   if (process.platform !== 'win32') {
-    fs.chmodSync(filePath, 0o600)
+    if (create) fs.chmodSync(filePath, 0o600)
     if ((fs.lstatSync(filePath).mode & 0o777) !== 0o600) throw createStorageError('本机 OCR 凭据加密密钥权限必须为 0600', 'INSECURE_LOCAL_KEY_MODE')
   }
   const key = fs.readFileSync(filePath)
   if (key.length !== 32) throw createStorageError('本机 OCR 凭据加密密钥无效，请恢复原密钥或重新配置凭据', 'INVALID_LOCAL_KEY')
   return key
+}
+
+export function encryptOcrCredentials(credentials, key) {
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
+  cipher.setAAD(ENCRYPTION_CONTEXT)
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(credentials), 'utf8'), cipher.final()])
+  return { ciphertext: ciphertext.toString('base64'), iv: iv.toString('base64'), authTag: cipher.getAuthTag().toString('base64') }
+}
+
+export function decryptOcrCredentials(row, key) {
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(row.iv, 'base64'))
+    decipher.setAAD(ENCRYPTION_CONTEXT)
+    decipher.setAuthTag(Buffer.from(row.auth_tag, 'base64'))
+    const plaintext = Buffer.concat([decipher.update(Buffer.from(row.ciphertext, 'base64')), decipher.final()]).toString('utf8')
+    const credentials = JSON.parse(plaintext)
+    if (!credentials.apiKey || !credentials.secretKey) throw new Error('Missing credentials')
+    return credentials
+  } catch {
+    throw createStorageError('无法解密已保存的百度 OCR 凭据，请重新配置', 'OCR_CONFIG_DECRYPT_FAILED')
+  }
 }
 
 function maskApiKey(apiKey) {

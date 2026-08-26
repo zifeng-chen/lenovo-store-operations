@@ -94,9 +94,10 @@ Express 5 unified server
   |-- /modules/price-labels      周边货品价签 SPA
   |-- /modules/receipt-assistant 付款凭证打印 SPA
   |-- /modules/employee-badges   员工工牌制作 SPA（纯浏览器状态）
-  |-- /api/computer-labels       电脑商品标签 API
-  |-- /api/price-labels          商品价格标签 API
-  `-- /api/receipt-assistant     付款凭证 API
+  |-- /api/computer-labels       仓库货品标签 API
+  |-- /api/price-labels          周边货品价签 API
+  |-- /api/receipt-assistant     付款凭证 API
+  `-- /api/system                健康检查与统一备份恢复 API
          |
          |-- $LENOVO_STORE_DATA_DIR/computer-labels/database.sqlite
          |-- $LENOVO_STORE_DATA_DIR/price-labels/database.sqlite
@@ -252,7 +253,7 @@ Portal 使用 hash 路由，`#` 后的业务路径只由浏览器解析，刷新
 
 ### 反向代理与刷新
 
-生产反向代理应将 `/`、`/assets/`、`/modules/` 和 `/api/` 保留原始路径转发到统一服务的 `8900` 端口，不要把未命中的页面路径改写到 `/api`，也不要对 API 或缺失的 JavaScript/CSS 使用全局 `index.html` 回退。Portal 的 hash 路由不依赖代理层 SPA rewrite；未知 API 始终返回 JSON 404，缺失资源和未知页面返回普通页面 404。
+生产反向代理应将 `/`、`/assets/`、`/modules/` 和 `/api/` 保留原始路径转发到统一服务的 `8900` 端口，不要把未命中的页面路径改写到 `/api`，也不要对 API 或缺失的 JavaScript/CSS 使用全局 `index.html` 回退。代理必须保留原始 `Host`，并设置正确的 `X-Forwarded-Proto`；服务仅信任回环代理提供的转发协议，用于统一维护接口的严格同源校验。Portal 的 hash 路由不依赖代理层 SPA rewrite；未知 API 始终返回 JSON 404，缺失资源和未知页面返回普通页面 404。
 
 如果部署后仍返回英文 `{"code":1,"data":null,"msg":"Not Found"}`，说明请求未进入当前 Express 服务或服务器仍运行旧版本；请核对反向代理 upstream、实际启动命令、部署提交哈希和进程重启状态。
 
@@ -322,14 +323,29 @@ npm run migrate:data
 
 ## 数据备份与恢复
 
-三个持久化板块必须分别备份，不应合并为一个数据库；员工工牌不保存数据，因此没有数据库备份：
+系统状态页 `http://localhost:8900/#/system` 提供统一数据保护入口。员工工牌不保存数据；其余三个板块一次生成一个 `.lsbackup` 文件，恢复时上传同一个文件并逐个选择模块：
 
-- 仓库货品标签：使用板块内的 Excel 导出或 SQLite 备份；SQLite 恢复会替换该板块数据库；
-- 周边货品价签：使用板块内 JSON 导出；导入时先校验，确认后在单事务中全量恢复；
-- 付款凭证打印：备份 `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` 时，必须同时备份 `$LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key`；
-- 员工工牌制作：页面刷新或关闭后自动清空，若需要保存员工资料，应等待后续持久化需求明确后再设计。
+1. 点击“下载全部数据库备份”，输入服务器维护令牌后下载文件；
+2. 备份包含仓库货品标签、周边货品价签和付款凭证打印三套 SQLite 一致性快照；本机密钥模式下还会包含配套 OCR 密钥；
+3. 恢复时选择 `.lsbackup` 并点击“上传并检查”；上传只检查格式、长度、SHA-256、SQLite 完整性、表结构、业务字段和记录数，不会立即覆盖数据；
+4. 核对备份编号、创建时间和各表记录数，在目标模块点击“恢复此模块”；
+5. 二次确认弹窗中完整输入“恢复”。每次只在一个 SQLite 事务中覆盖一个模块，没有“一键恢复全部”；
+6. 用完后点击“清除”。服务端恢复会话最长保留 30 分钟，过期后必须重新上传。
 
-推荐使用统一在线备份命令，并将备份目录放在数据根目录之外：
+`.lsbackup` 最大 1GB。它是无压缩的 `LSOBKP01` 单文件容器，不依赖 ZIP/TAR 解包；清单拒绝未知模块、重复或重叠条目、长度越界、尾随数据和摘要不一致。SHA-256 与数据库检查用于发现损坏，**不能证明文件来源**，只应恢复从受信任服务器下载并保存在受控位置的文件。备份可能包含可用于解密百度 OCR 凭据的密钥，禁止上传到公共网盘、群聊或工单附件。
+
+如果源服务使用 `OCR_CONFIG_ENCRYPTION_KEY`，统一包不会导出该环境密钥，只记录密钥指纹；目标服务必须配置相同环境密钥才能恢复付款凭证。密钥不匹配时，检查结果只会把付款凭证标为“不兼容”，仓库货品标签和周边货品价签仍可独立恢复。本机密钥模式则使用包内源密钥解密 OCR 配置，再使用目标服务器当前有效密钥重新加密，不会覆盖目标服务器密钥文件。
+
+现有单模块入口继续保留：
+
+- 仓库货品标签：板块内 Excel 导入导出和 SQLite `.db` 备份恢复；
+- 周边货品价签：板块内 JSON 导入导出，导入前校验并在单事务中全量恢复；
+- 付款凭证打印：当前使用系统状态页统一入口恢复；
+- 员工工牌制作：页面刷新或关闭后自动清空，没有数据库备份。
+
+统一维护 API 要求 `X-Lenovo-Store-Maintenance: 1` 和 `Authorization: Bearer <LENOVO_STORE_MAINTENANCE_TOKEN>`。生产环境缺少至少 24 个字符的 `LENOVO_STORE_MAINTENANCE_TOKEN` 时服务会拒绝启动；非生产环境未配置令牌时，仅服务器本机回环请求可操作。页面令牌只保存在当前页面内存，不写入浏览器持久化存储。
+
+服务器定时和部署前备份仍推荐使用在线备份命令，并将备份目录放在数据根目录之外：
 
 ```bash
 LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations \
@@ -354,7 +370,7 @@ npm run backup:data
 
 建议通过付款凭证页面配置 OCR 凭据。页面和配置查询接口只返回掩码状态，不返回明文 Secret Key。
 
-本项目当前定位为门店内部工具，没有用户登录、权限控制或公网部署配置。默认 `HOST=0.0.0.0` 会允许局域网访问；请只在可信网络中运行。若需要公网部署，应在反向代理层增加 HTTPS、身份认证、访问控制和请求限制。
+本项目当前定位为门店内部工具，没有完整的用户账号系统或公网部署配置。统一备份恢复使用独立维护令牌保护，但其他业务 API 仍依赖可信内网边界。默认 `HOST=0.0.0.0` 会允许局域网访问；请只在可信网络中运行。若需要公网部署，应在反向代理层增加 HTTPS、统一身份认证、访问控制和请求限制，不能把维护令牌当作全站登录系统。
 
 ## npm 脚本
 

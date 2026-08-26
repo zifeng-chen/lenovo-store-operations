@@ -133,13 +133,16 @@ HOST=127.0.0.1
 PORT=8900
 LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations
 LENOVO_STORE_BACKUP_DIR=/var/backups/lenovo-store-operations
+LENOVO_STORE_MAINTENANCE_TOKEN=<至少24字符的随机维护令牌>
 ```
 
 说明：
 
-- 通过 Nginx 反向代理时建议使用 `HOST=127.0.0.1`；
+- 通过 Nginx 反向代理时建议使用 `HOST=127.0.0.1`；代理应保留原始 `Host`，并设置 `X-Forwarded-Proto $scheme`，否则统一维护接口的同源校验会拒绝请求；
 - 需要直接提供局域网访问时可改为 `HOST=0.0.0.0`，同时配置 Ubuntu 防火墙；
 - `LENOVO_STORE_DATA_DIR` 和 `LENOVO_STORE_BACKUP_DIR` 必须为绝对路径；
+- 生产服务必须配置至少 24 个字符的 `LENOVO_STORE_MAINTENANCE_TOKEN`，否则启动会失败。可用 `openssl rand -base64 32` 生成随机值，将结果写入权限为 `0600` 的环境文件；不要提交到 Git、聊天或工单；
+- 系统状态页执行统一备份恢复时会要求输入该令牌。令牌只保存在当前页面内存中，刷新或关闭页面后需要重新输入；
 - 如果使用 `OCR_CONFIG_ENCRYPTION_KEY`，应将它放在权限受控的环境文件或密钥管理系统中，不要提交到 Git。
 
 ### 4.3 创建 systemd 服务
@@ -332,7 +335,21 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 
 ## 7. 备份
 
-### 7.1 手动在线备份
+### 7.1 系统状态页统一备份
+
+适合人工迁移、按模块恢复和日常下载留档：
+
+1. 打开 `https://<store-host>/#/system`；
+2. 在“统一数据保护”区域点击“下载全部数据库备份”；
+3. 输入 `/etc/lenovo-store-operations.env` 中的 `LENOVO_STORE_MAINTENANCE_TOKEN`；
+4. 浏览器下载一个 `lenovo-store-backup-<timestamp>.lsbackup` 文件；
+5. 将文件移动到权限受控、具备独立备份策略的目录，并记录来源服务器和创建时间。
+
+`.lsbackup` 一次包含三套 SQLite 在线一致性快照。本机 OCR 密钥模式下还包含配套密钥，因此该文件可以用于离线解密已保存的 OCR 凭据，必须按敏感密钥材料保护；环境密钥模式不会导出 `OCR_CONFIG_ENCRYPTION_KEY`，恢复付款凭证时目标服务必须配置相同环境密钥。文件最大 1GB，不压缩。清单和 SHA-256 能发现截断、重叠、尾随内容及传输损坏，但不能证明文件来源，只能使用从受信任服务器直接下载的文件。
+
+浏览器统一备份不能替代无人值守的服务器定时备份。页面下载依赖浏览器会话和本机磁盘；定时、升级前和灾难恢复仍使用下一节的 `npm run backup:data` 目录快照。
+
+### 7.2 手动在线目录备份
 
 推荐通过下一节配置的 systemd oneshot 服务执行，这样可以复用主服务的账号、EnvironmentFile 和 `OCR_CONFIG_ENCRYPTION_KEY`：
 
@@ -366,7 +383,7 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 
 如果未配置 OCR 或数据库中没有 OCR 凭据，`secrets/receipt-ocr.key` 可能不存在，以 `manifest.json` 为准。
 
-### 7.2 systemd 定时备份
+### 7.3 systemd 定时备份
 
 创建 `/etc/systemd/system/lenovo-store-backup.service`：
 
@@ -414,11 +431,33 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 
 ## 8. 恢复与回滚
 
-项目当前没有自动恢复脚本。恢复必须停服，先恢复到新的 staging 目录，验证后再切换，不能直接覆盖正在使用的数据目录。
+系统状态页支持从 `.lsbackup` 在线按模块恢复；目录快照仍使用停服、staging 和 rollback 完成整套灾难恢复。两种方式用途不同：在线入口一次只覆盖一个模块的已知表，目录恢复则切换整个数据根。
 
-### 8.1 选择并校验快照
+### 8.1 系统状态页按模块恢复
 
-先查看 `manifest.json` 中的 `ocrKey.source`：
+1. 先下载并保留目标服务器当前数据的统一备份，作为人工回退点；
+2. 打开 `https://<store-host>/#/system`，在“统一数据保护”区域选择 `.lsbackup`；
+3. 输入维护令牌并点击“上传并检查”。此步骤只创建最长 30 分钟的临时会话，不覆盖数据；
+4. 核对备份编号、创建时间，以及商品、品类、销售、OCR 配置和 OCR 历史记录数量；
+5. 每次只选择一个模块，点击“恢复此模块”，在二次确认框完整输入“恢复”；
+6. 恢复后立即打开对应业务页核对记录数量、最新记录和关键数据，再决定是否恢复下一个模块；
+7. 完成后点击“清除”，提前删除临时恢复会话。即使不操作，服务端也会在 30 分钟后清理。
+
+在线恢复有以下边界：
+
+- 三个模块没有跨库事务，因此不提供“一键恢复全部”；某模块失败不会回滚之前已明确成功的其他模块；
+- 每个模块在一个 SQLite 事务内清空并复制已知表，失败会保留该模块恢复前数据；
+- 付款凭证存在进行中的 OCR 识别或配置保存时会拒绝恢复；成功后会重建 OCR runtime；
+- 本机密钥备份会先用包内密钥解密，再用目标服务器当前有效密钥重新加密，不直接覆盖目标密钥；
+- 环境密钥指纹不匹配时，付款凭证显示“不兼容”且按钮禁用，但另外两个模块仍可恢复；
+- 上传检查验证格式、摘要、SQLite 完整性、表结构、业务字段与计数，但不证明备份来源；
+- 仓库货品标签原 Excel/SQLite 入口和周边货品价签原 JSON 入口继续保留。
+
+生产环境维护接口要求同源请求、`X-Lenovo-Store-Maintenance: 1` 和正确的 Bearer 维护令牌。不要通过命令行历史直接拼接真实令牌；人工操作优先使用系统状态页。若确需自动化，应从 root-only 环境文件或密钥管理系统读取，避免出现在进程列表、Shell 历史和日志中。
+
+### 8.2 选择并校验目录快照
+
+以下内容适用于 `npm run backup:data` 生成的目录快照，而不是 `.lsbackup` 文件。先查看 `manifest.json` 中的 `ocrKey.source`：
 
 - `environment`：备份时实际使用 `OCR_CONFIG_ENCRYPTION_KEY`；恢复后的服务必须保留完全相同的环境密钥；
 - `local-file`：快照中的 `secrets/receipt-ocr.key` 是实际密钥，应与付款凭证数据库成对恢复；
@@ -466,7 +505,7 @@ for item in items:
 PY
 ```
 
-### 8.2 准备、检查并切换数据目录
+### 8.3 准备、检查并切换数据目录
 
 恢复需要 Ubuntu 的 `sqlite3` 命令；没有时先安装对应系统包。下面整段必须在同一个 Shell 中执行，不要拆开跳过。它会检查 staging 和 rollback 均不存在，复制并校验完整性，停服后再切换；任一步失败都不会继续启动不完整的数据目录：
 
@@ -559,7 +598,7 @@ else
 fi
 ```
 
-### 8.3 业务验收和人工回滚
+### 8.4 业务验收和人工回滚
 
 健康接口只能证明数据库可打开，不能证明恢复了正确的业务版本。切换成功后必须核对三个板块的记录数量、最新记录和付款凭证 OCR 解密；确认无误前保留 `$ROLLBACK`。
 

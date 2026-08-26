@@ -72,7 +72,16 @@ export function createReceiptAssistantRouter() {
   const ocrRequestHistory = new Map()
   let runtime
   let activeOcrRequests = 0
+  let activeConfigWrites = 0
+  let maintenanceMode = false
   const getRuntime = () => runtime || (runtime = createRuntime())
+
+  router.use((request, response, next) => {
+    if (maintenanceMode && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
+      return response.status(503).json({ message: '付款凭证数据正在维护，请稍后重试' })
+    }
+    return next()
+  })
 
   router.use(json({ limit: '100kb', type: 'application/json' }))
 
@@ -100,6 +109,7 @@ export function createReceiptAssistantRouter() {
     const nextService = state.createService(nextCredentials)
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(createRequestError(504, '百度 OCR 凭据验证超时', 'OCR_CONFIG_VALIDATION_TIMEOUT')), 20000)
+    activeConfigWrites += 1
     try {
       await nextService.validateCredentials({ signal: controller.signal })
       const saved = state.storage.saveCredentials({ ...nextCredentials, expectedVersion })
@@ -111,6 +121,7 @@ export function createReceiptAssistantRouter() {
     } catch (error) {
       return next(error)
     } finally {
+      activeConfigWrites = Math.max(0, activeConfigWrites - 1)
       clearTimeout(timeout)
     }
   })
@@ -307,7 +318,30 @@ export function createReceiptAssistantRouter() {
     return response.status(status).json(payload)
   })
 
+  Object.defineProperty(router, 'maintenanceCoordinator', {
+    enumerable: false,
+    value: {
+      get activeOperations() { return activeOcrRequests + activeConfigWrites },
+      async runRestore(task) {
+        if (maintenanceMode) throw createRequestError(409, '付款凭证数据维护正在进行', 'RECEIPT_MAINTENANCE_ACTIVE')
+        maintenanceMode = true
+        try {
+          if (activeOcrRequests || activeConfigWrites) {
+            throw createRequestError(409, '存在进行中的 OCR 识别或配置保存，请稍后重试', 'RECEIPT_OPERATIONS_ACTIVE')
+          }
+          const result = await task()
+          runtime = undefined
+          return result
+        } finally {
+          maintenanceMode = false
+        }
+      },
+    },
+  })
+
   return router
 }
 
-export default createReceiptAssistantRouter()
+const receiptAssistantRouter = createReceiptAssistantRouter()
+export const receiptAssistantMaintenance = receiptAssistantRouter.maintenanceCoordinator
+export default receiptAssistantRouter

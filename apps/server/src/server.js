@@ -7,23 +7,30 @@ import { STORE_MODULES } from '@lenovo-store/shared';
 import computerLabelsRouter, {
   apiBase as computerLabelsApiBase,
   DATABASE_PATH as computerLabelsDatabasePath,
+  getDatabase as getComputerLabelsDatabase,
   initializeDatabase as initializeComputerLabelsDatabase
 } from './modules/computer-labels/index.js';
 import priceLabelsRouter, {
   apiBase as priceLabelsApiBase,
   DATABASE_PATH as priceLabelsDatabasePath,
+  getDatabase as getPriceLabelsDatabase,
   initializeDatabase as initializePriceLabelsDatabase
 } from './modules/price-labels/index.js';
 import receiptAssistantRouter, {
   apiBase as receiptAssistantApiBase,
   DATABASE_PATH as receiptAssistantDatabasePath,
-  initializeDatabase as initializeReceiptAssistantDatabase
+  OCR_KEY_PATH as receiptOcrKeyPath,
+  getDatabase as getReceiptAssistantDatabase,
+  initializeDatabase as initializeReceiptAssistantDatabase,
+  receiptAssistantMaintenance
 } from './modules/receipt-assistant/index.js';
 import {
   DATA_ROOT,
   DATA_ROOT_SOURCE,
   EXTERNAL_DATA_ROOT_CONFIGURED
 } from './config/data-paths.js';
+import { createPersistenceService } from './system/persistence-service.js';
+import { createSystemPersistenceRouter } from './system/router.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(currentDir, '../../..');
@@ -31,6 +38,10 @@ const dataRoot = DATA_ROOT;
 const webDist = path.join(projectRoot, 'apps/web/dist');
 const host = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.PORT) || 8900;
+const maintenanceToken = String(process.env.LENOVO_STORE_MAINTENANCE_TOKEN || '').trim();
+if (process.env.NODE_ENV === 'production' && maintenanceToken.length < 24) {
+  throw new Error('生产环境必须设置至少 24 个字符的 LENOVO_STORE_MAINTENANCE_TOKEN');
+}
 const app = express();
 
 const moduleRuntimes = new Map([
@@ -55,8 +66,25 @@ const moduleRuntimes = new Map([
   }]
 ]);
 const databaseStatuses = new Map();
+const persistenceService = createPersistenceService({
+  runtimes: new Map([
+    ['computer-labels', { getDatabase: getComputerLabelsDatabase }],
+    ['price-labels', { getDatabase: getPriceLabelsDatabase }],
+    ['receipt-assistant', { getDatabase: getReceiptAssistantDatabase }]
+  ]),
+  receiptMaintenance: receiptAssistantMaintenance,
+  ocrKeyPath: receiptOcrKeyPath
+});
+const systemPersistenceRouter = createSystemPersistenceRouter({
+  persistenceService,
+  maintenanceToken,
+  onModuleRestored(moduleId) {
+    databaseStatuses.set(moduleId, { connected: true, error: null });
+  }
+});
 
 app.disable('x-powered-by');
+app.set('trust proxy', 'loopback');
 app.enable('strict routing');
 app.use(cors());
 
@@ -112,9 +140,12 @@ app.get('/api/system/health', (_req, res) => {
     version: '1.0.0',
     uptimeSeconds: Math.floor(process.uptime()),
     persistentDataConfigured: EXTERNAL_DATA_ROOT_CONFIGURED,
+    maintenanceAuthenticationRequired: Boolean(maintenanceToken),
     modules: STORE_MODULES.map(moduleStatus)
   });
 });
+
+app.use('/api/system', systemPersistenceRouter);
 
 for (const module of STORE_MODULES) {
   if (!module.apiBase) continue;
