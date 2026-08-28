@@ -22,40 +22,39 @@
         <el-table v-loading="loading" :data="sales" height="260" class="sales-table" empty-text="暂无销售记录" row-key="id">
           <el-table-column prop="sale_date" label="日期" width="108"/><el-table-column label="金额" min-width="104"><template #default="scope"><span :class="['table-amount',{ 'is-cancelled':scope.row.status===0 }]">{{ money(scope.row.amount) }}</span></template></el-table-column>
           <el-table-column label="状态" width="72" align="center"><template #default="scope"><span :class="['status-pill',scope.row.status===1?'status-pill--active':'status-pill--cancelled']">{{ scope.row.status===1?'正常':'已撤销' }}</span></template></el-table-column>
-          <el-table-column label="操作" width="66" align="right"><template #default="scope"><el-button link :type="scope.row.status===1?'danger':'primary'" @click="toggleSale(scope.row)">{{ scope.row.status===1?'撤销':'恢复' }}</el-button></template></el-table-column>
+          <el-table-column label="操作" width="66" align="right"><template #default="scope"><el-button link :type="scope.row.status===1?'danger':'primary'" :loading="togglingSaleIds.has(scope.row.id)" :disabled="togglingSaleIds.has(scope.row.id)" @click="toggleSale(scope.row)">{{ scope.row.status===1?'撤销':'恢复' }}</el-button></template></el-table-column>
         </el-table>
       </section>
-      <section class="panel-section chart-section">
+      <section v-loading="trendRefreshing" class="panel-section chart-section">
         <div class="section-heading section-heading--compact">
           <div><span class="section-eyebrow section-eyebrow--dark">销售趋势</span><h2>近 30 天销售额与笔数</h2></div>
-          <span class="chart-click-hint">点击图表或选择日期查看明细</span>
+          <el-button link type="primary" :disabled="trendRefreshing" @click="refreshTrend">刷新趋势</el-button>
         </div>
         <div class="trend-summary" aria-label="近30天销售汇总">
           <div><span>累计销售额</span><strong>{{ money(trendSummary.total) }}</strong></div>
           <div><span>有效销售</span><strong>{{ trendSummary.count }} 笔</strong></div>
         </div>
+        <div class="trend-toolbar" aria-label="趋势图显示范围">
+          <span>图表范围</span>
+          <div class="trend-range-switch" role="group" aria-label="选择趋势图显示天数">
+            <button v-for="days in [7,14,30]" :key="days" type="button" :class="{ 'is-active':trendRange===days }" :aria-pressed="trendRange===days" @click="trendRange=days">近 {{ days }} 天</button>
+          </div>
+          <span class="chart-click-hint">点击任意日期查看明细</span>
+        </div>
         <div class="trend-chart">
-          <template v-if="hasTrendData">
-            <div class="chart-legend" aria-hidden="true"><span><i class="is-amount"></i>销售额</span><span><i class="is-count"></i>销售笔数</span></div>
-            <svg class="is-interactive" viewBox="0 0 420 170" preserveAspectRatio="xMidYMid meet" role="img" aria-label="近30天销售额与销售笔数趋势图；点击图表按横向位置查看最近日期明细" @click="openTrendFromPointer">
-              <title>近30天累计销售额 {{ money(trendSummary.total) }}，有效销售 {{ trendSummary.count }} 笔</title>
-              <g v-for="tick in trendAxisTicks" :key="tick.y" aria-hidden="true">
-                <line x1="54" :y1="tick.y" x2="366" :y2="tick.y" class="chart-grid"/>
-                <text x="49" :y="tick.y + 3" text-anchor="end" class="chart-scale chart-scale--amount">{{ tick.amount }}</text>
-                <text x="371" :y="tick.y + 3" class="chart-scale chart-scale--count">{{ tick.count }}</text>
-              </g>
-              <text x="8" y="12" class="chart-axis-title chart-axis-title--amount" aria-hidden="true">金额</text>
-              <text x="412" y="12" text-anchor="end" class="chart-axis-title chart-axis-title--count" aria-hidden="true">笔数</text>
-              <polyline :points="amountTrendPoints" class="chart-line chart-line--amount" aria-hidden="true"/>
-              <polyline :points="countTrendPoints" class="chart-line chart-line--count" aria-hidden="true"/>
-              <g v-for="point in trendCoordinates" :key="point.date" :class="['chart-day',{ 'is-selected':selectedTrendDate===point.date }]" aria-hidden="true">
-                <circle :cx="point.x" :cy="point.amountY" r="3.5" class="chart-point chart-point--amount"/>
-                <circle :cx="point.x" :cy="point.countY" r="3.5" class="chart-point chart-point--count"/>
-              </g>
-            </svg>
-            <div class="chart-axis" aria-hidden="true"><span>{{ trend[0]?.date?.slice(5) || '' }}</span><span>{{ trend[14]?.date?.slice(5) || '' }}</span><span>{{ trend[29]?.date?.slice(5) || '' }}</span></div>
-          </template>
-          <div v-else class="chart-empty" role="status"><strong>近 30 天暂无有效销售</strong><span>保存销售记录后，这里会显示销售额和笔数趋势。</span></div>
+          <div
+            ref="trendChartElement"
+            class="trend-echart"
+            role="group"
+            tabindex="0"
+            aria-label="销售额与有效销售笔数趋势图。使用左右方向键选择日期，Home 和 End 跳转，Enter 或空格打开当日明细。"
+            :aria-describedby="trendChartDescriptionId"
+            @keydown="handleTrendKeydown"
+          ></div>
+          <p :id="trendChartDescriptionId" class="visually-hidden" aria-live="polite">{{ trendA11yDescription }}</p>
+          <div v-if="!hasTrendData && !trendLoadError" class="chart-empty-overlay" role="status"><strong>近 30 天暂无有效销售</strong><span>仍可点击日期或使用键盘查看当日撤销记录。</span></div>
+          <div v-if="trendLoadError" class="chart-error" role="alert"><strong>趋势数据加载失败</strong><span>{{ trendLoadError }}</span><el-button size="small" @click="refreshTrend">重新加载</el-button></div>
+          <p class="chart-usage-tip">支持悬停查看数值、拖动底部滑块缩放；图表获得焦点后可用 ← →、Home、End 和 Enter 操作。</p>
           <label class="trend-date-picker">
             <span>按日期查看明细</span>
             <select :value="selectedTrendDate || ''" aria-label="选择销售趋势日期" @change="selectTrendDate">
@@ -86,7 +85,7 @@
         <el-table-column label="记录时间" min-width="168"><template #default="scope">{{ historyTime(scope.row.created_at) }}</template></el-table-column>
         <el-table-column label="金额" min-width="116"><template #default="scope"><span :class="['table-amount',{ 'is-cancelled':scope.row.status===0 }]">{{ money(scope.row.amount) }}</span></template></el-table-column>
         <el-table-column label="状态" width="84" align="center"><template #default="scope"><span :class="['status-pill',scope.row.status===1?'status-pill--active':'status-pill--cancelled']">{{ scope.row.status===1?'正常':'已撤销' }}</span></template></el-table-column>
-        <el-table-column label="操作" width="76" align="right"><template #default="scope"><el-button link :type="scope.row.status===1?'danger':'primary'" @click.stop="toggleSale(scope.row)">{{ scope.row.status===1?'撤销':'恢复' }}</el-button></template></el-table-column>
+        <el-table-column label="操作" width="76" align="right"><template #default="scope"><el-button link :type="scope.row.status===1?'danger':'primary'" :loading="togglingSaleIds.has(scope.row.id)" :disabled="togglingSaleIds.has(scope.row.id)" @click.stop="toggleSale(scope.row)">{{ scope.row.status===1?'撤销':'恢复' }}</el-button></template></el-table-column>
       </el-table>
     </el-dialog>
     <el-dialog v-model="configVisible" title="配置百度智能云文字识别" width="min(500px,92vw)" :close-on-click-modal="!configSaving" @close="resetConfigForm"><div class="ocr-config-dialog-summary"><span :class="['ocr-config-state',{ 'is-ready':ocrConfig.configured }]">{{ ocrConfig.configured?'当前已配置':'当前未配置' }}</span><span v-if="ocrConfig.configured">{{ ocrConfig.apiKeyMasked }}</span></div><el-alert title="凭据仅发送到当前门店后端，Secret Key 不会回显；留空字段将保留现有值。" type="info" :closable="false" show-icon/><el-form label-position="top" class="ocr-config-form"><el-form-item label="API Key"><el-input v-model="configForm.apiKey" :placeholder="ocrConfig.configured?'留空以保留当前 API Key':'请输入 API Key'"/></el-form-item><el-form-item label="Secret Key"><el-input v-model="configForm.secretKey" type="password" show-password autocomplete="new-password" :placeholder="ocrConfig.hasSecretKey?'留空以保留当前 Secret Key':'请输入 Secret Key'"/></el-form-item></el-form><p class="ocr-config-security-note">保存前会向百度验证凭据；数据库仅保存 AES-256-GCM 密文。此系统无登录功能，只能部署在可信门店内网。</p><template #footer><el-button @click="configVisible=false">取消</el-button><el-button type="primary" :loading="configSaving" @click="saveConfig">验证并保存</el-button></template></el-dialog>
@@ -96,49 +95,96 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { init, use } from 'echarts/core'
+import { LineChart } from 'echarts/charts'
+import { AriaComponent, DataZoomComponent, GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
 import logoUrl from '@lenovo-store/shared/lenovo-logo.svg'
 import { ApiError, request } from './api.js'
+
+use([LineChart, AriaComponent, DataZoomComponent, GridComponent, LegendComponent, TooltipComponent])
+use([CanvasRenderer])
 
 const images=reactive({stub:null,receipt:null}); const decoded=reactive({stub:null,receipt:null}); const readVersions=reactive({stub:0,receipt:0})
 const stubInput=ref(); const receiptInput=ref(); const draggingSide=ref(null); const saleAmount=ref(null); const sales=ref([]); const trend=ref([]); const todayStats=ref({count:0,total:0})
 const loading=ref(false); const saving=ref(false); const downloading=ref(false); const recognizing=ref(false); const ocrMessage=ref('上传两张图片后自动识别销售金额'); const ocrMessageType=ref('neutral'); const currentHistoryId=ref(null)
 const ocrConfig=ref({configured:false,apiKeyMasked:'',hasSecretKey:false,source:'none',version:0,updatedAt:null,storageError:false}); const configVisible=ref(false); const configSaving=ref(false); const configForm=reactive({apiKey:'',secretKey:''})
 const historyVisible=ref(false); const historyLoading=ref(false); const history=ref({items:[],total:0,page:1,pageSize:10,totalPages:1}); const detailVisible=ref(false); const detailLoading=ref(false); const detail=ref(null)
-const trendDetailVisible=ref(false); const selectedTrendDate=ref(null)
+const trendDetailVisible=ref(false); const selectedTrendDate=ref(null); const trendChartElement=ref(null); const trendRange=ref(30); const trendRefreshing=ref(false); const trendLoadError=ref(''); const togglingSaleIds=reactive(new Set())
+let trendChart=null,trendResizeObserver=null
 let ocrController=null, ocrRequestId=0, amountEditVersion=0, amountManuallyEdited=false, historyController=null, historyRequestId=0, detailController=null, detailRequestId=0, releasePrint=null
 const displayToday=new Intl.DateTimeFormat('zh-CN',{month:'long',day:'numeric',weekday:'short'}).format(new Date())
 const money=value=>new Intl.NumberFormat('zh-CN',{style:'currency',currency:'CNY',minimumFractionDigits:2}).format(Number(value)||0)
 const ocrConfigSourceLabel=computed(()=>ocrConfig.value.source==='database'?'页面持久化配置':ocrConfig.value.source==='environment'?'后端环境配置':'未配置')
-const CHART_LEFT=58,CHART_RIGHT=362,CHART_TOP=22,CHART_BOTTOM=145
+const trendChartDescriptionId='sales-trend-chart-description'
 const compactMoney=value=>{const amount=Math.max(0,Number(value)||0);if(amount>=10000){const scaled=amount/10000;return `¥${scaled>=10?scaled.toFixed(0):scaled.toFixed(1)}万`}return `¥${new Intl.NumberFormat('zh-CN',{maximumFractionDigits:amount<100?2:0}).format(amount)}`}
 const trendSummary=computed(()=>trend.value.reduce((summary,item)=>({total:summary.total+(Number(item.total)||0),count:summary.count+(Number(item.count)||0)}),{total:0,count:0}))
 const hasTrendData=computed(()=>trendSummary.value.count>0)
-const trendAmountMax=computed(()=>Math.max(0,...trend.value.map(item=>Number(item.total)||0)))
-const trendCountMax=computed(()=>Math.max(0,...trend.value.map(item=>Number(item.count)||0)))
-const trendCoordinates=computed(()=>{const amountScale=Math.max(1,trendAmountMax.value),countScale=Math.max(1,trendCountMax.value),range=CHART_BOTTOM-CHART_TOP,step=(CHART_RIGHT-CHART_LEFT)/Math.max(trend.value.length-1,1);return trend.value.map((item,index)=>{const total=Number(item.total)||0,count=Number(item.count)||0;return{date:item.date,total,count,x:CHART_LEFT+index*step,amountY:CHART_BOTTOM-total/amountScale*range,countY:CHART_BOTTOM-count/countScale*range}})})
-const amountTrendPoints=computed(()=>trendCoordinates.value.map(point=>`${point.x},${point.amountY}`).join(' '))
-const countTrendPoints=computed(()=>trendCoordinates.value.map(point=>`${point.x},${point.countY}`).join(' '))
-const trendAxisTicks=computed(()=>[{y:CHART_TOP,amount:compactMoney(trendAmountMax.value),count:trendCountMax.value},{y:(CHART_TOP+CHART_BOTTOM)/2,amount:compactMoney(trendAmountMax.value/2),count:Math.ceil(trendCountMax.value/2)},{y:CHART_BOTTOM,amount:'¥0',count:0}])
+const visibleTrend=computed(()=>trend.value.slice(-trendRange.value))
 const selectedTrend=computed(()=>trend.value.find(item=>item.date===selectedTrendDate.value)||null)
 const selectedTrendSales=computed(()=>sales.value.filter(item=>item.sale_date===selectedTrendDate.value))
 const selectedCancelledSales=computed(()=>selectedTrendSales.value.filter(item=>item.status===0))
 const trendDetailTitle=computed(()=>selectedTrendDate.value?`${selectedTrendDate.value} 销售趋势详情`:'销售趋势详情')
+const trendA11yDescription=computed(()=>{const selected=selectedTrend.value;if(selected)return `${selected.date}，有效销售额 ${money(selected.total)}，有效销售 ${selected.count||0} 笔。按 Enter 查看详情。`;return `近30天累计销售额 ${money(trendSummary.value.total)}，有效销售 ${trendSummary.value.count} 笔。`})
+const prefersReducedMotion=()=>window.matchMedia?.('(prefers-reduced-motion: reduce)').matches===true
+function chartOption(){
+  const data=visibleTrend.value
+  const dates=data.map(item=>item.date)
+  const selectedDate=selectedTrendDate.value
+  const selectedSize=(date,normal)=>date===selectedDate?normal+4:normal
+  const showZoom=data.length>7
+  return {
+    animation:!prefersReducedMotion(),animationDuration:350,
+    aria:{enabled:true,decal:{show:true},label:{description:`近30天销售趋势，累计销售额${money(trendSummary.value.total)}，有效销售${trendSummary.value.count}笔。`}},
+    color:['#1a5e9c','#b85c00'],
+    legend:{top:2,right:8,itemWidth:20,itemHeight:9,textStyle:{color:'#43536a',fontSize:11},data:['销售额','销售笔数']},
+    tooltip:{trigger:'axis',confine:true,backgroundColor:'rgba(20,35,55,.94)',borderWidth:0,padding:[9,11],textStyle:{color:'#fff',fontSize:12},axisPointer:{type:'line',snap:true,lineStyle:{color:'#68819d',type:'dashed'}},formatter(params){const index=params?.[0]?.dataIndex??0;const item=data[index];if(!item)return '';return `<strong>${item.date}</strong><br/>销售额：${money(item.total)}<br/>有效销售：${item.count||0} 笔<br/><span style="color:#bdc9d6">点击查看当日全部记录</span>`}},
+    grid:{left:64,right:56,top:43,bottom:showZoom?72:46,containLabel:false},
+    xAxis:{type:'category',boundaryGap:false,data:dates,axisLine:{lineStyle:{color:'#b9c5d2'}},axisTick:{show:false},axisLabel:{color:'#526176',fontSize:10,hideOverlap:true,formatter:value=>value.slice(5),interval:Math.max(0,Math.ceil(data.length/6)-1)}},
+    yAxis:[
+      {type:'value',name:'金额',min:0,splitNumber:3,nameTextStyle:{color:'#1a5e9c',fontSize:10,fontWeight:700},axisLabel:{color:'#1a5e9c',fontSize:9,formatter:compactMoney},splitLine:{lineStyle:{color:'#e4eaf1',type:'dashed'}}},
+      {type:'value',name:'笔数',min:0,minInterval:1,splitNumber:3,nameTextStyle:{color:'#8a4705',fontSize:10,fontWeight:700},axisLabel:{color:'#8a4705',fontSize:9,formatter:value=>`${Math.round(value)}`},splitLine:{show:false}}
+    ],
+    dataZoom:showZoom?[
+      {type:'inside',xAxisIndex:0,filterMode:'none',zoomOnMouseWheel:'shift',moveOnMouseWheel:false,moveOnMouseMove:true},
+      {type:'slider',xAxisIndex:0,filterMode:'none',height:18,bottom:14,borderColor:'#ccd6e1',backgroundColor:'#f5f7fa',fillerColor:'rgba(26,94,156,.16)',handleStyle:{color:'#1a5e9c'},moveHandleStyle:{color:'#1a5e9c'},showDetail:false,brushSelect:false}
+    ]:[],
+    series:[
+      {name:'销售额',type:'line',yAxisIndex:0,smooth:.22,showSymbol:true,symbol:'circle',symbolSize:(_value,params)=>selectedSize(data[params.dataIndex]?.date,6),lineStyle:{width:3},itemStyle:{borderColor:'#fff',borderWidth:1.5},areaStyle:{color:'rgba(26,94,156,.08)'},emphasis:{focus:'series',scale:1.35},data:data.map(item=>Number(item.total)||0)},
+      {name:'销售笔数',type:'line',yAxisIndex:1,smooth:.18,showSymbol:true,symbol:'diamond',symbolSize:(_value,params)=>selectedSize(data[params.dataIndex]?.date,7),lineStyle:{width:2.5,type:'dashed'},itemStyle:{borderColor:'#fff',borderWidth:1.5},emphasis:{focus:'series',scale:1.35},data:data.map(item=>Number(item.count)||0)}
+    ]
+  }
+}
+function renderTrendChart({preserveZoom=true}={}){if(!trendChart)return;const option=chartOption();const previousZoom=preserveZoom?trendChart.getOption()?.dataZoom?.[0]:null;if(previousZoom&&option.dataZoom.length){option.dataZoom=option.dataZoom.map(zoom=>({...zoom,start:previousZoom.start,end:previousZoom.end}))}trendChart.setOption(option,{notMerge:true,lazyUpdate:false})}
+function showTrendTooltip(date){const index=visibleTrend.value.findIndex(item=>item.date===date);if(index<0||!trendChart)return;trendChart.dispatchAction({type:'showTip',seriesIndex:0,dataIndex:index})}
+function revealTrendIndex(index){const length=visibleTrend.value.length,zoom=trendChart?.getOption()?.dataZoom?.[0];if(!zoom||length<2)return;const maximum=length-1,rawStart=Number(zoom.start),rawEnd=Number(zoom.end),start=Math.round((Number.isFinite(rawStart)?rawStart:0)/100*maximum),end=Math.round((Number.isFinite(rawEnd)?rawEnd:100)/100*maximum);if(index>=start&&index<=end)return;const span=Math.max(1,end-start),nextStart=Math.max(0,Math.min(maximum-span,index<start?index:index-span));trendChart.dispatchAction({type:'dataZoom',dataZoomIndex:0,start:nextStart/maximum*100,end:(nextStart+span)/maximum*100})}
+function selectTrendForKeyboard(index){const data=visibleTrend.value;if(!data.length)return;const safeIndex=Math.max(0,Math.min(data.length-1,index));selectedTrendDate.value=data[safeIndex].date;nextTick(()=>{revealTrendIndex(safeIndex);showTrendTooltip(data[safeIndex].date)})}
+function handleTrendKeydown(event){const data=visibleTrend.value;if(!data.length)return;const selectedIndex=data.findIndex(item=>item.date===selectedTrendDate.value),currentIndex=selectedIndex>=0?selectedIndex:data.length-1;if(event.key==='ArrowLeft'){event.preventDefault();selectTrendForKeyboard(currentIndex-1)}else if(event.key==='ArrowRight'){event.preventDefault();selectTrendForKeyboard(selectedIndex>=0?currentIndex+1:data.length-1)}else if(event.key==='Home'){event.preventDefault();selectTrendForKeyboard(0)}else if(event.key==='End'){event.preventDefault();selectTrendForKeyboard(data.length-1)}else if((event.key==='Enter'||event.key===' ')&&selectedIndex>=0){event.preventDefault();openTrendDetail(selectedTrendDate.value)}}
+function initializeTrendChart(){
+  if(!trendChartElement.value||trendChart)return
+  trendChart=init(trendChartElement.value,null,{renderer:'canvas'})
+  trendChart.getZr().on('click',event=>{const point=[event.offsetX,event.offsetY];if(!trendChart?.containPixel({gridIndex:0},point))return;let nearest=null,distance=Infinity;visibleTrend.value.forEach(item=>{const x=trendChart.convertToPixel({xAxisIndex:0},item.date);const nextDistance=Math.abs(x-event.offsetX);if(nextDistance<distance){nearest=item;distance=nextDistance}});if(nearest)openTrendDetail(nearest.date)})
+  trendResizeObserver=new ResizeObserver(()=>trendChart?.resize())
+  trendResizeObserver.observe(trendChartElement.value)
+  renderTrendChart()
+}
+function disposeTrendChart(){trendResizeObserver?.disconnect();trendResizeObserver=null;trendChart?.dispose();trendChart=null}
 const statusLabel=status=>status==='success'?'成功':status==='cancelled'?'已取消':'失败'
 const historyTime=value=>{if(!value)return '—';const date=new Date(`${String(value).replace(' ','T')}Z`);return Number.isNaN(date.getTime())?value:new Intl.DateTimeFormat('zh-CN',{dateStyle:'short',timeStyle:'medium',hour12:false}).format(date)}
 const message=(error,fallback)=>error instanceof ApiError?error.message:fallback
 const markAmountEdited=()=>{amountManuallyEdited=true;amountEditVersion+=1}
-function openTrendDetail(date){if(!date)return;selectedTrendDate.value=date;trendDetailVisible.value=true}
+function openTrendDetail(date){if(!date)return;selectedTrendDate.value=date;trendDetailVisible.value=true;nextTick(()=>showTrendTooltip(date))}
 function selectTrendDate(event){openTrendDetail(event.target.value)}
-function openTrendFromPointer(event){if(!trend.value.length)return;const bounds=event.currentTarget.getBoundingClientRect();if(!bounds.width)return;const viewX=(event.clientX-bounds.left)/bounds.width*420;const clampedX=Math.min(CHART_RIGHT,Math.max(CHART_LEFT,viewX));const index=Math.round((clampedX-CHART_LEFT)/(CHART_RIGHT-CHART_LEFT)*Math.max(trend.value.length-1,0));openTrendDetail(trend.value[index]?.date)}
-function closeTrendDetail(){selectedTrendDate.value=null}
+function closeTrendDetail(){selectedTrendDate.value=null;trendChart?.dispatchAction({type:'hideTip'})}
 function applySaleStatusChange(originalStatus,updated){if(originalStatus===updated.status)return;const direction=updated.status===1?1:-1,amount=Number(updated.amount)||0;trend.value=trend.value.map(item=>item.date===updated.sale_date?{...item,count:Math.max(0,(Number(item.count)||0)+direction),total:Math.max(0,Math.round(((Number(item.total)||0)+direction*amount)*100)/100)}:item);const todayDate=trend.value.at(-1)?.date;if(updated.sale_date===todayDate)todayStats.value={count:Math.max(0,(Number(todayStats.value.count)||0)+direction),total:Math.max(0,Math.round(((Number(todayStats.value.total)||0)+direction*amount)*100)/100)}}
 
 async function fetchConfig(){ocrConfig.value=await request('/ocr/config')}
-async function refresh(){const [all,today,last30]=await Promise.all([request('/sales'),request('/sales/today'),request('/sales/trend')]);sales.value=all;todayStats.value=today;trend.value=last30}
+async function refresh(){trendLoadError.value='';try{const [all,today,last30]=await Promise.all([request('/sales'),request('/sales/today'),request('/sales/trend')]);sales.value=all;todayStats.value=today;trend.value=last30}catch(error){trendLoadError.value='无法获取最新销售统计，请检查服务后重试';throw error}}
+async function refreshTrend(){if(trendRefreshing.value)return;trendRefreshing.value=true;try{await refresh();ElMessage.success('销售趋势已刷新')}catch(e){ElMessage.error(message(e,'销售趋势刷新失败'))}finally{trendRefreshing.value=false}}
 async function saveSale(){const amount=Number(saleAmount.value);if(!Number.isFinite(amount)||amount<=0)return ElMessage.warning('请输入大于 0 的销售金额');saving.value=true;try{await request('/sales',{method:'POST',body:{amount}});saleAmount.value=null;amountManuallyEdited=false;ElMessage.success('销售记录已保存')}catch(e){ElMessage.error(message(e,'保存失败，请检查后端服务'));saving.value=false;return}try{await refresh()}catch{ElMessage.warning('记录已保存，但统计刷新失败，请稍后刷新页面')}finally{saving.value=false}}
-async function toggleSale(sale){const originalStatus=sale.status;try{const updated=await request(`/sales/${sale.id}/toggle`,{method:'PUT'});Object.assign(sale,updated);applySaleStatusChange(originalStatus,updated);ElMessage.success(originalStatus===1?'记录已撤销':'记录已恢复')}catch(e){ElMessage.error(message(e,'操作失败，请稍后重试'));return}try{await refresh()}catch{ElMessage.warning('状态已更新，本页汇总已同步；服务器统计刷新失败，请稍后重试')}}
+async function toggleSale(sale){if(togglingSaleIds.has(sale.id))return;togglingSaleIds.add(sale.id);const originalStatus=sale.status;try{const updated=await request(`/sales/${sale.id}/toggle`,{method:'PUT'});Object.assign(sale,updated);applySaleStatusChange(originalStatus,updated);ElMessage.success(originalStatus===1?'记录已撤销':'记录已恢复');try{await refresh()}catch{ElMessage.warning('状态已更新，本页汇总已同步；服务器统计刷新失败，请稍后重试')}}catch(e){ElMessage.error(message(e,'操作失败，请稍后重试'))}finally{togglingSaleIds.delete(sale.id)}}
 function pick(side){(side==='stub'?stubInput.value:receiptInput.value)?.click()}
 function drop(side,event){draggingSide.value=null;readImage(side,event.dataTransfer.files[0])}
 function selected(side,event){readImage(side,event.target.files[0]);event.target.value=''}
@@ -160,6 +206,8 @@ async function loadHistory(page=1){const id=++historyRequestId;historyController
 async function openHistory(){historyVisible.value=true;await loadHistory(1)}
 function cancelDetail(){detailRequestId+=1;detailController?.abort();detailController=null;detail.value=null}
 async function openHistoryDetail(id){if(!id)return;const requestId=++detailRequestId;detailController?.abort();const controller=new AbortController();detailController=controller;detailVisible.value=true;detailLoading.value=true;detail.value=null;try{const data=await request(`/ocr/history/${id}`,{signal:controller.signal});if(requestId===detailRequestId)detail.value=data}catch(e){if(requestId===detailRequestId){detailVisible.value=false;ElMessage.error(message(e,'识别结果详情加载失败'))}}finally{if(requestId===detailRequestId){detailLoading.value=false;detailController=null}}}
-onMounted(async()=>{loading.value=true;const results=await Promise.allSettled([refresh(),fetchConfig()]);if(results[0].status==='rejected')ElMessage.error('数据加载失败，请确认后端服务已启动');if(results[1].status==='rejected')ElMessage.warning('OCR 配置状态加载失败');loading.value=false})
-onBeforeUnmount(()=>{cancelOcr();cancelHistory();cancelDetail();releasePrint?.()})
+watch([trend,selectedTrendDate],()=>nextTick(()=>renderTrendChart()),{deep:true})
+watch(trendRange,()=>{if(!visibleTrend.value.some(item=>item.date===selectedTrendDate.value))selectedTrendDate.value=null;nextTick(()=>renderTrendChart({preserveZoom:false}))})
+onMounted(async()=>{await nextTick();initializeTrendChart();loading.value=true;const results=await Promise.allSettled([refresh(),fetchConfig()]);if(results[0].status==='rejected')ElMessage.error('数据加载失败，请确认后端服务已启动');if(results[1].status==='rejected')ElMessage.warning('OCR 配置状态加载失败');loading.value=false})
+onBeforeUnmount(()=>{disposeTrendChart();cancelOcr();cancelHistory();cancelDetail();releasePrint?.()})
 </script>
