@@ -27,7 +27,7 @@
       </section>
       <section v-loading="trendRefreshing" class="panel-section chart-section">
         <div class="section-heading section-heading--compact">
-          <div><span class="section-eyebrow section-eyebrow--dark">销售趋势</span><h2>近 30 天销售额与笔数</h2></div>
+          <div><span class="section-eyebrow section-eyebrow--dark">销售趋势</span><h2>近 30 天销售额走势</h2></div>
           <el-button link type="primary" :disabled="trendRefreshing" @click="refreshTrend">刷新趋势</el-button>
         </div>
         <div class="trend-summary" aria-label="近30天销售汇总">
@@ -35,11 +35,11 @@
           <div><span>有效销售</span><strong>{{ trendSummary.count }} 笔</strong></div>
         </div>
         <div class="trend-toolbar" aria-label="趋势图显示范围">
-          <span>图表范围</span>
+          <span>显示范围</span>
           <div class="trend-range-switch" role="group" aria-label="选择趋势图显示天数">
-            <button v-for="days in [7,14,30]" :key="days" type="button" :class="{ 'is-active':trendRange===days }" :aria-pressed="trendRange===days" @click="trendRange=days">近 {{ days }} 天</button>
+            <button v-for="days in [7,14,30]" :key="days" type="button" :class="{ 'is-active':trendRange===days }" :aria-pressed="trendRange===days" @click="trendRange=days">{{ days }} 天</button>
           </div>
-          <span class="chart-click-hint">点击任意日期查看明细</span>
+          <span class="chart-click-hint">悬浮看数值 · 点击看明细</span>
         </div>
         <div class="trend-chart">
           <div
@@ -47,14 +47,14 @@
             class="trend-echart"
             role="group"
             tabindex="0"
-            aria-label="销售额与有效销售笔数趋势图。使用左右方向键选择日期，Home 和 End 跳转，Enter 或空格打开当日明细。"
+            aria-label="销售额趋势曲线图。鼠标悬浮可查看数值；使用左右方向键选择日期，Home 和 End 跳转，Enter 或空格打开当日明细。"
             :aria-describedby="trendChartDescriptionId"
             @keydown="handleTrendKeydown"
           ></div>
           <p :id="trendChartDescriptionId" class="visually-hidden" aria-live="polite">{{ trendA11yDescription }}</p>
-          <div v-if="!hasTrendData && !trendLoadError" class="chart-empty-overlay" role="status"><strong>近 30 天暂无有效销售</strong><span>仍可点击日期或使用键盘查看当日撤销记录。</span></div>
+          <div v-if="!hasTrendData && !trendLoadError" class="chart-empty-overlay" role="status"><strong>近 {{ trendRange }} 天暂无有效销售</strong><span>仍可点击日期或使用键盘查看当日撤销记录。</span></div>
           <div v-if="trendLoadError" class="chart-error" role="alert"><strong>趋势数据加载失败</strong><span>{{ trendLoadError }}</span><el-button size="small" @click="refreshTrend">重新加载</el-button></div>
-          <p class="chart-usage-tip">支持悬停查看数值、拖动底部滑块缩放；图表获得焦点后可用 ← →、Home、End 和 Enter 操作。</p>
+          <p class="chart-usage-tip">曲线仅表示销售额；鼠标悬浮可查看当日金额和有效笔数，点击图表可打开当日明细。</p>
           <label class="trend-date-picker">
             <span>按日期查看明细</span>
             <select :value="selectedTrendDate || ''" aria-label="选择销售趋势日期" @change="selectTrendDate">
@@ -99,12 +99,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { ElMessage } from 'element-plus'
 import { init, use } from 'echarts/core'
 import { LineChart } from 'echarts/charts'
-import { AriaComponent, DataZoomComponent, GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { AriaComponent, GridComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import logoUrl from '@lenovo-store/shared/lenovo-logo.svg'
 import { ApiError, request } from './api.js'
 
-use([LineChart, AriaComponent, DataZoomComponent, GridComponent, LegendComponent, TooltipComponent])
+use([LineChart, AriaComponent, GridComponent, TooltipComponent])
 use([CanvasRenderer])
 
 const images=reactive({stub:null,receipt:null}); const decoded=reactive({stub:null,receipt:null}); const readVersions=reactive({stub:0,receipt:0})
@@ -129,38 +129,32 @@ const selectedCancelledSales=computed(()=>selectedTrendSales.value.filter(item=>
 const trendDetailTitle=computed(()=>selectedTrendDate.value?`${selectedTrendDate.value} 销售趋势详情`:'销售趋势详情')
 const trendA11yDescription=computed(()=>{const selected=selectedTrend.value;if(selected)return `${selected.date}，有效销售额 ${money(selected.total)}，有效销售 ${selected.count||0} 笔。按 Enter 查看详情。`;return `近30天累计销售额 ${money(trendSummary.value.total)}，有效销售 ${trendSummary.value.count} 笔。`})
 const prefersReducedMotion=()=>window.matchMedia?.('(prefers-reduced-motion: reduce)').matches===true
+const escapeTooltipText=value=>String(value).replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]))
 function chartOption(){
   const data=visibleTrend.value
   const dates=data.map(item=>item.date)
-  const selectedDate=selectedTrendDate.value
-  const selectedSize=(date,normal)=>date===selectedDate?normal+4:normal
-  const showZoom=data.length>7
   return {
-    animation:!prefersReducedMotion(),animationDuration:350,
-    aria:{enabled:true,decal:{show:true},label:{description:`近30天销售趋势，累计销售额${money(trendSummary.value.total)}，有效销售${trendSummary.value.count}笔。`}},
-    color:['#1a5e9c','#b85c00'],
-    legend:{top:2,right:8,itemWidth:20,itemHeight:9,textStyle:{color:'#43536a',fontSize:11},data:['销售额','销售笔数']},
-    tooltip:{trigger:'axis',confine:true,backgroundColor:'rgba(20,35,55,.94)',borderWidth:0,padding:[9,11],textStyle:{color:'#fff',fontSize:12},axisPointer:{type:'line',snap:true,lineStyle:{color:'#68819d',type:'dashed'}},formatter(params){const index=params?.[0]?.dataIndex??0;const item=data[index];if(!item)return '';return `<strong>${item.date}</strong><br/>销售额：${money(item.total)}<br/>有效销售：${item.count||0} 笔<br/><span style="color:#bdc9d6">点击查看当日全部记录</span>`}},
-    grid:{left:64,right:56,top:43,bottom:showZoom?72:46,containLabel:false},
-    xAxis:{type:'category',boundaryGap:false,data:dates,axisLine:{lineStyle:{color:'#b9c5d2'}},axisTick:{show:false},axisLabel:{color:'#526176',fontSize:10,hideOverlap:true,formatter:value=>value.slice(5),interval:Math.max(0,Math.ceil(data.length/6)-1)}},
-    yAxis:[
-      {type:'value',name:'金额',min:0,splitNumber:3,nameTextStyle:{color:'#1a5e9c',fontSize:10,fontWeight:700},axisLabel:{color:'#1a5e9c',fontSize:9,formatter:compactMoney},splitLine:{lineStyle:{color:'#e4eaf1',type:'dashed'}}},
-      {type:'value',name:'笔数',min:0,minInterval:1,splitNumber:3,nameTextStyle:{color:'#8a4705',fontSize:10,fontWeight:700},axisLabel:{color:'#8a4705',fontSize:9,formatter:value=>`${Math.round(value)}`},splitLine:{show:false}}
-    ],
-    dataZoom:showZoom?[
-      {type:'inside',xAxisIndex:0,filterMode:'none',zoomOnMouseWheel:'shift',moveOnMouseWheel:false,moveOnMouseMove:true},
-      {type:'slider',xAxisIndex:0,filterMode:'none',height:18,bottom:14,borderColor:'#ccd6e1',backgroundColor:'#f5f7fa',fillerColor:'rgba(26,94,156,.16)',handleStyle:{color:'#1a5e9c'},moveHandleStyle:{color:'#1a5e9c'},showDetail:false,brushSelect:false}
-    ]:[],
-    series:[
-      {name:'销售额',type:'line',yAxisIndex:0,smooth:.22,showSymbol:true,symbol:'circle',symbolSize:(_value,params)=>selectedSize(data[params.dataIndex]?.date,6),lineStyle:{width:3},itemStyle:{borderColor:'#fff',borderWidth:1.5},areaStyle:{color:'rgba(26,94,156,.08)'},emphasis:{focus:'series',scale:1.35},data:data.map(item=>Number(item.total)||0)},
-      {name:'销售笔数',type:'line',yAxisIndex:1,smooth:.18,showSymbol:true,symbol:'diamond',symbolSize:(_value,params)=>selectedSize(data[params.dataIndex]?.date,7),lineStyle:{width:2.5,type:'dashed'},itemStyle:{borderColor:'#fff',borderWidth:1.5},emphasis:{focus:'series',scale:1.35},data:data.map(item=>Number(item.count)||0)}
-    ]
+    animation:!prefersReducedMotion(),animationDuration:320,
+    aria:{enabled:true,label:{description:`近${trendRange.value}天销售额趋势，累计销售额${money(trendSummary.value.total)}，有效销售${trendSummary.value.count}笔。`}},
+    tooltip:{
+      trigger:'axis',confine:true,transitionDuration:0,backgroundColor:'rgba(255,255,255,.98)',borderColor:'#dce5ee',borderWidth:1,padding:[11,13],extraCssText:'border-radius:10px;box-shadow:0 10px 28px rgba(20,44,70,.14);',textStyle:{color:'#172033',fontSize:12},
+      axisPointer:{type:'line',snap:true,lineStyle:{color:'#8aa9c3',width:1}},
+      formatter(params){const index=params?.[0]?.dataIndex??0;const item=data[index];if(!item)return '';return `<div style="min-width:148px"><div style="margin-bottom:6px;color:#6b7b8e;font-size:11px">${escapeTooltipText(item.date)}</div><div style="color:#173b5d;font-size:18px;font-weight:750;line-height:1.2">${money(item.total)}</div><div style="margin-top:7px;color:#56687b;font-size:11px">有效销售 ${item.count||0} 笔 · 点击查看明细</div></div>`}
+    },
+    grid:{left:58,right:20,top:22,bottom:40,containLabel:false},
+    xAxis:{type:'category',boundaryGap:false,data:dates,axisLine:{lineStyle:{color:'#d8e1ea'}},axisTick:{show:false},axisLabel:{margin:12,color:'#77879a',fontSize:10,hideOverlap:true,formatter:value=>value.slice(5),interval:Math.max(0,Math.ceil(data.length/6)-1)}},
+    yAxis:{type:'value',min:0,splitNumber:3,axisLine:{show:false},axisTick:{show:false},axisLabel:{margin:12,color:'#77879a',fontSize:10,formatter:compactMoney},splitLine:{lineStyle:{color:'#e9eef4',width:1}}},
+    series:[{
+      name:'销售额',type:'line',smooth:.4,showSymbol:false,symbol:'none',connectNulls:true,
+      lineStyle:{width:3,color:'#1a5e9c',cap:'round',join:'round'},
+      emphasis:{disabled:true},
+      data:data.map(item=>Number(item.total)||0)
+    }]
   }
 }
-function renderTrendChart({preserveZoom=true}={}){if(!trendChart)return;const option=chartOption();const previousZoom=preserveZoom?trendChart.getOption()?.dataZoom?.[0]:null;if(previousZoom&&option.dataZoom.length){option.dataZoom=option.dataZoom.map(zoom=>({...zoom,start:previousZoom.start,end:previousZoom.end}))}trendChart.setOption(option,{notMerge:true,lazyUpdate:false})}
+function renderTrendChart(){if(!trendChart)return;trendChart.setOption(chartOption(),{notMerge:true,lazyUpdate:false})}
 function showTrendTooltip(date){const index=visibleTrend.value.findIndex(item=>item.date===date);if(index<0||!trendChart)return;trendChart.dispatchAction({type:'showTip',seriesIndex:0,dataIndex:index})}
-function revealTrendIndex(index){const length=visibleTrend.value.length,zoom=trendChart?.getOption()?.dataZoom?.[0];if(!zoom||length<2)return;const maximum=length-1,rawStart=Number(zoom.start),rawEnd=Number(zoom.end),start=Math.round((Number.isFinite(rawStart)?rawStart:0)/100*maximum),end=Math.round((Number.isFinite(rawEnd)?rawEnd:100)/100*maximum);if(index>=start&&index<=end)return;const span=Math.max(1,end-start),nextStart=Math.max(0,Math.min(maximum-span,index<start?index:index-span));trendChart.dispatchAction({type:'dataZoom',dataZoomIndex:0,start:nextStart/maximum*100,end:(nextStart+span)/maximum*100})}
-function selectTrendForKeyboard(index){const data=visibleTrend.value;if(!data.length)return;const safeIndex=Math.max(0,Math.min(data.length-1,index));selectedTrendDate.value=data[safeIndex].date;nextTick(()=>{revealTrendIndex(safeIndex);showTrendTooltip(data[safeIndex].date)})}
+function selectTrendForKeyboard(index){const data=visibleTrend.value;if(!data.length)return;const safeIndex=Math.max(0,Math.min(data.length-1,index));selectedTrendDate.value=data[safeIndex].date;nextTick(()=>showTrendTooltip(data[safeIndex].date))}
 function handleTrendKeydown(event){const data=visibleTrend.value;if(!data.length)return;const selectedIndex=data.findIndex(item=>item.date===selectedTrendDate.value),currentIndex=selectedIndex>=0?selectedIndex:data.length-1;if(event.key==='ArrowLeft'){event.preventDefault();selectTrendForKeyboard(currentIndex-1)}else if(event.key==='ArrowRight'){event.preventDefault();selectTrendForKeyboard(selectedIndex>=0?currentIndex+1:data.length-1)}else if(event.key==='Home'){event.preventDefault();selectTrendForKeyboard(0)}else if(event.key==='End'){event.preventDefault();selectTrendForKeyboard(data.length-1)}else if((event.key==='Enter'||event.key===' ')&&selectedIndex>=0){event.preventDefault();openTrendDetail(selectedTrendDate.value)}}
 function initializeTrendChart(){
   if(!trendChartElement.value||trendChart)return
@@ -206,8 +200,8 @@ async function loadHistory(page=1){const id=++historyRequestId;historyController
 async function openHistory(){historyVisible.value=true;await loadHistory(1)}
 function cancelDetail(){detailRequestId+=1;detailController?.abort();detailController=null;detail.value=null}
 async function openHistoryDetail(id){if(!id)return;const requestId=++detailRequestId;detailController?.abort();const controller=new AbortController();detailController=controller;detailVisible.value=true;detailLoading.value=true;detail.value=null;try{const data=await request(`/ocr/history/${id}`,{signal:controller.signal});if(requestId===detailRequestId)detail.value=data}catch(e){if(requestId===detailRequestId){detailVisible.value=false;ElMessage.error(message(e,'识别结果详情加载失败'))}}finally{if(requestId===detailRequestId){detailLoading.value=false;detailController=null}}}
-watch([trend,selectedTrendDate],()=>nextTick(()=>renderTrendChart()),{deep:true})
-watch(trendRange,()=>{if(!visibleTrend.value.some(item=>item.date===selectedTrendDate.value))selectedTrendDate.value=null;nextTick(()=>renderTrendChart({preserveZoom:false}))})
+watch(trend,()=>nextTick(()=>renderTrendChart()),{deep:true})
+watch(trendRange,()=>{if(!visibleTrend.value.some(item=>item.date===selectedTrendDate.value))selectedTrendDate.value=null;nextTick(()=>renderTrendChart())})
 onMounted(async()=>{await nextTick();initializeTrendChart();loading.value=true;const results=await Promise.allSettled([refresh(),fetchConfig()]);if(results[0].status==='rejected')ElMessage.error('数据加载失败，请确认后端服务已启动');if(results[1].status==='rejected')ElMessage.warning('OCR 配置状态加载失败');loading.value=false})
 onBeforeUnmount(()=>{disposeTrendChart();cancelOcr();cancelHistory();cancelDetail();releasePrint?.()})
 </script>
