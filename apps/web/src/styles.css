@@ -60,6 +60,9 @@ button, input { font: inherit; }
 .hero-stage span { margin-top: 8px; color: #aebed2; font-size: 10px; }
 .section-heading h2, .page-heading h1 { margin: 0; font-size: 20px; }
 .section-heading p, .page-heading p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+.dashboard-section-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px 20px; }
+.github-repository-link { flex: 0 0 auto; font-weight: 600; }
+.github-repository-link span[aria-hidden="true"] { margin-left: 3px; font-size: 13px; }
 
 .module-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .module-card { min-height: 260px; padding: 22px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); box-shadow: 0 8px 24px rgba(35,55,80,.045); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }

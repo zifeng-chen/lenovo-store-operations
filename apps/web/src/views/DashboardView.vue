@@ -16,11 +16,20 @@ import { STORE_MODULES } from '@lenovo-store/shared';
       </div>
     </div>
 
-    <div class="section-heading">
+    <div class="section-heading dashboard-section-heading">
       <div>
         <h2>业务板块</h2>
         <p>选择需要使用的联想门店工具</p>
       </div>
+      <el-button
+        class="github-repository-link"
+        tag="a"
+        href="https://github.com/zifeng-chen/lenovo-store-operations"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        GitHub 仓库 <span aria-hidden="true">↗</span>
+      </el-button>
     </div>
 
     <div class="module-grid">
