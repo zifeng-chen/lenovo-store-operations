@@ -232,3 +232,81 @@ body.print-preview-open { overflow: hidden; }
   .app-header h1 { font-size: 19px; }
   .page-content { padding-top: 16px; }
 }
+
+@media screen {
+  .tool-card-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+  .tool-card-heading h2 { margin: 0; color: var(--ls-color-text-strong); font-size: 18px; }
+  .filter-result-count { flex: 0 0 auto; color: var(--ls-color-text-muted); font-size: 12px; font-weight: 700; }
+  .filter-selection-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--ls-color-text-muted); font-size: 12px; }
+  .select-filtered-button { flex: 0 0 auto; min-height: 36px; padding: 0 12px; font-size: 12px; }
+  .workspace-form { scroll-margin-top: 16px; }
+}
+
+@media screen and (min-width: 901px) {
+  html, body, #app { height: 100%; overflow: hidden; }
+  .app-shell { position: fixed; inset: 0; width: 100%; --price-print-bar-height: 85px; height: 100dvh; min-height: 0; overflow: hidden; }
+  .management-ui { display: flex; height: calc(100dvh - var(--price-print-bar-height)); min-height: 0; overflow: hidden; flex-direction: column; }
+  .app-header { flex: 0 0 auto; }
+  .header-inner { width: 100%; min-height: 78px; padding: 0 20px; }
+  .brand-mark { flex-basis: 76px !important; width: 76px !important; }
+  .header-description { margin-top: 3px; }
+  .page-content {
+    display: grid;
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    flex: 1 1 auto;
+    grid-template-columns: clamp(360px, 29vw, 440px) minmax(0, 1fr);
+    gap: 16px;
+    margin: 0;
+    padding: 16px;
+    overflow: hidden;
+  }
+  .workspace-tools {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    padding-right: 4px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    flex-direction: column;
+    gap: 14px;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+  }
+  .workspace-tools > * { flex: 0 0 auto; }
+  .workspace-tools .filter-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0; padding: 18px; }
+  .workspace-tools .search-box { width: 100%; }
+  .workspace-tools .category-tabs { width: 100%; padding-bottom: 4px; }
+  .workspace-tools .product-form-card { padding: 18px; }
+  .workspace-tools .section-heading { align-items: center; margin-bottom: 16px; }
+  .workspace-tools .product-form { grid-template-columns: minmax(0, 1fr) minmax(120px, .7fr); gap: 12px; }
+  .workspace-tools .field-name, .workspace-tools .submit-button { grid-column: 1 / -1; }
+  .workspace-tools .submit-button { width: 100%; }
+  .workspace-tools .category-creator { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; }
+  .workspace-tools .data-tools { display: block; margin: 0; padding: 18px; }
+  .workspace-tools .data-tools p:last-child { line-height: 1.55; }
+  .workspace-tools .data-tool-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .workspace-tools .data-tool-buttons .secondary-button { width: 100%; min-width: 0; padding: 0 10px; }
+  .workspace-results { display: flex; min-width: 0; min-height: 0; overflow: hidden; }
+  .workspace-results > .list-card { display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; flex-direction: column; }
+  .workspace-results .list-heading { flex: 0 0 auto; margin: 0; padding: 18px 22px 15px; }
+  .workspace-results .table-scroll { min-width: 0; min-height: 0; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+  .workspace-results .product-table th { position: sticky; z-index: 2; top: 0; box-shadow: inset 0 -1px 0 var(--ls-color-border); }
+  .workspace-results > .loading-state { display: grid; min-height: 0; flex: 1 1 auto; margin: 0; place-items: center; }
+  .print-actions-inner { width: 100%; padding: 0 20px; }
+}
+
+@media screen and (max-width: 900px) {
+  .workspace-tools { display: grid; gap: 16px; }
+  .workspace-tools .filter-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0; padding: 20px; }
+  .workspace-tools .data-tools { margin: 0; }
+  .workspace-results { margin-top: 16px; }
+  .workspace-results > .loading-state { margin: 0; }
+}
+
+@media screen and (max-width: 620px) {
+  .filter-selection-row { align-items: stretch; flex-direction: column; }
+  .select-filtered-button { width: 100%; }
+}

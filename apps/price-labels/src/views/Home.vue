@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import logoUrl from '@lenovo-store/shared/lenovo-logo.svg'
 import { apiUrl, requestJson } from '../api.js'
 import CategoryTabs from '../components/CategoryTabs.vue'
@@ -14,6 +14,7 @@ const searchTerm = ref('')
 const selectedIds = ref(new Set())
 const editingProduct = ref(null)
 const formRef = ref(null)
+const formSectionRef = ref(null)
 const dataFileInputRef = ref(null)
 const loading = ref(true)
 const saving = ref(false)
@@ -32,6 +33,10 @@ const filteredProducts = computed(() => {
   })
 })
 const selectedProducts = computed(() => products.value.filter(({ id }) => selectedIds.value.has(id)))
+const filteredSelectedCount = computed(() => filteredProducts.value.filter(({ id }) => selectedIds.value.has(id)).length)
+const allFilteredSelected = computed(() => (
+  filteredProducts.value.length > 0 && filteredSelectedCount.value === filteredProducts.value.length
+))
 const dataToolsBusy = computed(() => Boolean(dataAction.value) || saving.value || categorySaving.value || deletingProductId.value !== null)
 
 function notify(message, type = 'success') {
@@ -190,7 +195,7 @@ async function saveProduct(payload) {
 function editProduct(product) {
   if (dataAction.value) return
   editingProduct.value = product
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  nextTick(() => formSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
 }
 async function deleteProduct(product) {
   if (dataAction.value || deletingProductId.value !== null) return
@@ -238,21 +243,38 @@ onMounted(loadData)
         </div>
       </header>
       <main class="page-content">
-        <section class="card data-tools" aria-labelledby="data-tools-title">
-          <div><p class="eyebrow">数据维护</p><h2 id="data-tools-title">备份与恢复</h2><p>导出完整 JSON 备份；导入会先校验，并在确认后替换当前全部数据。</p></div>
-          <div class="data-tool-buttons">
-            <button type="button" class="secondary-button" :disabled="dataToolsBusy" @click="exportData">{{ dataAction === 'export' ? '导出中…' : '导出数据' }}</button>
-            <button type="button" class="secondary-button" :disabled="dataToolsBusy" @click="selectImportFile">{{ dataAction === 'validate' ? '校验中…' : (dataAction === 'import' ? '导入中…' : '导入数据') }}</button>
-            <input ref="dataFileInputRef" class="visually-hidden" type="file" accept=".json,application/json" tabindex="-1" @change="importData" />
+        <aside class="workspace-tools" aria-label="商品管理工具">
+          <section class="card filter-section" aria-labelledby="filter-title">
+            <div class="tool-card-heading">
+              <div><p class="eyebrow">快速查找</p><h2 id="filter-title">筛选商品</h2></div>
+              <span class="filter-result-count">{{ filteredProducts.length }} 条结果</span>
+            </div>
+            <label class="search-box"><span class="search-icon" aria-hidden="true"></span><span class="visually-hidden">搜索商品</span><input v-model="searchTerm" type="search" placeholder="搜索商品名称 / 品类 / 价格" /></label>
+            <CategoryTabs v-model="activeCategory" :categories="categories" />
+            <div class="filter-selection-row">
+              <span>已选 {{ selectedIds.size }} 个<span v-if="filteredSelectedCount">，当前结果 {{ filteredSelectedCount }} 个</span></span>
+              <button type="button" class="secondary-button select-filtered-button" :disabled="!filteredProducts.length || dataToolsBusy" @click="toggleAllFiltered(!allFilteredSelected)">{{ allFilteredSelected ? '取消当前全选' : '全选当前结果' }}</button>
+            </div>
+          </section>
+
+          <div ref="formSectionRef" class="workspace-form">
+            <ProductForm ref="formRef" :categories="categories" :editing-product="editingProduct" :busy="saving || Boolean(dataAction)" :category-busy="categorySaving || Boolean(dataAction)" @submit="saveProduct" @create-category="createCategory" @cancel-edit="editingProduct = null" />
           </div>
+
+          <section class="card data-tools" aria-labelledby="data-tools-title">
+            <div><p class="eyebrow">数据维护</p><h2 id="data-tools-title">备份与恢复</h2><p>导出完整 JSON 备份；导入会先校验，并在确认后替换当前全部数据。</p></div>
+            <div class="data-tool-buttons">
+              <button type="button" class="secondary-button" :disabled="dataToolsBusy" @click="exportData">{{ dataAction === 'export' ? '导出中…' : '导出数据' }}</button>
+              <button type="button" class="secondary-button" :disabled="dataToolsBusy" @click="selectImportFile">{{ dataAction === 'validate' ? '校验中…' : (dataAction === 'import' ? '导入中…' : '导入数据') }}</button>
+              <input ref="dataFileInputRef" class="visually-hidden" type="file" accept=".json,application/json" tabindex="-1" @change="importData" />
+            </div>
+          </section>
+        </aside>
+
+        <section class="workspace-results" aria-label="商品列表区域">
+          <div v-if="loading" class="card loading-state">正在读取商品数据…</div>
+          <ProductList v-else :products="filteredProducts" :selected-ids="selectedIds" @toggle="toggleProduct" @toggle-all="toggleAllFiltered" @edit="editProduct" @delete="deleteProduct" />
         </section>
-        <ProductForm ref="formRef" :categories="categories" :editing-product="editingProduct" :busy="saving || Boolean(dataAction)" :category-busy="categorySaving || Boolean(dataAction)" @submit="saveProduct" @create-category="createCategory" @cancel-edit="editingProduct = null" />
-        <section class="filter-section" aria-label="商品筛选">
-          <CategoryTabs v-model="activeCategory" :categories="categories" />
-          <label class="search-box"><span class="search-icon" aria-hidden="true"></span><span class="visually-hidden">搜索商品</span><input v-model="searchTerm" type="search" placeholder="搜索商品名称 / 品类 / 价格" /></label>
-        </section>
-        <div v-if="loading" class="card loading-state">正在读取商品数据…</div>
-        <ProductList v-else :products="filteredProducts" :selected-ids="selectedIds" @toggle="toggleProduct" @toggle-all="toggleAllFiltered" @edit="editProduct" @delete="deleteProduct" />
       </main>
     </div>
     <PrintPanel :products="selectedProducts" @clear="clearSelection" />
