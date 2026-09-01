@@ -181,11 +181,11 @@ button, input, textarea { font: inherit; }
 }
 .text-area { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
 .text-area .sku {
-  margin-bottom: 1.2mm;
+  margin-bottom: 0.5mm;
   color: #d71920;
   font-size: 11pt;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.05;
   transform: translateY(-1mm);
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
