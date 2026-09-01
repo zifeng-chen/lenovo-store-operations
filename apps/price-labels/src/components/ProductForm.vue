@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
   categories: { type: Array, required: true },
@@ -11,9 +11,7 @@ const props = defineProps({
 const emit = defineEmits(['submit', 'cancel-edit', 'create-category'])
 const LAST_CATEGORY_KEY = 'lenovo-price-label:last-category'
 const form = reactive({ name: '', category: '', price: '' })
-const showCategoryCreator = ref(false)
 const newCategoryName = ref('')
-const categoryInputRef = ref(null)
 const isEditing = computed(() => Boolean(props.editingProduct))
 
 watch(
@@ -64,15 +62,7 @@ function cancelEdit() {
   emit('cancel-edit')
 }
 
-async function openCategoryCreator() {
-  if (props.busy || props.categoryBusy) return
-  showCategoryCreator.value = true
-  await nextTick()
-  categoryInputRef.value?.focus()
-}
-
-function closeCategoryCreator() {
-  showCategoryCreator.value = false
+function clearNewCategoryName() {
   newCategoryName.value = ''
 }
 
@@ -85,7 +75,7 @@ function submitNewCategory() {
 function selectCategory(name) {
   form.category = name
   localStorage.setItem(LAST_CATEGORY_KEY, name)
-  closeCategoryCreator()
+  clearNewCategoryName()
 }
 
 function resetAfterImport() {
@@ -96,7 +86,7 @@ function resetAfterImport() {
     ? savedCategory
     : (props.categories[0]?.name ?? '')
   if (form.category) localStorage.setItem(LAST_CATEGORY_KEY, form.category)
-  closeCategoryCreator()
+  clearNewCategoryName()
 }
 
 defineExpose({ clearFields, selectCategory, resetAfterImport })
@@ -105,27 +95,16 @@ defineExpose({ clearFields, selectCategory, resetAfterImport })
 <template>
   <div class="product-form-sections">
     <section class="card category-management-card" aria-labelledby="category-management-title">
-      <div class="tool-card-heading category-management-heading">
-        <div>
+      <div class="category-management-layout">
+        <div class="category-management-copy">
           <p class="eyebrow">品类管理</p>
-          <h2 id="category-management-title">商品品类</h2>
+          <h2 id="category-management-title">新增品类</h2>
         </div>
-        <button
-          v-if="!showCategoryCreator"
-          type="button"
-          class="secondary-button add-category-button"
-          :disabled="busy || categoryBusy"
-          @click="openCategoryCreator"
-        >
-          + 新增品类
-        </button>
-      </div>
-
-      <div v-if="showCategoryCreator" class="category-creator">
-        <label class="visually-hidden" for="new-category-name">新品类名称</label>
-        <input id="new-category-name" ref="categoryInputRef" v-model="newCategoryName" type="text" maxlength="30" placeholder="输入新品类名称" autocomplete="off" :disabled="busy || categoryBusy" @keydown.enter.prevent="submitNewCategory" @keydown.esc.prevent="closeCategoryCreator" />
-        <button type="button" class="primary-button" :disabled="busy || categoryBusy || !newCategoryName.trim()" @click="submitNewCategory">{{ categoryBusy ? '保存中…' : '保存品类' }}</button>
-        <button type="button" class="secondary-button" :disabled="busy || categoryBusy" @click="closeCategoryCreator">取消</button>
+        <div class="category-creator">
+          <label class="visually-hidden" for="new-category-name">新品类名称</label>
+          <input id="new-category-name" v-model="newCategoryName" type="text" maxlength="30" placeholder="输入新品类名称" autocomplete="off" :disabled="busy || categoryBusy" @keydown.enter.prevent="submitNewCategory" @keydown.esc.prevent="clearNewCategoryName" />
+          <button type="button" class="primary-button" :disabled="busy || categoryBusy || !newCategoryName.trim()" @click="submitNewCategory">{{ categoryBusy ? '保存中…' : '保存品类' }}</button>
+        </div>
       </div>
     </section>
 
