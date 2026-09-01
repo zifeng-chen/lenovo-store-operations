@@ -180,7 +180,16 @@ button, input, textarea { font: inherit; }
   word-break: break-word;
 }
 .text-area { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
-.text-area .sku { margin-bottom: 1.2mm; color: #444; font-size: 8pt; line-height: 1.2; }
+.text-area .sku {
+  margin-bottom: 1.2mm;
+  color: #d71920;
+  font-size: 11pt;
+  font-weight: 700;
+  line-height: 1.2;
+  transform: translateY(-1mm);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
 .text-area .name { margin-bottom: 1.2mm; overflow: hidden; color: #0b1e2e; font-size: 13pt; font-weight: 700; line-height: 1.2; word-break: break-word; }
 .text-area .config { overflow: hidden; color: #2a3a4e; font-size: 8pt; font-weight: 700; line-height: 1.3; white-space: normal; word-break: break-word; }
 .preview-empty { height: 100%; min-height: 320px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6a7e96; }
