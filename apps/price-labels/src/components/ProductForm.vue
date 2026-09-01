@@ -103,43 +103,61 @@ defineExpose({ clearFields, selectCategory, resetAfterImport })
 </script>
 
 <template>
-  <section class="card product-form-card" aria-labelledby="form-title">
-    <div class="section-heading">
-      <div>
-        <p class="eyebrow">商品录入</p>
-        <h2 id="form-title">{{ isEditing ? '编辑商品' : '添加新商品' }}</h2>
-      </div>
-      <button v-if="isEditing" type="button" class="text-button" @click="cancelEdit">取消编辑</button>
-    </div>
-
-    <form class="product-form" @submit.prevent="submitForm">
-      <label class="field field-name">
-        <span>商品名称</span>
-        <input v-model="form.name" type="text" maxlength="100" placeholder="例如：联想无线键鼠套装" autocomplete="off" required />
-      </label>
-      <div class="field">
-        <div class="field-label-row">
-          <label for="product-category">品类</label>
-          <button v-if="!showCategoryCreator" type="button" class="text-button add-category-button" :disabled="busy || categoryBusy" @click="openCategoryCreator">+ 新增品类</button>
+  <div class="product-form-sections">
+    <section class="card category-management-card" aria-labelledby="category-management-title">
+      <div class="tool-card-heading category-management-heading">
+        <div>
+          <p class="eyebrow">品类管理</p>
+          <h2 id="category-management-title">商品品类</h2>
         </div>
-        <select id="product-category" v-model="form.category" required>
-          <option value="" disabled>请选择品类</option>
-          <option v-for="category in categories" :key="category.id" :value="category.name">{{ category.name }}</option>
-        </select>
+        <button
+          v-if="!showCategoryCreator"
+          type="button"
+          class="secondary-button add-category-button"
+          :disabled="busy || categoryBusy"
+          @click="openCategoryCreator"
+        >
+          + 新增品类
+        </button>
       </div>
-      <label class="field">
-        <span>价格（元）</span>
-        <input v-model="form.price" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required />
-      </label>
-      <button class="primary-button submit-button" type="submit" :disabled="busy || categoryBusy || !categories.length">
-        {{ busy ? '保存中…' : (isEditing ? '保存修改' : '添加商品') }}
-      </button>
+
       <div v-if="showCategoryCreator" class="category-creator">
         <label class="visually-hidden" for="new-category-name">新品类名称</label>
         <input id="new-category-name" ref="categoryInputRef" v-model="newCategoryName" type="text" maxlength="30" placeholder="输入新品类名称" autocomplete="off" :disabled="busy || categoryBusy" @keydown.enter.prevent="submitNewCategory" @keydown.esc.prevent="closeCategoryCreator" />
         <button type="button" class="primary-button" :disabled="busy || categoryBusy || !newCategoryName.trim()" @click="submitNewCategory">{{ categoryBusy ? '保存中…' : '保存品类' }}</button>
         <button type="button" class="secondary-button" :disabled="busy || categoryBusy" @click="closeCategoryCreator">取消</button>
       </div>
-    </form>
-  </section>
+    </section>
+
+    <section class="card product-form-card" aria-labelledby="form-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">商品录入</p>
+          <h2 id="form-title">{{ isEditing ? '编辑商品' : '添加新商品' }}</h2>
+        </div>
+        <button v-if="isEditing" type="button" class="text-button" @click="cancelEdit">取消编辑</button>
+      </div>
+
+      <form class="product-form" @submit.prevent="submitForm">
+        <label class="field field-name">
+          <span>商品名称</span>
+          <input v-model="form.name" type="text" maxlength="100" placeholder="例如：联想无线键鼠套装" autocomplete="off" required />
+        </label>
+        <label class="field">
+          <span>品类</span>
+          <select id="product-category" v-model="form.category" required>
+            <option value="" disabled>请选择品类</option>
+            <option v-for="category in categories" :key="category.id" :value="category.name">{{ category.name }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>价格（元）</span>
+          <input v-model="form.price" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required />
+        </label>
+        <button class="primary-button submit-button" type="submit" :disabled="busy || categoryBusy || !categories.length">
+          {{ busy ? '保存中…' : (isEditing ? '保存修改' : '添加商品') }}
+        </button>
+      </form>
+    </section>
+  </div>
 </template>
