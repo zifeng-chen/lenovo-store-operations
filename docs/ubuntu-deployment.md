@@ -125,7 +125,7 @@ sudo install -m 0600 -o root -g root /dev/null \
 sudoedit /etc/lenovo-store-operations.env
 ```
 
-推荐内容：
+推荐内容（维护令牌模式）：
 
 ```ini
 NODE_ENV=production
@@ -136,13 +136,26 @@ LENOVO_STORE_BACKUP_DIR=/var/backups/lenovo-store-operations
 LENOVO_STORE_MAINTENANCE_TOKEN=<至少24字符的随机维护令牌>
 ```
 
+仅在受防火墙保护的可信局域网中，也可以不配置维护令牌，改用免令牌模式：
+
+```ini
+NODE_ENV=production
+HOST=0.0.0.0
+PORT=8900
+LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations
+LENOVO_STORE_BACKUP_DIR=/var/backups/lenovo-store-operations
+LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE=true
+```
+
 说明：
 
 - 通过 Nginx 反向代理时建议使用 `HOST=127.0.0.1`；代理应保留原始 `Host`，并设置 `X-Forwarded-Proto $scheme`，否则统一维护接口的同源校验会拒绝请求；
-- 需要直接提供局域网访问时可改为 `HOST=0.0.0.0`，同时配置 Ubuntu 防火墙；
+- 需要直接提供局域网访问时可改为 `HOST=0.0.0.0`，并使用 Ubuntu 防火墙只允许门店可信网段访问 `8900/tcp`，不得将端口直接暴露到公网；
 - `LENOVO_STORE_DATA_DIR` 和 `LENOVO_STORE_BACKUP_DIR` 必须为绝对路径；
-- 生产服务必须配置至少 24 个字符的 `LENOVO_STORE_MAINTENANCE_TOKEN`，否则启动会失败。可用 `openssl rand -base64 32` 生成随机值，将结果写入权限为 `0600` 的环境文件；不要提交到 Git、聊天或工单；
-- 系统状态页执行统一备份恢复时会要求输入该令牌。令牌只保存在当前页面内存中，刷新或关闭页面后需要重新输入；
+- 生产服务必须配置至少 24 个字符的 `LENOVO_STORE_MAINTENANCE_TOKEN`，或者在未配置令牌时显式设置 `LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE=true`，否则启动会失败；
+- 令牌可用 `openssl rand -base64 32` 生成，并写入权限为 `0600` 的环境文件；不要提交到 Git、聊天或工单。配置令牌后，即使免令牌开关同时为 `true`，服务仍优先使用令牌模式并强制 Bearer 鉴权；
+- 令牌模式下，系统状态页执行统一备份恢复时会要求输入令牌；令牌只保存在当前页面内存中。可信局域网免令牌模式无需输入令牌，但任何能访问服务端口的客户端都可能下载或覆盖业务数据库，因此禁止在公网启用；
+- `LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE` 只有去除首尾空格并忽略大小写后严格等于 `true` 才会启用；
 - 如果使用 `OCR_CONFIG_ENCRYPTION_KEY`，应将它放在权限受控的环境文件或密钥管理系统中，不要提交到 Git。
 
 ### 4.3 创建 systemd 服务
@@ -333,6 +346,22 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 
 当前部署直接更新正在使用的代码目录，构建期间静态资源可能短暂变化，建议在维护时段操作。如果构建或检查失败，不要重启服务；先查看命令输出并修复部署问题。
 
+### 6.1 GitHub 在线更新方案（规划）
+
+> 当前版本尚未实现在线安装。本节是后续实施方案；现阶段仍按上一节手工升级。
+
+在线更新固定从公开仓库 `zifeng-chen/lenovo-store-operations` 的 GitHub Release 获取，只跟随 `stable` 通道，不允许页面传入任意仓库、下载地址或 Shell 命令。建议分两个阶段实施：先上线只读更新检测，再上线安装和回滚。
+
+1. **发布产物**：每次发布创建语义版本 tag 和 GitHub Release，由 CI 生成只读源码/构建包、`manifest.json`、SHA-256 校验文件，条件允许时再增加签名。清单至少记录版本、提交哈希、发布日期、下载资源、摘要、最低 Node.js 版本和数据结构版本。
+2. **只读检测**：服务端通过 GitHub Releases API 查询最新稳定版，使用 `ETag` 做缓存并按语义版本比较；系统状态页显示当前版本、最新版本、发布时间、变更摘要和“检查更新”结果。网络或 GitHub 不可用时只报告失败，不影响业务服务。
+3. **不可变目录**：版本安装到 `/opt/lenovo-store-operations/releases/<version>-<commit>/`，安装完成后设为只读；`/opt/lenovo-store-operations/current` 原子指向当前版本，`previous` 保留上一个已验证版本。`/var/lib/lenovo-store-operations`、备份目录、环境文件和密钥始终位于 release 目录之外，升级和回滚都不得修改或删除它们。
+4. **外部更新器**：使用 root 拥有且普通服务账号不可修改的 systemd oneshot 更新器执行下载、校验、安装、切换和服务重启。Express 只通过固定、严格校验的控制通道提交 Release 版本号并读取状态，不直接执行 `git pull`、`npm`、任意 Shell 或 root 命令。
+5. **安装流程**：获取共享维护锁，拒绝与备份或恢复并发；运行升级前一致性备份；下载到临时目录；校验仓库、版本、SHA-256/签名和清单兼容性；在候选 release 中执行锁定依赖安装、构建和检查；记录旧目标；原子切换 `current`；重启服务并检查 `/api/system/health`、运行版本及关键数据库可读性。
+6. **失败回滚**：下载、校验、安装或构建失败时不切换；切换后若健康检查在限定时间内失败，立即将 `current` 切回 `previous` 并重启。涉及不可逆数据迁移的版本不得自动安装，必须先提供可验证的迁移和恢复策略。
+7. **API 与页面**：规划提供只读状态、手动检查、安装操作状态和回滚能力，例如 `GET /api/system/update/status`、`POST /api/system/update/check`、`POST /api/system/update/install`、`GET /api/system/update/operations/:id`、`POST /api/system/update/rollback`。安装和回滚必须沿用维护接口的同源、维护标识与令牌/可信局域网策略，并记录操作者来源、目标版本、结果和日志摘要。
+
+推荐实施顺序：版本信息与只读检测 → Release CI 和摘要校验 → 不可变 release 部署 → systemd 更新器与自动回滚 → Portal 安装/回滚入口。正式启用安装前，应在隔离 Ubuntu 主机完成断网、损坏包、构建失败、启动超时和数据库不兼容演练。
+
 ## 7. 备份
 
 ### 7.1 系统状态页统一备份
@@ -341,7 +370,7 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 
 1. 打开 `https://<store-host>/#/system`；
 2. 在“统一数据保护”区域点击“下载全部数据库备份”；
-3. 输入 `/etc/lenovo-store-operations.env` 中的 `LENOVO_STORE_MAINTENANCE_TOKEN`；
+3. 令牌模式输入 `/etc/lenovo-store-operations.env` 中的 `LENOVO_STORE_MAINTENANCE_TOKEN`；可信局域网免令牌模式无需输入；
 4. 浏览器下载一个 `lenovo-store-backup-<timestamp>.lsbackup` 文件；
 5. 将文件移动到权限受控、具备独立备份策略的目录，并记录来源服务器和创建时间。
 
@@ -437,7 +466,7 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 
 1. 先下载并保留目标服务器当前数据的统一备份，作为人工回退点；
 2. 打开 `https://<store-host>/#/system`，在“统一数据保护”区域选择 `.lsbackup`；
-3. 输入维护令牌并点击“上传并检查”。此步骤只创建最长 30 分钟的临时会话，不覆盖数据；
+3. 令牌模式输入维护令牌；可信局域网免令牌模式无需输入。点击“上传并检查”后只创建最长 30 分钟的临时会话，不覆盖数据；
 4. 核对备份编号、创建时间，以及商品、品类、销售、OCR 配置和 OCR 历史记录数量；
 5. 每次只选择一个模块，点击“恢复此模块”，在二次确认框完整输入“恢复”；
 6. 恢复后立即打开对应业务页核对记录数量、最新记录和关键数据，再决定是否恢复下一个模块；
@@ -453,7 +482,7 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 - 上传检查验证格式、摘要、SQLite 完整性、表结构、业务字段与计数，但不证明备份来源；
 - 仓库货品标签原 Excel/SQLite 入口和周边货品价签原 JSON 入口继续保留。
 
-生产环境维护接口要求同源请求、`X-Lenovo-Store-Maintenance: 1` 和正确的 Bearer 维护令牌。不要通过命令行历史直接拼接真实令牌；人工操作优先使用系统状态页。若确需自动化，应从 root-only 环境文件或密钥管理系统读取，避免出现在进程列表、Shell 历史和日志中。
+生产环境维护接口始终要求同源请求和 `X-Lenovo-Store-Maintenance: 1`。令牌模式还要求正确的 Bearer 维护令牌；不要通过命令行历史直接拼接真实令牌，自动化应从 root-only 环境文件或密钥管理系统读取。可信局域网免令牌模式只取消 Bearer 要求，不取消同源和维护标识检查；任何能访问服务端口并构造请求的客户端仍可能执行备份或覆盖业务数据，因此必须通过防火墙限制可信网段，禁止在公网启用。人工操作优先使用系统状态页。
 
 ### 8.2 选择并校验目录快照
 

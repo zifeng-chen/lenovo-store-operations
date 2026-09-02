@@ -39,8 +39,19 @@ const webDist = path.join(projectRoot, 'apps/web/dist');
 const host = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.PORT) || 8900;
 const maintenanceToken = String(process.env.LENOVO_STORE_MAINTENANCE_TOKEN || '').trim();
-if (process.env.NODE_ENV === 'production' && maintenanceToken.length < 24) {
-  throw new Error('生产环境必须设置至少 24 个字符的 LENOVO_STORE_MAINTENANCE_TOKEN');
+const allowUnauthenticatedMaintenance = String(
+  process.env.LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE || ''
+).trim().toLowerCase() === 'true';
+if (process.env.NODE_ENV === 'production') {
+  if (maintenanceToken && maintenanceToken.length < 24) {
+    throw new Error('生产环境的 LENOVO_STORE_MAINTENANCE_TOKEN 必须至少包含 24 个字符');
+  }
+  if (!maintenanceToken && !allowUnauthenticatedMaintenance) {
+    throw new Error('生产环境必须设置至少 24 个字符的 LENOVO_STORE_MAINTENANCE_TOKEN，或显式启用 LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE=true');
+  }
+}
+if (!maintenanceToken && allowUnauthenticatedMaintenance) {
+  console.warn('警告：已允许局域网客户端在无维护令牌的情况下执行系统备份和恢复');
 }
 const app = express();
 
@@ -78,6 +89,7 @@ const persistenceService = createPersistenceService({
 const systemPersistenceRouter = createSystemPersistenceRouter({
   persistenceService,
   maintenanceToken,
+  allowUnauthenticatedMaintenance,
   onModuleRestored(moduleId) {
     databaseStatuses.set(moduleId, { connected: true, error: null });
   }
@@ -141,6 +153,7 @@ app.get('/api/system/health', (_req, res) => {
     uptimeSeconds: Math.floor(process.uptime()),
     persistentDataConfigured: EXTERNAL_DATA_ROOT_CONFIGURED,
     maintenanceAuthenticationRequired: Boolean(maintenanceToken),
+    unauthenticatedMaintenanceAllowed: !maintenanceToken && allowUnauthenticatedMaintenance,
     modules: STORE_MODULES.map(moduleStatus)
   });
 });

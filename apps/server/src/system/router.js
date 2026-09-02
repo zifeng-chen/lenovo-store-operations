@@ -34,7 +34,12 @@ function matchesToken(value, expected) {
   return actualBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(actualBuffer, expectedBuffer)
 }
 
-export function createSystemPersistenceRouter({ persistenceService, onModuleRestored, maintenanceToken = '' } = {}) {
+export function createSystemPersistenceRouter({
+  persistenceService,
+  onModuleRestored,
+  maintenanceToken = '',
+  allowUnauthenticatedMaintenance = false,
+} = {}) {
   if (!persistenceService) throw new Error('系统备份路由缺少持久化服务')
   const router = Router()
   const workPrefix = 'lenovo-store-operations-'
@@ -86,7 +91,7 @@ export function createSystemPersistenceRouter({ persistenceService, onModuleRest
       if (!matchesToken(suppliedToken, maintenanceToken)) {
         return response.status(401).json({ code: 1, data: null, msg: '系统维护令牌无效' })
       }
-    } else if (!isLoopbackRequest(request)) {
+    } else if (!allowUnauthenticatedMaintenance && !isLoopbackRequest(request)) {
       return response.status(403).json({ code: 1, data: null, msg: '未配置维护令牌时仅允许服务器本机操作' })
     }
     const origin = request.get('Origin')
