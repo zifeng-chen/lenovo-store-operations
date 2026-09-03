@@ -7,6 +7,9 @@ const UPDATE_HEADER = { 'X-Lenovo-Store-Update': '1' };
 const loading = ref(true);
 const error = ref('');
 const health = ref(null);
+const uptimeSnapshotSeconds = ref(null);
+const uptimeSnapshotAt = ref(0);
+const uptimeNow = ref(0);
 const updateLoading = ref(false);
 const updateError = ref('');
 const updateStatus = ref(null);
@@ -14,6 +17,7 @@ const installSubmitting = ref(false);
 const updateToken = ref('');
 const lastInstallationResult = ref('');
 let updatePollTimer = null;
+let uptimeTimer = null;
 const backupLoading = ref(false);
 const inspectLoading = ref(false);
 const fileInput = ref(null);
@@ -65,7 +69,13 @@ async function loadHealth() {
   try {
     const response = await fetch('/api/system/health');
     const body = await readApiResponse(response);
+    const sampledAt = window.performance.now();
     health.value = body.data;
+    uptimeSnapshotSeconds.value = Number.isFinite(Number(body.data.uptimeSeconds))
+      ? Math.max(0, Math.floor(Number(body.data.uptimeSeconds)))
+      : null;
+    uptimeSnapshotAt.value = sampledAt;
+    uptimeNow.value = sampledAt;
   } catch (requestError) {
     error.value = requestError.message;
   } finally {
@@ -238,6 +248,34 @@ function formatUpdateTime(value) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
 
+function formatUptime(value) {
+  const totalSeconds = Number(value);
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return '—';
+
+  let remainingSeconds = Math.floor(totalSeconds);
+  const units = [
+    { label: '年', seconds: 365 * 24 * 60 * 60 },
+    { label: '月', seconds: 30 * 24 * 60 * 60 },
+    { label: '天', seconds: 24 * 60 * 60 },
+    { label: '小时', seconds: 60 * 60 },
+    { label: '分钟', seconds: 60 },
+    { label: '秒', seconds: 1 },
+  ];
+  const parts = [];
+  let started = false;
+
+  for (const unit of units) {
+    const count = Math.floor(remainingSeconds / unit.seconds);
+    remainingSeconds %= unit.seconds;
+    if (count > 0 || started || unit.seconds === 1) {
+      parts.push(`${count}${unit.label}`);
+      started = true;
+    }
+  }
+
+  return parts.join(' ');
+}
+
 async function downloadBackup() {
   if (!await ensureMaintenanceAccess()) return;
   backupLoading.value = true;
@@ -393,6 +431,12 @@ function formatCounts(counts) {
   return Object.entries(counts).map(([key, value]) => `${labels[key] || key} ${value.toLocaleString()} 条`).join('，');
 }
 
+const liveUptimeSeconds = computed(() => {
+  if (uptimeSnapshotSeconds.value === null) return null;
+  const elapsedSeconds = Math.max(0, Math.floor((uptimeNow.value - uptimeSnapshotAt.value) / 1000));
+  return uptimeSnapshotSeconds.value + elapsedSeconds;
+});
+
 const currentBuild = computed(() => updateStatus.value?.current || health.value?.build || {
   version: health.value?.version || '未知',
   commit: null,
@@ -448,15 +492,22 @@ const sessionExpiresText = computed(() => restoreSession.value
   : '');
 
 function handleVisibilityChange() {
+  uptimeNow.value = window.performance.now();
   if (updateStatus.value?.installation?.active) scheduleUpdatePolling();
 }
 
 onMounted(() => {
+  uptimeNow.value = window.performance.now();
+  uptimeTimer = window.setInterval(() => {
+    uptimeNow.value = window.performance.now();
+  }, 1000);
   loadHealth();
   loadUpdateStatus();
   document.addEventListener('visibilitychange', handleVisibilityChange);
 });
 onBeforeUnmount(() => {
+  if (uptimeTimer) window.clearInterval(uptimeTimer);
+  uptimeTimer = null;
   clearUpdatePolling();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   discardSession();
@@ -479,7 +530,7 @@ onBeforeUnmount(() => {
     <div v-if="health" class="status-summary">
       <div><span>服务状态</span><b class="healthy">正常</b></div>
       <div><span>服务版本</span><b>{{ health.version }}</b></div>
-      <div><span>运行时间</span><b>{{ health.uptimeSeconds }} 秒</b></div>
+      <div><span>运行时间</span><b>{{ formatUptime(liveUptimeSeconds) }}</b></div>
       <div><span>板块数量</span><b>{{ health.modules.length }}</b></div>
     </div>
 
