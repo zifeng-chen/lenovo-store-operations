@@ -429,7 +429,7 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 备份目录示例：
 
 ```text
-/var/backups/lenovo-store-operations/2026-09-02T10-20-30.000Z/
+/var/backups/lenovo-store-operations/<timestamp>/
 ├── computer-labels/database.sqlite
 ├── price-labels/database.sqlite
 ├── receipt-assistant/database.sqlite
