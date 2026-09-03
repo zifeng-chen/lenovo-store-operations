@@ -7,12 +7,13 @@ const RELEASES_PER_PAGE = 100
 const MAX_RELEASE_PAGES = 3
 const RELEASE_URL_PREFIX = `https://github.com/${GITHUB_REPOSITORY}/releases/`
 const STABLE_TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
-const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000
+const DEFAULT_CACHE_TTL_MS = 15 * 60 * 1000
 const DEFAULT_RETRY_DELAY_MS = 60 * 1000
-const MAX_RETRY_DELAY_MS = 15 * 60 * 1000
+const MAX_RETRY_DELAY_MS = 2 * 60 * 60 * 1000
 const DEFAULT_TIMEOUT_MS = 8000
 const MAX_RESPONSE_BYTES = 1024 * 1024
 const MAX_RELEASE_NOTES_CHARS = 8000
+const MAX_GITHUB_TOKEN_CHARS = 1024
 
 function serviceError(message, status = 502, code = 'UPDATE_CHECK_FAILED') {
   const error = new Error(message)
@@ -78,10 +79,24 @@ async function readLimitedText(response) {
   return text + decoder.decode()
 }
 
+function normalizeGithubToken(value) {
+  const token = String(value || '').trim()
+  if (!token) return ''
+  if (token.length > MAX_GITHUB_TOKEN_CHARS || /[\u0000-\u001f\u007f]/.test(token)) {
+    throw new Error('LENOVO_STORE_GITHUB_TOKEN 格式无效')
+  }
+  return token
+}
+
 function retryDelayFromResponse(response, currentTime) {
-  const retryAfterSeconds = Number(response.headers.get('retry-after'))
+  const retryAfter = response.headers.get('retry-after')
+  const retryAfterSeconds = Number(retryAfter)
   if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
     return Math.min(retryAfterSeconds * 1000, MAX_RETRY_DELAY_MS)
+  }
+  const retryAfterTime = Date.parse(retryAfter || '')
+  if (Number.isFinite(retryAfterTime) && retryAfterTime > currentTime) {
+    return Math.min(retryAfterTime - currentTime, MAX_RETRY_DELAY_MS)
   }
   const resetSeconds = Number(response.headers.get('x-ratelimit-reset'))
   if (Number.isFinite(resetSeconds) && resetSeconds > 0) {
@@ -90,11 +105,34 @@ function retryDelayFromResponse(response, currentTime) {
   return DEFAULT_RETRY_DELAY_MS
 }
 
-function githubError(response, currentTime) {
-  if (response.status === 403 || response.status === 429) {
+async function isRateLimitedResponse(response) {
+  if (response.status === 429) return true
+  if (response.status !== 403) return false
+  if (response.headers.get('x-ratelimit-remaining')?.trim() === '0' || response.headers.get('retry-after')) {
+    return true
+  }
+
+  const responseText = await readLimitedText(response)
+  try {
+    const responseBody = JSON.parse(responseText)
+    const message = typeof responseBody?.message === 'string' ? responseBody.message : ''
+    return /secondary rate limit|abuse detection mechanism|api rate limit exceeded/i.test(message)
+  } catch {
+    return false
+  }
+}
+
+async function githubError(response, currentTime) {
+  if (await isRateLimitedResponse(response)) {
     const error = serviceError('GitHub 更新检查暂时受到访问频率限制，请稍后重试', 503, 'GITHUB_RATE_LIMITED')
     error.retryAfterMs = retryDelayFromResponse(response, currentTime)
     return error
+  }
+  if (response.status === 401) {
+    return serviceError('GitHub 更新检查身份验证失败，请检查只读访问令牌', 502, 'GITHUB_AUTH_FAILED')
+  }
+  if (response.status === 403) {
+    return serviceError('GitHub 拒绝更新检查请求，请检查只读访问令牌权限', 502, 'GITHUB_FORBIDDEN')
   }
   if (response.status >= 500) {
     const error = serviceError('GitHub 更新服务暂时不可用，请稍后重试', 502, 'GITHUB_UNAVAILABLE')
@@ -109,8 +147,10 @@ export function createGithubReleaseService({
   now = () => Date.now(),
   cacheTtlMs = DEFAULT_CACHE_TTL_MS,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  githubToken = '',
 } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('更新检查服务缺少 fetch 实现')
+  const authorizationToken = normalizeGithubToken(githubToken)
 
   let etag = null
   let latestRelease = null
@@ -154,6 +194,7 @@ export function createGithubReleaseService({
         'X-GitHub-Api-Version': '2022-11-28',
         'User-Agent': 'lenovo-store-operations-update-checker',
       }
+      if (authorizationToken) headers.Authorization = `Bearer ${authorizationToken}`
       if (page === 1 && etag && checkedAt) headers['If-None-Match'] = etag
       const url = `${RELEASES_URL}?per_page=${RELEASES_PER_PAGE}&page=${page}`
 
@@ -180,7 +221,7 @@ export function createGithubReleaseService({
         lastError = null
         return snapshot({ cache: 'revalidated' })
       }
-      if (!response.ok) throw githubError(response, now())
+      if (!response.ok) throw await githubError(response, now())
       if (page === 1) firstPageEtag = response.headers.get('etag') || null
 
       const responseText = await readLimitedText(response)

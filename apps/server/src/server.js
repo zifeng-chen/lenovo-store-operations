@@ -48,6 +48,7 @@ const allowUnauthenticatedMaintenance = String(
 ).trim().toLowerCase() === 'true';
 const updateInstallationEnabled = String(process.env.LENOVO_STORE_UPDATE_ENABLED || '').trim().toLowerCase() === 'true';
 const updateToken = String(process.env.LENOVO_STORE_UPDATE_TOKEN || '').trim();
+const githubToken = process.env.LENOVO_STORE_GITHUB_TOKEN || '';
 const configuredPublicOrigin = String(process.env.LENOVO_STORE_PUBLIC_ORIGIN || '').trim();
 let publicOrigin = '';
 if (configuredPublicOrigin) {
@@ -107,7 +108,7 @@ const persistenceService = createPersistenceService({
   receiptMaintenance: receiptAssistantMaintenance,
   ocrKeyPath: receiptOcrKeyPath
 });
-const githubReleaseService = createGithubReleaseService();
+const githubReleaseService = createGithubReleaseService({ githubToken });
 const updateIpcService = createUpdateIpcService({
   enabled: updateInstallationEnabled,
   requestPath: process.env.LENOVO_STORE_UPDATE_REQUEST_PATH || '/run/lenovo-store-updater/request.json',

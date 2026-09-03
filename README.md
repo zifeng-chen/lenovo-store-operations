@@ -15,7 +15,7 @@
 
 每次功能、配置、部署方式或文档更新都必须同步维护 GitHub 仓库文档，并按 `YYYY-MM-DD` 记录更新日期和主要内容。最新更新与完整历史请查看 [CHANGELOG.md](CHANGELOG.md)。
 
-当前最新记录：`2026-09-03`，完成在线更新第二阶段：新增签名 Release、独立 systemd 更新器、受控任务 IPC、Portal 安装进度、不可变 release 原子切换和健康检查失败自动回滚；安装入口默认关闭，Ubuntu 必须完成公钥、权限、HTTPS origin、独立令牌和故障演练后才能启用。
+当前最新记录：`2026-09-03`，发布 `0.2.1`：GitHub Release 检查支持仅服务端只读 token、15 分钟成功缓存、精确的鉴权/权限/限流错误分类和按额度重置时间退避；在线更新第二阶段继续提供签名 Release、独立 systemd 更新器、受控任务 IPC、不可变 release 原子切换和健康检查失败自动回滚。
 
 ## 板块说明
 
@@ -342,18 +342,20 @@ npm run migrate:data
 服务端提供：
 
 - `GET /api/system/update/status`：读取当前版本、最近一次检查结果和 root 更新器写入的脱敏任务状态，不主动连接 GitHub；
-- `POST /api/system/update/check`：同源触发 GitHub 检查，使用 8 秒超时、5 分钟成功缓存、失败重试退避、`ETag` 条件请求，并在最多 300 条 Release 内进行稳定语义版本比较；
+- `POST /api/system/update/check`：同源触发 GitHub 检查，使用 8 秒超时、15 分钟成功缓存、按额度重置时间退避、`ETag` 条件请求，并在最多 300 条 Release 内进行稳定语义版本比较；
 - `POST /api/system/update/install`：要求固定 `LENOVO_STORE_PUBLIC_ORIGIN`、`X-Lenovo-Store-Update: 1`、独立至少 32 字符的更新令牌和唯一 `tag` 字段；维护令牌或局域网免令牌模式不能授权；
 - Express 只原子写入固定任务文件，不执行 `git pull`、`npm`、Shell、systemctl 或 root 命令；root-owned systemd oneshot 更新器负责备份、下载、签名/摘要/包结构校验、普通账号依赖安装、原子切换、重启、完整 health 验证和失败自动回滚；
 - GitHub 不可用、更新失败或回滚状态不会影响业务 API；更新前 `current` 不变，切换后失败会恢复 `previous`。
 
-根 `package.json` 的 `version` 是整套产品的唯一发布版本。准备新版本时先更新版本、README、CHANGELOG 和相关文档并提交，再创建完全一致的 `vX.Y.Z` tag。例如发布 `0.2.0`：
+可选环境变量 `LENOVO_STORE_GITHUB_TOKEN` 仅由服务端用于固定公开仓库的 Releases API。建议使用只授权 `zifeng-chen/lenovo-store-operations`、仅具备 Contents/Metadata 读取权限的 fine-grained PAT 或 GitHub App token；不得写入前端变量、日志或 Git，也不得复用权限边界不同的 `LENOVO_STORE_UPDATE_TOKEN`。未配置时仍可匿名检查，但共享出口受 GitHub 匿名配额限制。
+
+根 `package.json` 的 `version` 是整套产品的唯一发布版本。准备新版本时先更新版本、README、CHANGELOG 和相关文档并提交，再创建完全一致的严格 `vX.Y.Z` tag。例如发布 `0.2.1`：
 
 ```bash
-npm version 0.2.0 --no-git-tag-version --workspaces=false
+npm version 0.2.1 --no-git-tag-version --workspaces=false
 # 按实际日期更新 README、CHANGELOG 和相关文档，完成验证后提交并推送 main
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 `.github/workflows/release.yml` 会校验 tag、根 package 与 lockfile 版本一致，并依次执行 `npm ci`、`npm run build`、`npm run check` 和 `npm audit --audit-level=high`。全部通过后才会创建 GitHub Release，包含：

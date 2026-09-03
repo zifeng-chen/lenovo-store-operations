@@ -140,6 +140,7 @@ HOST=127.0.0.1
 PORT=8900
 LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations
 LENOVO_STORE_BACKUP_DIR=/var/backups/lenovo-store-operations
+# LENOVO_STORE_GITHUB_TOKEN=<固定仓库只读 GitHub token>
 LENOVO_STORE_MAINTENANCE_TOKEN=<至少24字符的随机维护令牌>
 ```
 
@@ -151,6 +152,7 @@ HOST=0.0.0.0
 PORT=8900
 LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations
 LENOVO_STORE_BACKUP_DIR=/var/backups/lenovo-store-operations
+# LENOVO_STORE_GITHUB_TOKEN=<固定仓库只读 GitHub token>
 LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE=true
 ```
 
@@ -159,6 +161,7 @@ LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE=true
 - 通过 Nginx 反向代理时建议使用 `HOST=127.0.0.1`；代理应保留原始 `Host`，并设置 `X-Forwarded-Proto $scheme`，否则统一维护接口的同源校验会拒绝请求；
 - 需要直接提供局域网访问时可改为 `HOST=0.0.0.0`，并使用 Ubuntu 防火墙只允许门店可信网段访问 `8900/tcp`，不得将端口直接暴露到公网；
 - `LENOVO_STORE_DATA_DIR` 和 `LENOVO_STORE_BACKUP_DIR` 必须为绝对路径；
+- `LENOVO_STORE_GITHUB_TOKEN` 可选且只由服务端用于固定仓库的 Releases API。建议创建仅授权 `zifeng-chen/lenovo-store-operations`、只具备 Contents/Metadata 读取权限的 fine-grained PAT 或 GitHub App token；token 不得进入浏览器、API 响应、日志或 Git，也不得复用 `LENOVO_STORE_UPDATE_TOKEN`。不配置时会匿名检查，但共享出口受 GitHub 匿名配额限制；
 - 生产服务必须配置至少 24 个字符的 `LENOVO_STORE_MAINTENANCE_TOKEN`，或者在未配置令牌时显式设置 `LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE=true`，否则启动会失败；
 - 令牌可用 `openssl rand -base64 32` 生成，并写入权限为 `0600` 的环境文件；不要提交到 Git、聊天或工单。配置令牌后，即使免令牌开关同时为 `true`，服务仍优先使用令牌模式并强制 Bearer 鉴权；
 - 令牌模式下，系统状态页执行统一备份恢复时会要求输入令牌；令牌只保存在当前页面内存中。可信局域网免令牌模式无需输入令牌，但任何能访问服务端口的客户端都可能下载或覆盖业务数据库，因此禁止在公网启用；
@@ -363,8 +366,9 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 
 - `GET /api/system/update/status` 只返回当前版本和进程内最近一次检查结果，不主动联网；
 - `POST /api/system/update/check` 同源触发检查，固定访问 GitHub Releases API；
-- 只接受非草稿、非预发布且 tag 符合 `vX.Y.Z` 或 `X.Y.Z` 的版本，在最多 300 条 Release 内按语义版本比较；
-- 使用 8 秒超时、1MB 单页响应限制、5 分钟成功缓存、失败重试退避、`ETag` 条件请求和并发请求合并；
+- 只接受非草稿、非预发布且 tag 严格符合 `vX.Y.Z` 的版本，在最多 300 条 Release 内按语义版本比较；
+- 使用 8 秒超时、1MB 单页响应限制、15 分钟成功缓存、按 GitHub 额度重置时间退避、`ETag` 条件请求和并发请求合并；
+- 可选 `LENOVO_STORE_GITHUB_TOKEN` 仅在服务端发往固定 GitHub API，绝不返回浏览器或写入日志；401、普通 403 和真实限流会分别报告，未配置时保留匿名降级；
 - GitHub 超时、限流或返回异常时不影响健康接口和业务 API；已有成功缓存时继续显示旧结果并标记错误；
 - Release 更新说明按纯文本显示；配置完成后，页面仅允许安装刚刚成功检查到的最新稳定版本，并显示备份、下载、签名验证、安装、切换、重启、健康检查和回滚状态；
 - `POST /api/system/update/install` 只接受一个严格 `vX.Y.Z` tag，要求固定 HTTPS Portal origin、`X-Lenovo-Store-Update: 1` 和独立更新管理员 Bearer 令牌；维护令牌及局域网免令牌模式不能授权安装；
@@ -373,10 +377,10 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 发布新版本时，先更新根版本、README、CHANGELOG 和相关文档，完成验证并推送默认分支，再创建同版本 tag。例如：
 
 ```bash
-npm version 0.2.0 --no-git-tag-version --workspaces=false
+npm version 0.2.1 --no-git-tag-version --workspaces=false
 # 按实际日期更新文档和CHANGELOG，验证、提交并推送main后：
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 `.github/workflows/release.yml` 会严格校验 tag 与根 `package.json`、`package-lock.json` 版本一致，并确认提交位于默认分支；随后执行 `npm ci`、全量构建、检查和高危依赖审计。全部成功后创建正式 GitHub Release：
