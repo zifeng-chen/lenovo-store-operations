@@ -15,7 +15,7 @@
 
 每次功能、配置、部署方式或文档更新都必须同步维护 GitHub 仓库文档，并按 `YYYY-MM-DD` 记录更新日期和主要内容。最新更新与完整历史请查看 [CHANGELOG.md](CHANGELOG.md)。
 
-当前最新记录：`2026-09-02`，新增可信局域网免维护令牌开关，使其他机器可直接执行统一备份和恢复，补充 GitHub 在线更新实施方案，并按实际 Git 提交时间校正历史更新日期。
+当前最新记录：`2026-09-02`，完成在线更新第一阶段：统一产品版本与提交信息、在系统状态页检测 GitHub 正式版本，并建立自动生成 Release、发布清单和 SHA-256 校验文件的工作流；在线安装与自动回滚尚未开放。
 
 ## 板块说明
 
@@ -335,6 +335,34 @@ npm run migrate:data
 
 迁移是一次性操作。目标文件已经存在时脚本会主动停止，这是防止覆盖现有业务数据的保护机制。
 
+## GitHub 更新检测与 Release 发布
+
+系统状态页 `http://localhost:8900/#/system` 已支持第一阶段只读更新检测：显示当前产品版本、提交哈希、`stable` 通道、最新正式 Release、发布时间和更新说明。点击“检查更新”只会由服务端查询固定仓库 `zifeng-chen/lenovo-store-operations`，不会下载代码、执行命令、安装版本或重启服务。
+
+服务端提供：
+
+- `GET /api/system/update/status`：读取当前版本和进程内最近一次检查结果，不主动连接 GitHub；
+- `POST /api/system/update/check`：同源触发 GitHub 检查，使用 8 秒超时、5 分钟成功缓存、失败重试退避、`ETag` 条件请求，并在最多 300 条 Release 内进行稳定语义版本比较；
+- GitHub 不可用时不会影响健康接口和业务 API；已有成功缓存时继续显示缓存结果并明确标记错误。
+
+根 `package.json` 的 `version` 是整套产品的唯一发布版本。准备新版本时先更新版本、README、CHANGELOG 和相关文档并提交，再创建完全一致的 `vX.Y.Z` tag。例如发布 `0.2.0`：
+
+```bash
+npm version 0.2.0 --no-git-tag-version --workspaces=false
+# 按实际日期更新 README、CHANGELOG 和相关文档，完成验证后提交并推送 main
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+`.github/workflows/release.yml` 会校验 tag、根 package 与 lockfile 版本一致，并依次执行 `npm ci`、`npm run build`、`npm run check` 和 `npm audit --audit-level=high`。全部通过后才会创建 GitHub Release，包含：
+
+- `lenovo-store-operations-vX.Y.Z.tar.gz`：Git 受控源码和本次 CI 构建的五套前端产物，不包含 `node_modules`、运行数据库、备份、环境文件或密钥；
+- `manifest.json`：仓库、版本、提交、Node.js 要求、产物大小和 SHA-256；
+- `SHA256SUMS`：发布包与清单的摘要；
+- 包内 `release-info.json`：运行时读取的版本和提交信息。
+
+如果 GitHub 禁止工作流创建 Release，需要在仓库 `Settings → Actions → General → Workflow permissions` 允许工作流写入仓库内容。第一阶段不提供“安装更新”按钮；Ubuntu 仍按部署文档中的人工升级流程更新。
+
 ## 数据备份与恢复
 
 系统状态页 `http://localhost:8900/#/system` 提供统一数据保护入口。员工工牌不保存数据；其余三个板块一次生成一个 `.lsbackup` 文件，恢复时上传同一个文件并逐个选择模块：
@@ -393,9 +421,11 @@ npm run backup:data
 | `npm run dev` | 同时启动五个前端开发服务器和统一后端 |
 | `npm run build` | 构建 Portal 和四个业务 SPA |
 | `npm start` | 启动 8900 统一生产服务 |
-| `npm run check` | 构建检查四个业务 SPA、后端与数据脚本语法 |
+| `npm run check` | 构建检查四个业务 SPA，并检查后端、数据脚本和 Release 脚本语法 |
 | `npm run migrate:data` | 一次性迁移三个旧项目数据库和 OCR 密钥，目标由 `LENOVO_STORE_DATA_DIR` 决定 |
 | `npm run backup:data` | 在线一致性备份三套 SQLite、OCR 密钥和校验清单 |
+| `npm run release:verify -- vX.Y.Z` | 校验稳定版 tag 与根 package、lockfile 版本一致 |
+| `npm run release:pack -- vX.Y.Z` | 在全量构建后生成 Release 安装包、清单和 SHA-256 校验文件 |
 
 ## 构建与健康检查
 
@@ -416,6 +446,7 @@ curl http://127.0.0.1:8900/api/system/health
 
 健康接口会报告：
 
+- 根 `package.json` 的产品版本，以及当前构建的完整提交哈希、短提交和 `stable` 通道；
 - `persistentDataConfigured` 是否已使用外部持久化数据根；生产探针应要求该值为 `true`；
 - 每个业务板块的 SPA 构建产物是否存在；
 - 有 API 的板块是否已挂载；

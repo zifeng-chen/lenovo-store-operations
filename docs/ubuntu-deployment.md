@@ -346,21 +346,48 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 
 当前部署直接更新正在使用的代码目录，构建期间静态资源可能短暂变化，建议在维护时段操作。如果构建或检查失败，不要重启服务；先查看命令输出并修复部署问题。
 
-### 6.1 GitHub 在线更新方案（规划）
+### 6.1 GitHub Release 与更新检测（第一阶段已实现）
 
-> 当前版本尚未实现在线安装。本节是后续实施方案；现阶段仍按上一节手工升级。
+> 当前已实现版本信息、GitHub Release 自动发布和系统状态页只读检查；在线安装、服务重启和自动回滚尚未实现，Ubuntu 仍按上一节手工升级。
 
-在线更新固定从公开仓库 `zifeng-chen/lenovo-store-operations` 的 GitHub Release 获取，只跟随 `stable` 通道，不允许页面传入任意仓库、下载地址或 Shell 命令。建议分两个阶段实施：先上线只读更新检测，再上线安装和回滚。
+更新源固定为公开仓库 `zifeng-chen/lenovo-store-operations` 的 `stable` 正式 Release，页面不能传入仓库、下载地址、分支或 Shell 命令。根 `package.json` 的 `version` 是产品唯一版本源；运行时健康接口同时报告发布版本、提交哈希和通道。源码 checkout 会以固定参数读取 Git commit，CI 发布包则通过包内 `release-info.json` 提供提交信息。
 
-1. **发布产物**：每次发布创建语义版本 tag 和 GitHub Release，由 CI 生成只读源码/构建包、`manifest.json`、SHA-256 校验文件，条件允许时再增加签名。清单至少记录版本、提交哈希、发布日期、下载资源、摘要、最低 Node.js 版本和数据结构版本。
-2. **只读检测**：服务端通过 GitHub Releases API 查询最新稳定版，使用 `ETag` 做缓存并按语义版本比较；系统状态页显示当前版本、最新版本、发布时间、变更摘要和“检查更新”结果。网络或 GitHub 不可用时只报告失败，不影响业务服务。
-3. **不可变目录**：版本安装到 `/opt/lenovo-store-operations/releases/<version>-<commit>/`，安装完成后设为只读；`/opt/lenovo-store-operations/current` 原子指向当前版本，`previous` 保留上一个已验证版本。`/var/lib/lenovo-store-operations`、备份目录、环境文件和密钥始终位于 release 目录之外，升级和回滚都不得修改或删除它们。
-4. **外部更新器**：使用 root 拥有且普通服务账号不可修改的 systemd oneshot 更新器执行下载、校验、安装、切换和服务重启。Express 只通过固定、严格校验的控制通道提交 Release 版本号并读取状态，不直接执行 `git pull`、`npm`、任意 Shell 或 root 命令。
-5. **安装流程**：获取共享维护锁，拒绝与备份或恢复并发；运行升级前一致性备份；下载到临时目录；校验仓库、版本、SHA-256/签名和清单兼容性；在候选 release 中执行锁定依赖安装、构建和检查；记录旧目标；原子切换 `current`；重启服务并检查 `/api/system/health`、运行版本及关键数据库可读性。
-6. **失败回滚**：下载、校验、安装或构建失败时不切换；切换后若健康检查在限定时间内失败，立即将 `current` 切回 `previous` 并重启。涉及不可逆数据迁移的版本不得自动安装，必须先提供可验证的迁移和恢复策略。
-7. **API 与页面**：规划提供只读状态、手动检查、安装操作状态和回滚能力，例如 `GET /api/system/update/status`、`POST /api/system/update/check`、`POST /api/system/update/install`、`GET /api/system/update/operations/:id`、`POST /api/system/update/rollback`。安装和回滚必须沿用维护接口的同源、维护标识与令牌/可信局域网策略，并记录操作者来源、目标版本、结果和日志摘要。
+系统状态页提供“系统版本与更新”卡片：
 
-推荐实施顺序：版本信息与只读检测 → Release CI 和摘要校验 → 不可变 release 部署 → systemd 更新器与自动回滚 → Portal 安装/回滚入口。正式启用安装前，应在隔离 Ubuntu 主机完成断网、损坏包、构建失败、启动超时和数据库不兼容演练。
+- `GET /api/system/update/status` 只返回当前版本和进程内最近一次检查结果，不主动联网；
+- `POST /api/system/update/check` 同源触发检查，固定访问 GitHub Releases API；
+- 只接受非草稿、非预发布且 tag 符合 `vX.Y.Z` 或 `X.Y.Z` 的版本，在最多 300 条 Release 内按语义版本比较；
+- 使用 8 秒超时、1MB 单页响应限制、5 分钟成功缓存、失败重试退避、`ETag` 条件请求和并发请求合并；
+- GitHub 超时、限流或返回异常时不影响健康接口和业务 API；已有成功缓存时继续显示旧结果并标记错误；
+- Release 更新说明按纯文本显示，当前页面没有“安装更新”或“回滚”按钮。
+
+发布新版本时，先更新根版本、README、CHANGELOG 和相关文档，完成验证并推送默认分支，再创建同版本 tag。例如：
+
+```bash
+npm version 0.2.0 --no-git-tag-version --workspaces=false
+# 按实际日期更新文档和CHANGELOG，验证、提交并推送main后：
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+`.github/workflows/release.yml` 会严格校验 tag 与根 `package.json`、`package-lock.json` 版本一致，并确认提交位于默认分支；随后执行 `npm ci`、全量构建、检查和高危依赖审计。全部成功后创建正式 GitHub Release：
+
+- `lenovo-store-operations-vX.Y.Z.tar.gz`：Git 受控源码和本次 CI 生成的五套前端 `dist`，不包含 `node_modules`、`data`、数据库、备份、环境文件或密钥；
+- `manifest.json`：固定仓库、版本、提交、Node.js 要求、数据兼容标识、产物大小和 SHA-256；
+- `SHA256SUMS`：发布包与 manifest 的摘要；
+- 包内 `release-info.json`：供运行时读取版本和提交。
+
+若工作流因权限无法创建 Release，在 GitHub 仓库 `Settings → Actions → General → Workflow permissions` 中允许工作流写入仓库内容；工作流自身只在发布 job 使用 `contents: write`，不需要额外 PAT。
+
+第二阶段继续采用以下安全边界：
+
+1. 版本安装到 `/opt/lenovo-store-operations/releases/<version>-<commit>/`，`current` 原子指向当前版本，`previous` 保留上一个已验证版本；数据、备份、环境文件和密钥始终位于 release 目录之外。
+2. 使用 root 拥有且普通服务账号不可修改的 systemd oneshot 更新器执行下载、校验、安装、切换和服务重启；Express 不直接执行 `git pull`、`npm`、任意 Shell 或 root 命令。
+3. 安装前获取共享维护锁并创建一致性备份，再校验固定仓库、版本、SHA-256/签名和兼容性；候选版本通过构建和检查后才能原子切换。
+4. 切换后验证 `/api/system/health`、运行版本和数据库；失败立即切回 `previous`。涉及不可逆数据迁移的版本不得自动安装。
+5. 后续才增加安装操作状态、安装和回滚接口，并使用比局域网免令牌备份恢复更严格的独立更新管理员身份验证。
+
+正式启用第二阶段前，应在隔离 Ubuntu 主机完成断网、损坏包、构建失败、启动超时和数据库不兼容演练。
 
 ## 7. 备份
 
@@ -402,7 +429,7 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 备份目录示例：
 
 ```text
-/var/backups/lenovo-store-operations/2026-08-20T10-20-30.000Z/
+/var/backups/lenovo-store-operations/2026-09-02T10-20-30.000Z/
 ├── computer-labels/database.sqlite
 ├── price-labels/database.sqlite
 ├── receipt-assistant/database.sqlite

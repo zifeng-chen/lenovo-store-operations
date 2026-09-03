@@ -6,6 +6,9 @@ const MAINTENANCE_HEADER = { 'X-Lenovo-Store-Maintenance': '1' };
 const loading = ref(true);
 const error = ref('');
 const health = ref(null);
+const updateLoading = ref(false);
+const updateError = ref('');
+const updateStatus = ref(null);
 const backupLoading = ref(false);
 const inspectLoading = ref(false);
 const fileInput = ref(null);
@@ -60,6 +63,51 @@ async function loadHealth() {
   } finally {
     loading.value = false;
   }
+}
+
+async function loadUpdateStatus() {
+  updateLoading.value = true;
+  updateError.value = '';
+  try {
+    const response = await fetch('/api/system/update/status');
+    const body = await readApiResponse(response);
+    updateStatus.value = body.data;
+    if (body.data.lastError) updateError.value = body.data.lastError;
+  } catch (requestError) {
+    updateError.value = requestError.message;
+  } finally {
+    updateLoading.value = false;
+  }
+}
+
+async function checkForUpdates() {
+  updateLoading.value = true;
+  updateError.value = '';
+  try {
+    const response = await fetch('/api/system/update/check', { method: 'POST' });
+    const body = await readApiResponse(response);
+    updateStatus.value = body.data;
+    if (body.data.lastError) {
+      updateError.value = body.data.lastError;
+      ElMessage.warning('GitHub 暂时不可用，已保留上次成功的检查结果');
+    } else if (body.data.updateAvailable) {
+      ElMessage.success(`发现新版本 ${body.data.latestRelease.version}`);
+    } else if (!body.data.latestRelease) {
+      ElMessage.info('GitHub 仓库暂时没有正式 Release');
+    } else {
+      ElMessage.success('当前已是最新稳定版本');
+    }
+  } catch (requestError) {
+    updateError.value = requestError.message;
+    ElMessage.error(requestError.message);
+  } finally {
+    updateLoading.value = false;
+  }
+}
+
+function formatUpdateTime(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
 
 async function downloadBackup() {
@@ -217,11 +265,35 @@ function formatCounts(counts) {
   return Object.entries(counts).map(([key, value]) => `${labels[key] || key} ${value.toLocaleString()} 条`).join('，');
 }
 
+const currentBuild = computed(() => updateStatus.value?.current || health.value?.build || {
+  version: health.value?.version || '未知',
+  commit: null,
+  shortCommit: null,
+  channel: 'stable',
+});
+
+const updateStateText = computed(() => {
+  if (!updateStatus.value?.checkedAt) return '尚未检查';
+  if (!updateStatus.value.latestRelease) return '暂无正式 Release';
+  if (updateStatus.value.updateAvailable) return '发现新版本';
+  if (updateStatus.value.aheadOfLatest) return '当前版本领先';
+  return '已是最新版本';
+});
+
+const updateTagType = computed(() => {
+  if (updateStatus.value?.updateAvailable) return 'warning';
+  if (updateStatus.value?.checkedAt && updateStatus.value?.latestRelease) return 'success';
+  return 'info';
+});
+
 const sessionExpiresText = computed(() => restoreSession.value
   ? new Date(restoreSession.value.expiresAt).toLocaleString('zh-CN', { hour12: false })
   : '');
 
-onMounted(loadHealth);
+onMounted(() => {
+  loadHealth();
+  loadUpdateStatus();
+});
 onBeforeUnmount(() => discardSession());
 </script>
 
@@ -244,6 +316,61 @@ onBeforeUnmount(() => discardSession());
       <div><span>运行时间</span><b>{{ health.uptimeSeconds }} 秒</b></div>
       <div><span>板块数量</span><b>{{ health.modules.length }}</b></div>
     </div>
+
+    <section class="update-panel" aria-labelledby="update-title">
+      <div class="update-heading">
+        <div>
+          <span class="card-kicker">GitHub 稳定通道</span>
+          <h2 id="update-title">系统版本与更新</h2>
+          <p>当前阶段只检查 GitHub 正式版本，不会自动下载、安装或重启系统。</p>
+        </div>
+        <div class="update-heading-actions">
+          <el-tag type="info" effect="plain">stable</el-tag>
+          <el-button type="primary" :loading="updateLoading" @click="checkForUpdates">检查更新</el-button>
+        </div>
+      </div>
+
+      <el-alert v-if="updateError" :title="`${updateError}；业务服务不受影响。`" type="warning" :closable="false" show-icon />
+      <el-alert v-if="updateStatus?.searchTruncated" title="Release 数量超过检查上限，当前结果仅基于最近 300 条记录。" type="warning" :closable="false" show-icon />
+
+      <div v-loading="updateLoading" class="update-content">
+        <div class="update-grid">
+          <article class="update-info-card">
+            <span>当前运行版本</span>
+            <strong>v{{ currentBuild.version }}</strong>
+            <dl>
+              <div><dt>提交</dt><dd><code :title="currentBuild.commit || '当前构建未包含提交信息'">{{ currentBuild.shortCommit || '未知' }}</code></dd></div>
+              <div><dt>通道</dt><dd>{{ currentBuild.channel }}</dd></div>
+            </dl>
+          </article>
+
+          <article class="update-info-card">
+            <div class="update-card-title">
+              <span>最新 GitHub Release</span>
+              <el-tag :type="updateTagType" effect="light">{{ updateStateText }}</el-tag>
+            </div>
+            <strong>{{ updateStatus?.latestRelease ? `v${updateStatus.latestRelease.version}` : '—' }}</strong>
+            <dl>
+              <div><dt>发布时间</dt><dd>{{ formatUpdateTime(updateStatus?.latestRelease?.publishedAt) }}</dd></div>
+              <div><dt>检查时间</dt><dd>{{ formatUpdateTime(updateStatus?.checkedAt) }}</dd></div>
+            </dl>
+          </article>
+        </div>
+
+        <div v-if="updateStatus?.latestRelease" class="release-notes">
+          <div class="release-notes-heading">
+            <div>
+              <span>更新说明</span>
+              <strong>{{ updateStatus.latestRelease.name }}</strong>
+            </div>
+            <a v-if="updateStatus.latestRelease.url" class="update-release-link" :href="updateStatus.latestRelease.url" target="_blank" rel="noopener noreferrer">查看 GitHub Release <span aria-hidden="true">↗</span></a>
+          </div>
+          <pre>{{ updateStatus.latestRelease.notes || '该版本未提供更新说明。' }}</pre>
+          <p v-if="updateStatus.stale" class="update-stale-note">当前显示上次成功的缓存结果。</p>
+        </div>
+        <p v-else class="update-empty-note">{{ updateStatus?.stale ? '当前显示上次成功检查的“无正式 Release”结果，本次无法连接 GitHub，暂时不能确认最新状态。' : (updateStatus?.checkedAt ? 'GitHub 仓库暂时没有正式 Release。' : '点击“检查更新”获取最新稳定版本。') }}</p>
+      </div>
+    </section>
 
     <div v-loading="loading" class="status-table-wrap">
       <table class="status-table">

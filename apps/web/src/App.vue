@@ -1,6 +1,19 @@
 <script setup>
+import { onMounted, ref } from 'vue';
 import { STORE_MODULES } from '@lenovo-store/shared';
 import logoUrl from '@lenovo-store/shared/lenovo-logo.svg';
+
+const suiteVersion = ref('');
+
+onMounted(async () => {
+  try {
+    const response = await fetch('/api/system/health');
+    const body = await response.json();
+    if (response.ok && body?.code === 0) suiteVersion.value = body.data.version;
+  } catch {
+    // 版本信息不影响导航和业务页面使用。
+  }
+});
 </script>
 
 <template>
@@ -30,7 +43,7 @@ import logoUrl from '@lenovo-store/shared/lenovo-logo.svg';
 
       <div class="sidebar-footer">
         <span class="status-dot"></span>
-        <span>联想统一运营套件 v1.0.0</span>
+        <span>联想统一运营套件{{ suiteVersion ? ` v${suiteVersion}` : '' }}</span>
       </div>
     </aside>
 

@@ -4,6 +4,8 @@
 
 ## 2026-09-02
 
+- 在线更新第一阶段：统一以根 `package.json` 的 `0.1.0` 为产品版本，健康接口返回版本、完整提交哈希和 `stable` 通道；系统状态页新增 GitHub 正式版本检查、更新说明和 Release 跳转，当前不执行安装。
+- 发布流程：新增 `vX.Y.Z` tag 驱动的 GitHub Actions，自动执行依赖安装、全量构建、检查和审计，并生成源码与构建产物包、`manifest.json`、`release-info.json` 和 `SHA256SUMS` 后创建正式 Release。
 - 文档：依据对应 Git 提交时间校正历史更新日期，将此前误归到 `2026-08-20` 的记录重新归档到实际日期。
 - 系统维护：新增 `LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE=true` 可信局域网开关；未配置维护令牌时可从其他机器直接备份、检查和按模块恢复，默认本机限制不变，配置令牌后仍优先强制 Bearer 鉴权。
 - 部署文档：补充 GitHub Release 更新检测、不可变 release 目录、systemd 外部更新器、升级前备份、原子切换和自动回滚的在线更新实施方案。

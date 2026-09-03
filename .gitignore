@@ -11,3 +11,4 @@ data/**/*.db
 data/**/*.db-*
 data/secrets/*
 !data/**/.gitkeep
+release-assets/

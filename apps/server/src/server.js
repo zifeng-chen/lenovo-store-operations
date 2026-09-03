@@ -29,8 +29,11 @@ import {
   DATA_ROOT_SOURCE,
   EXTERNAL_DATA_ROOT_CONFIGURED
 } from './config/data-paths.js';
+import { createGithubReleaseService } from './system/github-release-service.js';
 import { createPersistenceService } from './system/persistence-service.js';
+import { runtimeInfo } from './system/runtime-info.js';
 import { createSystemPersistenceRouter } from './system/router.js';
+import { createSystemUpdateRouter } from './system/update-router.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(currentDir, '../../..');
@@ -86,6 +89,8 @@ const persistenceService = createPersistenceService({
   receiptMaintenance: receiptAssistantMaintenance,
   ocrKeyPath: receiptOcrKeyPath
 });
+const githubReleaseService = createGithubReleaseService();
+const systemUpdateRouter = createSystemUpdateRouter({ releaseService: githubReleaseService });
 const systemPersistenceRouter = createSystemPersistenceRouter({
   persistenceService,
   maintenanceToken,
@@ -98,7 +103,12 @@ const systemPersistenceRouter = createSystemPersistenceRouter({
 app.disable('x-powered-by');
 app.set('trust proxy', 'loopback');
 app.enable('strict routing');
-app.use(cors());
+const corsMiddleware = cors();
+app.use((request, response, next) => {
+  const isRestrictedSystemRoute = request.path === '/api/system/health'
+    || request.path.startsWith('/api/system/update');
+  return isRestrictedSystemRoute ? next() : corsMiddleware(request, response, next);
+});
 
 function success(res, data, msg = 'success') {
   res.json({ code: 0, data, msg });
@@ -146,10 +156,12 @@ function moduleStatus(module) {
 initializeDatabases();
 
 app.get('/api/system/health', (_req, res) => {
+  res.removeHeader('Access-Control-Allow-Origin');
   success(res, {
     status: 'ok',
     service: 'lenovo-store-operations',
-    version: '1.0.0',
+    version: runtimeInfo.version,
+    build: runtimeInfo,
     uptimeSeconds: Math.floor(process.uptime()),
     persistentDataConfigured: EXTERNAL_DATA_ROOT_CONFIGURED,
     maintenanceAuthenticationRequired: Boolean(maintenanceToken),
@@ -158,6 +170,7 @@ app.get('/api/system/health', (_req, res) => {
   });
 });
 
+app.use('/api/system/update', systemUpdateRouter);
 app.use('/api/system', systemPersistenceRouter);
 
 for (const module of STORE_MODULES) {
