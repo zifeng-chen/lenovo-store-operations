@@ -6,6 +6,7 @@
 
 - 在线更新第一阶段：统一以根 `package.json` 的 `0.1.0` 为产品版本，健康接口返回版本、完整提交哈希和 `stable` 通道；系统状态页新增 GitHub 正式版本检查、更新说明和 Release 跳转，当前不执行安装。
 - 发布流程：新增 `vX.Y.Z` tag 驱动的 GitHub Actions，自动执行依赖安装、全量构建、检查和审计，并生成源码与构建产物包、`manifest.json`、`release-info.json` 和 `SHA256SUMS` 后创建正式 Release。
+- 依赖安全：将 Express 使用的传递依赖 `qs` 由 `6.15.3` 更新到 `6.16.0`，修复 npm 审计报告的中危拒绝服务问题。
 
 ## 2026-09-02
 
