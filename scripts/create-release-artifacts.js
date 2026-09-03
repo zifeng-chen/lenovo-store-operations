@@ -55,6 +55,8 @@ function validateReleaseTree(releaseRoot) {
     'apps/server/src/system/runtime-info.js',
     'packages/shared/package.json',
     'scripts/backup-data.js',
+    'ops/updater/updater.mjs',
+    'ops/systemd/lenovo-store-updater.service',
     ...requiredDistDirectories.map(directory => `${directory}/index.html`),
   ]
   for (const relativePath of requiredFiles) {
@@ -154,6 +156,9 @@ try {
     dataCompatibility: {
       schemaVersion: 1,
       irreversibleMigration: false,
+    },
+    platformCompatibility: {
+      updaterContractVersion: 1,
     },
     artifact: {
       name: artifactName,

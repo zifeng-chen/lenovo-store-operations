@@ -65,6 +65,16 @@ jobs:
       - name: Create release artifacts
         run: npm run release:pack
 
+      - name: Sign release manifest
+        env:
+          RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
+          RELEASE_SIGNING_PUBLIC_KEY_SHA256: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY_SHA256 }}
+        run: npm run release:sign
+
+      - name: Verify signed artifact checksums
+        working-directory: release-assets
+        run: sha256sum --check SHA256SUMS
+
       - name: Upload validated artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -99,6 +109,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             release-assets/*.tar.gz \
             release-assets/manifest.json \
+            release-assets/manifest.json.sig \
             release-assets/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \

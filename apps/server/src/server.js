@@ -33,6 +33,7 @@ import { createGithubReleaseService } from './system/github-release-service.js';
 import { createPersistenceService } from './system/persistence-service.js';
 import { runtimeInfo } from './system/runtime-info.js';
 import { createSystemPersistenceRouter } from './system/router.js';
+import { createUpdateIpcService } from './system/update-ipc-service.js';
 import { createSystemUpdateRouter } from './system/update-router.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -45,6 +46,23 @@ const maintenanceToken = String(process.env.LENOVO_STORE_MAINTENANCE_TOKEN || ''
 const allowUnauthenticatedMaintenance = String(
   process.env.LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE || ''
 ).trim().toLowerCase() === 'true';
+const updateInstallationEnabled = String(process.env.LENOVO_STORE_UPDATE_ENABLED || '').trim().toLowerCase() === 'true';
+const updateToken = String(process.env.LENOVO_STORE_UPDATE_TOKEN || '').trim();
+const configuredPublicOrigin = String(process.env.LENOVO_STORE_PUBLIC_ORIGIN || '').trim();
+let publicOrigin = '';
+if (configuredPublicOrigin) {
+  const parsedPublicOrigin = new URL(configuredPublicOrigin);
+  if (parsedPublicOrigin.origin !== configuredPublicOrigin || (parsedPublicOrigin.protocol !== 'https:' && !['127.0.0.1', 'localhost'].includes(parsedPublicOrigin.hostname))) {
+    throw new Error('LENOVO_STORE_PUBLIC_ORIGIN 必须是无路径的 HTTPS origin；仅本机允许 HTTP');
+  }
+  publicOrigin = parsedPublicOrigin.origin;
+}
+if (updateInstallationEnabled && updateToken.length < 32) {
+  throw new Error('启用在线安装时 LENOVO_STORE_UPDATE_TOKEN 必须至少包含 32 个字符');
+}
+if (updateInstallationEnabled && !publicOrigin) {
+  throw new Error('启用在线安装时必须配置 LENOVO_STORE_PUBLIC_ORIGIN');
+}
 if (process.env.NODE_ENV === 'production') {
   if (maintenanceToken && maintenanceToken.length < 24) {
     throw new Error('生产环境的 LENOVO_STORE_MAINTENANCE_TOKEN 必须至少包含 24 个字符');
@@ -90,7 +108,18 @@ const persistenceService = createPersistenceService({
   ocrKeyPath: receiptOcrKeyPath
 });
 const githubReleaseService = createGithubReleaseService();
-const systemUpdateRouter = createSystemUpdateRouter({ releaseService: githubReleaseService });
+const updateIpcService = createUpdateIpcService({
+  enabled: updateInstallationEnabled,
+  requestPath: process.env.LENOVO_STORE_UPDATE_REQUEST_PATH || '/run/lenovo-store-updater/request.json',
+  processingPath: process.env.LENOVO_STORE_UPDATE_PROCESSING_PATH || '/run/lenovo-store-updater/claimed/processing.json',
+  statePath: process.env.LENOVO_STORE_UPDATE_STATE_PATH || '/var/lib/lenovo-store-updater/status.json'
+});
+const systemUpdateRouter = createSystemUpdateRouter({
+  releaseService: githubReleaseService,
+  ipcService: updateIpcService,
+  updateToken,
+  publicOrigin
+});
 const systemPersistenceRouter = createSystemPersistenceRouter({
   persistenceService,
   maintenanceToken,
@@ -166,6 +195,8 @@ app.get('/api/system/health', (_req, res) => {
     persistentDataConfigured: EXTERNAL_DATA_ROOT_CONFIGURED,
     maintenanceAuthenticationRequired: Boolean(maintenanceToken),
     unauthenticatedMaintenanceAllowed: !maintenanceToken && allowUnauthenticatedMaintenance,
+    updateInstallationEnabled,
+    updateAuthenticationRequired: updateInstallationEnabled,
     modules: STORE_MODULES.map(moduleStatus)
   });
 });

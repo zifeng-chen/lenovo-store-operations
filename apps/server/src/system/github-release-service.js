@@ -6,7 +6,7 @@ const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases
 const RELEASES_PER_PAGE = 100
 const MAX_RELEASE_PAGES = 3
 const RELEASE_URL_PREFIX = `https://github.com/${GITHUB_REPOSITORY}/releases/`
-const STABLE_TAG_PATTERN = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
+const STABLE_TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000
 const DEFAULT_RETRY_DELAY_MS = 60 * 1000
 const MAX_RETRY_DELAY_MS = 15 * 60 * 1000
@@ -24,7 +24,7 @@ function serviceError(message, status = 502, code = 'UPDATE_CHECK_FAILED') {
 function stableVersionFromTag(tag) {
   const value = String(tag || '').trim()
   if (!STABLE_TAG_PATTERN.test(value)) return null
-  const version = semver.valid(value.startsWith('v') ? value.slice(1) : value)
+  const version = semver.valid(value.slice(1))
   return version && !semver.prerelease(version) ? version : null
 }
 

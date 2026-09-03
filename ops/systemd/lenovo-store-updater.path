@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for Lenovo Store Operations update requests
+
+[Path]
+PathExists=/run/lenovo-store-updater/request.json
+Unit=lenovo-store-updater.service
+
+[Install]
+WantedBy=multi-user.target

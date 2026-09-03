@@ -4,6 +4,12 @@
 
 ## 2026-09-03
 
+- 在线更新第二阶段：发布版本提升至 `0.2.0`；新增独立 root-owned systemd 更新器和受限文件 IPC；Portal 可使用独立更新管理员令牌提交刚检查到的最新稳定版本，并持续显示备份、下载、校验、安装、切换、重启、健康检查及回滚状态，功能默认关闭。
+- 安装安全：Release manifest 新增 Ed25519 独立签名和固定部署公钥指纹核对；更新器固定仓库和下载域名，使用 root 私有 claimed 目录与 `O_NOFOLLOW` 文件描述符领取请求，校验签名、SHA-256、包结构、版本与完整提交，拒绝不可逆数据迁移，并以专用不可登录 builder uid/gid 执行依赖安装和检查；构建前后复核更新器摘要并清除该 uid 的全部进程后才由 root 封存。
+- 原子部署与恢复：Ubuntu 改用 `releases/<version>-<commit>`、`current` 和 `previous`；候选版本通过完整 health、五套前端和三套数据库连续检查后才完成，失败自动切回旧版本；fsync 事务 journal 覆盖 `claimed`、`preparing`、`prepared`、`switched`、`recovered` 与 `committed`，支持强杀或断电后的开机保守回滚，且不自动覆盖业务数据库。
+- 安全加固：更新器以 root-owned、专用 builder 组仅可穿越的 staging 运行降权 npm，主服务启动门识别 oneshot 的 `activating` 状态，并在切换前持久化候选身份以清理中断残留；首次迁移改从已推送 Git 归档构建受控候选，先建立连续 health 基线，拒绝敏感 ignored 内容，失败时精确恢复旧 checkout 顶层权限并验证健康。
+- Ubuntu 运维：新增 systemd service/path/tmpfiles 模板、签名密钥生成工具、更新器配置示例和显式确认的首次迁移脚本，并补充 HTTPS origin、权限、令牌及故障演练流程。
+
 - 在线更新第一阶段：统一以根 `package.json` 的 `0.1.0` 为产品版本，健康接口返回版本、完整提交哈希和 `stable` 通道；系统状态页新增 GitHub 正式版本检查、更新说明和 Release 跳转，当前不执行安装。
 - 发布流程：新增 `vX.Y.Z` tag 驱动的 GitHub Actions，自动执行依赖安装、全量构建、检查和审计，并生成源码与构建产物包、`manifest.json`、`release-info.json` 和 `SHA256SUMS` 后创建正式 Release。
 - 依赖安全：将 Express 使用的传递依赖 `qs` 由 `6.15.3` 更新到 `6.16.0`，修复 npm 审计报告的中危拒绝服务问题。

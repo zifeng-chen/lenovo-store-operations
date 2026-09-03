@@ -15,7 +15,7 @@
 
 每次功能、配置、部署方式或文档更新都必须同步维护 GitHub 仓库文档，并按 `YYYY-MM-DD` 记录更新日期和主要内容。最新更新与完整历史请查看 [CHANGELOG.md](CHANGELOG.md)。
 
-当前最新记录：`2026-09-03`，完成在线更新第一阶段：统一产品版本与提交信息、在系统状态页检测 GitHub 正式版本，并建立自动生成 Release、发布清单和 SHA-256 校验文件的工作流；在线安装与自动回滚尚未开放。
+当前最新记录：`2026-09-03`，完成在线更新第二阶段：新增签名 Release、独立 systemd 更新器、受控任务 IPC、Portal 安装进度、不可变 release 原子切换和健康检查失败自动回滚；安装入口默认关闭，Ubuntu 必须完成公钥、权限、HTTPS origin、独立令牌和故障演练后才能启用。
 
 ## 板块说明
 
@@ -335,15 +335,17 @@ npm run migrate:data
 
 迁移是一次性操作。目标文件已经存在时脚本会主动停止，这是防止覆盖现有业务数据的保护机制。
 
-## GitHub 更新检测与 Release 发布
+## GitHub 更新检测、签名 Release 与受控安装
 
-系统状态页 `http://localhost:8900/#/system` 已支持第一阶段只读更新检测：显示当前产品版本、提交哈希、`stable` 通道、最新正式 Release、发布时间和更新说明。点击“检查更新”只会由服务端查询固定仓库 `zifeng-chen/lenovo-store-operations`，不会下载代码、执行命令、安装版本或重启服务。
+系统状态页 `http://localhost:8900/#/system` 支持检查固定仓库 `zifeng-chen/lenovo-store-operations` 的稳定 Release。未配置 Ubuntu 更新器时保持只读；完成安全配置后，只允许安装服务端刚刚成功检查到、非 stale 且高于当前版本的最新稳定 tag。
 
 服务端提供：
 
-- `GET /api/system/update/status`：读取当前版本和进程内最近一次检查结果，不主动连接 GitHub；
+- `GET /api/system/update/status`：读取当前版本、最近一次检查结果和 root 更新器写入的脱敏任务状态，不主动连接 GitHub；
 - `POST /api/system/update/check`：同源触发 GitHub 检查，使用 8 秒超时、5 分钟成功缓存、失败重试退避、`ETag` 条件请求，并在最多 300 条 Release 内进行稳定语义版本比较；
-- GitHub 不可用时不会影响健康接口和业务 API；已有成功缓存时继续显示缓存结果并明确标记错误。
+- `POST /api/system/update/install`：要求固定 `LENOVO_STORE_PUBLIC_ORIGIN`、`X-Lenovo-Store-Update: 1`、独立至少 32 字符的更新令牌和唯一 `tag` 字段；维护令牌或局域网免令牌模式不能授权；
+- Express 只原子写入固定任务文件，不执行 `git pull`、`npm`、Shell、systemctl 或 root 命令；root-owned systemd oneshot 更新器负责备份、下载、签名/摘要/包结构校验、普通账号依赖安装、原子切换、重启、完整 health 验证和失败自动回滚；
+- GitHub 不可用、更新失败或回滚状态不会影响业务 API；更新前 `current` 不变，切换后失败会恢复 `previous`。
 
 根 `package.json` 的 `version` 是整套产品的唯一发布版本。准备新版本时先更新版本、README、CHANGELOG 和相关文档并提交，再创建完全一致的 `vX.Y.Z` tag。例如发布 `0.2.0`：
 
@@ -357,11 +359,12 @@ git push origin v0.2.0
 `.github/workflows/release.yml` 会校验 tag、根 package 与 lockfile 版本一致，并依次执行 `npm ci`、`npm run build`、`npm run check` 和 `npm audit --audit-level=high`。全部通过后才会创建 GitHub Release，包含：
 
 - `lenovo-store-operations-vX.Y.Z.tar.gz`：Git 受控源码和本次 CI 构建的五套前端产物，不包含 `node_modules`、运行数据库、备份、环境文件或密钥；
-- `manifest.json`：仓库、版本、提交、Node.js 要求、产物大小和 SHA-256；
-- `SHA256SUMS`：发布包与清单的摘要；
-- 包内 `release-info.json`：运行时读取的版本和提交信息。
+- `manifest.json`：仓库、版本、提交、Node.js 要求、数据兼容性、产物大小和 SHA-256；
+- `manifest.json.sig`：使用 GitHub Actions Secret `RELEASE_SIGNING_PRIVATE_KEY` 中的 Ed25519 私钥生成的独立签名；工作流会把私钥派生公钥与 Variable `RELEASE_SIGNING_PUBLIC_KEY_SHA256` 的固定部署指纹比对并自验签；
+- `SHA256SUMS`：发布包、manifest 和签名文件的摘要；
+- 包内 `release-info.json`：运行时读取并与签名 manifest 交叉核对的版本和提交信息。
 
-如果 GitHub 禁止工作流创建 Release，需要在仓库 `Settings → Actions → General → Workflow permissions` 允许工作流写入仓库内容。第一阶段不提供“安装更新”按钮；Ubuntu 仍按部署文档中的人工升级流程更新。
+缺少签名 Secret、公钥指纹 Variable 或二者不匹配时，发布工作流都会失败，不会降级发布无签名或目标机无法验证的版本。现有无签名 `v0.1.0` 不能自动安装。首次生成密钥、迁移 `/opt/lenovo-store-operations/current`/`previous`/`releases`、配置 systemd.path/开机事务恢复和执行故障演练的完整步骤见 [Ubuntu 部署指南第 6 节](docs/ubuntu-deployment.md#61-github-release更新检测与受控安装第二阶段已实现)。
 
 ## 数据备份与恢复
 
@@ -425,7 +428,8 @@ npm run backup:data
 | `npm run migrate:data` | 一次性迁移三个旧项目数据库和 OCR 密钥，目标由 `LENOVO_STORE_DATA_DIR` 决定 |
 | `npm run backup:data` | 在线一致性备份三套 SQLite、OCR 密钥和校验清单 |
 | `npm run release:verify -- vX.Y.Z` | 校验稳定版 tag 与根 package、lockfile 版本一致 |
-| `npm run release:pack -- vX.Y.Z` | 在全量构建后生成 Release 安装包、清单和 SHA-256 校验文件 |
+| `npm run release:pack -- vX.Y.Z` | 在全量构建后生成 Release 安装包、manifest 和 SHA-256 校验文件 |
+| `npm run release:sign` | 使用私钥签名 manifest，并核对 `RELEASE_SIGNING_PUBLIC_KEY_SHA256` 固定部署公钥指纹 |
 
 ## 构建与健康检查
 

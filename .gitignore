@@ -12,3 +12,4 @@ data/**/*.db-*
 data/secrets/*
 !data/**/.gitkeep
 release-assets/
+release-signing-private.pem
