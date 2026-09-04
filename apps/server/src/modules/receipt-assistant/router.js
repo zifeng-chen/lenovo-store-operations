@@ -2,10 +2,13 @@ import crypto from 'node:crypto'
 import { Router, json } from 'express'
 import { getDatabase, OCR_KEY_PATH } from './database.js'
 import { createBaiduOcrService } from './baidu-ocr.js'
-import { createOcrStorage } from './ocr-storage.js'
+import { createOcrStorage, getOcrBillingMonth, isValidOcrBillingMonth } from './ocr-storage.js'
 
 const OCR_DEADLINE_MS = 35000
 const OCR_MAX_IMAGE_BYTES = 6 * 1024 * 1024
+const OCR_EXPORT_MAX_ROWS = 10000
+const OCR_EXPORT_MAX_SOURCE_BYTES = 10 * 1024 * 1024
+const OCR_EXPORT_MAX_RESPONSE_BYTES = 20 * 1024 * 1024
 
 function toLocalISODate(date = new Date()) {
   const year = date.getFullYear()
@@ -19,6 +22,49 @@ function createRequestError(status, message, code) {
   error.status = status
   error.code = code
   return error
+}
+
+function requireSameOriginManagement(request, response, next) {
+  const origin = request.get('Origin')
+  if (origin) {
+    try {
+      if (new URL(origin).origin === `${request.protocol}://${request.get('host')}`) return next()
+    } catch {}
+    return response.status(403).json({ message: '仅允许从当前付款凭证页面管理 OCR 记录' })
+  }
+  if (request.get('Sec-Fetch-Site') === 'same-origin') return next()
+  return response.status(403).json({ message: 'OCR 记录管理请求必须来自同源页面' })
+}
+
+function csvCell(value) {
+  let text = value === null || value === undefined ? '' : String(value)
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+function historyCsv(items) {
+  const columns = [
+    ['id', 'id'],
+    ['requestId', 'request_id'],
+    ['status', 'status'],
+    ['amount', 'amount'],
+    ['matchedText', 'matched_text'],
+    ['wordsCount', 'words_count'],
+    ['errorCode', 'error_code'],
+    ['httpStatus', 'http_status'],
+    ['errorMessage', 'error_message'],
+    ['durationMs', 'duration_ms'],
+    ['createdAt', 'created_at_utc'],
+    ['recognizedText', 'recognized_text'],
+  ]
+  return [
+    columns.map(([, heading]) => csvCell(heading)).join(','),
+    ...items.map(item => columns.map(([field]) => csvCell(item[field])).join(',')),
+  ].join('\r\n')
+}
+
+function exportFileTimestamp(date = new Date()) {
+  return date.toISOString().replace(/[:.]/g, '-').replace('T', '_').replace('Z', '')
 }
 
 function isSupportedOcrImage(buffer) {
@@ -208,7 +254,10 @@ export function createReceiptAssistantRouter() {
     try {
       let result
       try {
-        result = await state.service.recognizeAmount(request.body, { signal: operation.signal })
+        result = await state.service.recognizeAmount(request.body, {
+          signal: operation.signal,
+          onAttempt: attemptNo => state.storage.recordUsageAttempt({ requestId, attemptNo }),
+        })
       } catch (error) {
         try {
           error.historyId = state.storage.insertHistory({
@@ -234,6 +283,33 @@ export function createReceiptAssistantRouter() {
     }
   })
 
+  router.get('/ocr/usage', (request, response) => {
+    const month = request.query.month === undefined ? getOcrBillingMonth() : String(request.query.month)
+    if (!isValidOcrBillingMonth(month)) return response.status(400).json({ message: '额度月份必须符合 YYYY-MM' })
+    response.set('Cache-Control', 'no-store')
+    return response.json(getRuntime().storage.getUsage(month))
+  })
+
+  router.get('/ocr/history/export', requireSameOriginManagement, (request, response) => {
+    const format = String(request.query.format || 'csv').toLowerCase()
+    if (!['csv', 'json'].includes(format)) return response.status(400).json({ message: '导出格式只支持 csv 或 json' })
+    const storage = getRuntime().storage
+    const stats = storage.getHistoryExportStats()
+    if (stats.count > OCR_EXPORT_MAX_ROWS) return response.status(413).json({ message: `识别记录超过 ${OCR_EXPORT_MAX_ROWS} 条，请先删除不需要的记录后再导出` })
+    if (stats.sourceBytes > OCR_EXPORT_MAX_SOURCE_BYTES) return response.status(413).json({ message: '识别记录全文超过 10MB，请先删除不需要的记录后再导出' })
+    const items = storage.listHistoryForExport(OCR_EXPORT_MAX_ROWS)
+    const exportedAt = new Date().toISOString()
+    const filename = `receipt-ocr-history-${exportFileTimestamp(new Date(exportedAt))}.${format}`
+    const body = format === 'json'
+      ? `${JSON.stringify({ schemaVersion: 1, exportedAt, timezone: 'UTC', itemCount: items.length, items }, null, 2)}\n`
+      : `\ufeff${historyCsv(items)}\r\n`
+    if (Buffer.byteLength(body) > OCR_EXPORT_MAX_RESPONSE_BYTES) return response.status(413).json({ message: '识别记录导出文件超过 20MB，请先删除不需要的记录后再导出' })
+    response.set('Cache-Control', 'no-store')
+    response.set('Content-Disposition', `attachment; filename="${filename}"`)
+    response.type(format === 'json' ? 'application/json' : 'text/csv; charset=utf-8')
+    return response.send(body)
+  })
+
   router.get('/ocr/history', (request, response) => {
     const page = request.query.page === undefined ? 1 : Number(request.query.page)
     const pageSize = request.query.pageSize === undefined ? 10 : Number(request.query.pageSize)
@@ -246,6 +322,14 @@ export function createReceiptAssistantRouter() {
     if (!Number.isInteger(id) || id <= 0) return response.status(400).json({ message: '无效的 OCR 记录 ID' })
     const history = getRuntime().storage.getHistoryById(id)
     return history ? response.json(history) : response.status(404).json({ message: 'OCR 识别记录不存在' })
+  })
+
+  router.delete('/ocr/history/:id', requireSameOriginManagement, (request, response) => {
+    const id = Number(request.params.id)
+    if (!Number.isInteger(id) || id <= 0) return response.status(400).json({ message: '无效的 OCR 记录 ID' })
+    return getRuntime().storage.deleteHistory(id)
+      ? response.status(204).end()
+      : response.status(404).json({ message: 'OCR 识别记录不存在' })
   })
 
   const getSaleById = id => getRuntime().db.prepare('SELECT * FROM sales WHERE id = ?').get(id)

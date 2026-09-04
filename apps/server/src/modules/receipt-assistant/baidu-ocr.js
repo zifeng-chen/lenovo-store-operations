@@ -88,16 +88,27 @@ export function createBaiduOcrService({ apiKey, secretKey, endpoint = DEFAULT_OC
     })
   }
   function getAccessToken(forceRefresh = false, signal) { if (!forceRefresh && accessToken && Date.now() < tokenExpiresAt) return Promise.resolve(accessToken); return waitForTokenRequest(tokenRequest || startTokenRequest(), signal) }
-  async function callOcr(imageBuffer, { forceRefreshToken = false, signal } = {}) {
+  async function callOcr(imageBuffer, { forceRefreshToken = false, signal, onAttempt, attemptNo } = {}) {
     const token = await getAccessToken(forceRefreshToken, signal)
     const body = new URLSearchParams({ image: imageBuffer.toString('base64'), language_type: 'CHN_ENG', detect_direction: 'true', paragraph: 'false', probability: 'false' }).toString()
     if (Buffer.byteLength(body) > MAX_ENCODED_IMAGE_BYTES) throw createHttpError(413, '合成图片过大，无法提交百度 OCR', 'OCR_IMAGE_TOO_LARGE')
     const url = new URL(endpoint); url.searchParams.set('access_token', token)
+    if (signal?.aborted) throw getAbortError(signal)
+    if (typeof onAttempt === 'function') {
+      try { await onAttempt(attemptNo) }
+      catch { throw createHttpError(500, 'OCR 调用次数记录失败，本次未发送识别请求', 'OCR_USAGE_PERSIST_FAILED') }
+    }
     return { data: await requestJson(url, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }, body, timeout: 30000, signal }), token }
   }
-  async function recognizeAmount(imageBuffer, { signal } = {}) {
-    let attempt = await callOcr(imageBuffer, { signal })
-    if (attempt.data.error_code === 110 || attempt.data.error_code === 111) { const failedTokenIsCurrent = accessToken === attempt.token; if (failedTokenIsCurrent) { accessToken = null; tokenExpiresAt = 0 } attempt = await callOcr(imageBuffer, { forceRefreshToken: failedTokenIsCurrent, signal }) }
+  async function recognizeAmount(imageBuffer, { signal, onAttempt } = {}) {
+    let attemptNo = 1
+    let attempt = await callOcr(imageBuffer, { signal, onAttempt, attemptNo })
+    if (attempt.data.error_code === 110 || attempt.data.error_code === 111) {
+      const failedTokenIsCurrent = accessToken === attempt.token
+      if (failedTokenIsCurrent) { accessToken = null; tokenExpiresAt = 0 }
+      attemptNo += 1
+      attempt = await callOcr(imageBuffer, { forceRefreshToken: failedTokenIsCurrent, signal, onAttempt, attemptNo })
+    }
     const data = attempt.data
     if (data.error_code) throw createHttpError(502, data.error_msg ? `百度 OCR 识别失败：${data.error_msg}` : '百度 OCR 识别失败', `BAIDU_${data.error_code}`)
     const words = Array.isArray(data.words_result) ? data.words_result.map(item => item.words).filter(Boolean) : []; const recognizedText = words.join('\n').slice(0, 100000); const result = extractReceiptAmount(words)

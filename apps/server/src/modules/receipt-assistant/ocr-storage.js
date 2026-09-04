@@ -3,6 +3,25 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const ENCRYPTION_CONTEXT = Buffer.from('lenovo-pos-ocr-config:v1')
+export const OCR_MONTHLY_FREE_LIMIT = 500
+export const OCR_BILLING_TIME_ZONE = 'Asia/Shanghai'
+const BILLING_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/
+
+export function getOcrBillingMonth(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: OCR_BILLING_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(date)
+  const year = parts.find(part => part.type === 'year')?.value
+  const month = parts.find(part => part.type === 'month')?.value
+  if (!year || !month) throw createStorageError('无法确定 OCR 额度统计月份', 'OCR_BILLING_MONTH_ERROR')
+  return `${year}-${month}`
+}
+
+export function isValidOcrBillingMonth(value) {
+  return BILLING_MONTH_PATTERN.test(String(value || ''))
+}
 
 function createStorageError(message, code) {
   const error = new Error(message)
@@ -116,6 +135,16 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
     );
     CREATE INDEX IF NOT EXISTS idx_receipt_ocr_history_created_at
       ON ocr_history (created_at DESC, id DESC);
+    CREATE TABLE IF NOT EXISTS ocr_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_id TEXT NOT NULL,
+      attempt_no INTEGER NOT NULL CHECK (attempt_no > 0),
+      billing_month TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (request_id, attempt_no)
+    );
+    CREATE INDEX IF NOT EXISTS idx_receipt_ocr_usage_billing_month
+      ON ocr_usage (billing_month, id);
   `)
 
   let encryptionKey = decodeEnvironmentKey(environmentKey)
@@ -180,6 +209,57 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
     return { items: rows.map(row => mapHistoryRow(row)), total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) }
   }
 
+  const insertUsageStatement = db.prepare('INSERT INTO ocr_usage (request_id, attempt_no, billing_month) VALUES (?, ?, ?)')
+  function recordUsageAttempt({ requestId, attemptNo, date = new Date() }) {
+    const normalizedRequestId = String(requestId || '').trim()
+    if (!normalizedRequestId || normalizedRequestId.length > 128 || !Number.isInteger(attemptNo) || attemptNo < 1 || attemptNo > 10) {
+      throw createStorageError('OCR 调用记录参数无效', 'OCR_USAGE_INVALID')
+    }
+    const billingMonth = getOcrBillingMonth(date)
+    insertUsageStatement.run(normalizedRequestId, attemptNo, billingMonth)
+    return { billingMonth, attemptNo }
+  }
+
+  function getUsage(month = getOcrBillingMonth()) {
+    if (!isValidOcrBillingMonth(month)) throw createStorageError('OCR 额度月份必须符合 YYYY-MM', 'OCR_BILLING_MONTH_INVALID')
+    const used = Number(db.prepare('SELECT COUNT(*) AS count FROM ocr_usage WHERE billing_month = ?').get(month).count) || 0
+    const trackingSince = db.prepare('SELECT MIN(created_at) AS value FROM ocr_usage').get().value || null
+    return {
+      month,
+      timezone: OCR_BILLING_TIME_ZONE,
+      limit: OCR_MONTHLY_FREE_LIMIT,
+      used,
+      remaining: Math.max(0, OCR_MONTHLY_FREE_LIMIT - used),
+      overage: Math.max(0, used - OCR_MONTHLY_FREE_LIMIT),
+      trackingSince,
+      basis: 'local-ocr-endpoint-attempts',
+    }
+  }
+
+  function deleteHistory(id) {
+    return db.prepare('DELETE FROM ocr_history WHERE id = ?').run(id).changes > 0
+  }
+
+  function getHistoryExportStats() {
+    const row = db.prepare(`
+      SELECT COUNT(*) AS count, COALESCE(SUM(
+        256
+        + length(CAST(COALESCE(request_id, '') AS BLOB))
+        + length(CAST(COALESCE(matched_text, '') AS BLOB))
+        + length(CAST(COALESCE(recognized_text, '') AS BLOB))
+        + length(CAST(COALESCE(error_code, '') AS BLOB))
+        + length(CAST(COALESCE(error_message, '') AS BLOB))
+      ), 0) AS source_bytes
+      FROM ocr_history
+    `).get()
+    return { count: Number(row.count) || 0, sourceBytes: Number(row.source_bytes) || 0 }
+  }
+
+  function listHistoryForExport(limit) {
+    if (!Number.isInteger(limit) || limit < 1) throw createStorageError('OCR 导出上限无效', 'OCR_EXPORT_LIMIT_INVALID')
+    return db.prepare('SELECT * FROM ocr_history ORDER BY id ASC LIMIT ?').all(limit).map(row => mapHistoryRow(row, true))
+  }
+
   return {
     loadCredentials,
     saveCredentials,
@@ -190,5 +270,10 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
     insertHistory,
     listHistory,
     getHistoryById(id) { return mapHistoryRow(db.prepare('SELECT * FROM ocr_history WHERE id = ?').get(id), true) },
+    recordUsageAttempt,
+    getUsage,
+    deleteHistory,
+    getHistoryExportStats,
+    listHistoryForExport,
   }
 }

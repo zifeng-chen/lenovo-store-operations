@@ -47,6 +47,11 @@ button, input { font: inherit; }
 .ocr-config-state { display: inline-flex; padding: 4px 9px; color: #9a6700; font-size: 10px; font-weight: 700; background: #fff6d8; border-radius: 999px; }
 .ocr-config-state.is-ready { color: #12805c; background: #e9f8f2; }
 .ocr-config-summary { min-height: 18px; margin: 0 0 11px; color: #778399; font-size: 11px; }
+.ocr-quota-card { margin-bottom: 11px; padding: 11px 12px; background: linear-gradient(145deg,#f4f8fc,#edf5fa); border: 1px solid #dbe9f2; border-radius: 10px; }
+.ocr-quota-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: #5d6d80; font-size: 10px; }
+.ocr-quota-heading strong { color: #173b5d; font-size: 18px; line-height: 1; }
+.ocr-quota-heading small { color: #718196; font-size: 10px; font-weight: 500; }
+.ocr-quota-card p { margin: 7px 0 0; color: #718196; font-size: 10px; line-height: 1.45; }
 .ocr-management-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .ocr-management-actions .el-button { height: 38px; margin: 0; border-radius: 9px; }
 .sales-table { width: 100%; --el-table-header-bg-color:#f7f9fc; --el-table-row-hover-bg-color:#f7f9ff; --el-table-border-color:transparent; font-size: 12px; border-radius: 10px; }
@@ -99,6 +104,13 @@ button, input { font: inherit; }
 .ocr-result-link { min-height: auto; margin-left: auto; padding: 0; font-size: 11px; }
 .ocr-config-dialog-summary { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; color: #657087; font-size: 12px; }
 .ocr-config-form { margin-top: 18px; } .ocr-config-security-note { color: #8a95a8; font-size: 11px; line-height: 1.6; }
+.ocr-history-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 8px; padding: 12px 14px; background: #f3f8fc; border: 1px solid #dbe9f2; border-radius: 10px; }
+.ocr-history-toolbar strong, .ocr-history-toolbar span { display: block; }
+.ocr-history-toolbar strong { margin-bottom: 4px; color: #173b5d; font-size: 15px; }
+.ocr-history-toolbar span, .ocr-history-note { color: #718196; font-size: 10px; line-height: 1.5; }
+.ocr-history-note { margin: 0 2px 12px; }
+.ocr-history-export-actions { display: flex; flex: 0 0 auto; gap: 8px; }
+.ocr-history-export-actions .el-button + .el-button { margin-left: 0; }
 .ocr-history-pagination { display: flex; justify-content: flex-end; margin-top: 18px; }
 .history-status { display: inline-flex; padding: 3px 8px; font-size: 10px; font-weight: 700; border-radius: 999px; }
 .history-status--success { color: #12805c; background: #e9f8f2; } .history-status--failure { color: #c93f3f; background: #fff0f0; } .history-status--cancelled { color: #7b8493; background: #f0f2f5; }
@@ -116,7 +128,7 @@ button, input { font: inherit; }
 .ocr-detail-block--error { background: #fff7f7; border-color: #f7dada; }
 @media (max-width:1100px) { .app-shell { grid-template-columns: minmax(400px,430px) minmax(0,1fr); } .control-panel { padding-right:24px; padding-left:24px; } }
 @media (max-width:850px) { .app-shell { display:block; height:auto; min-height:100dvh; overflow:visible; } .control-panel { overflow:visible; } .preview-workspace { height:100dvh; padding:20px; } .preview-header { flex-wrap:wrap; gap:10px; margin-bottom:16px; } .trend-echart { height:280px; } }
-@media (max-width:560px) { .ocr-detail-grid, .trend-detail-summary { grid-template-columns:1fr; } .trend-toolbar { align-items:flex-start; flex-wrap:wrap; } .trend-range-switch { order:3; width:100%; } .trend-range-switch button { flex:1; } .chart-click-hint { margin-left:auto; } .trend-echart { height:260px; } .trend-date-picker { grid-template-columns:1fr; } }
+@media (max-width:560px) { .ocr-detail-grid, .trend-detail-summary { grid-template-columns:1fr; } .ocr-history-toolbar { align-items:stretch; flex-direction:column; } .ocr-history-export-actions .el-button { flex:1; } .trend-toolbar { align-items:flex-start; flex-wrap:wrap; } .trend-range-switch { order:3; width:100%; } .trend-range-switch button { flex:1; } .chart-click-hint { margin-left:auto; } .trend-echart { height:260px; } .trend-date-picker { grid-template-columns:1fr; } }
 
 @media screen {
   :root { --receipt-blue: var(--ls-color-brand); }

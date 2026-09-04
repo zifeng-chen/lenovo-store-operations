@@ -7,6 +7,7 @@ import {
   decodeEnvironmentKey,
   decryptOcrCredentials,
   encryptOcrCredentials,
+  isValidOcrBillingMonth,
   loadOrCreateLocalKey,
 } from '../modules/receipt-assistant/ocr-storage.js'
 import { writeBackupPackage } from './backup-package.js'
@@ -23,6 +24,7 @@ const ROW_LIMITS = {
   'receipt-assistant.sales': 2000000,
   'receipt-assistant.ocr_config': 1,
   'receipt-assistant.ocr_history': 2000000,
+  'receipt-assistant.ocr_usage': 4000000,
 }
 
 function persistenceError(message, status = 400, code = 'INVALID_BACKUP_DATA') {
@@ -149,6 +151,15 @@ function validateDatabase(filePath, moduleId) {
         const duplicateHistory = db.prepare('SELECT 1 FROM ocr_history GROUP BY id HAVING COUNT(*) > 1 UNION ALL SELECT 1 FROM ocr_history GROUP BY request_id HAVING COUNT(*) > 1 LIMIT 1').get()
         if (invalidHistory || duplicateHistory) throw persistenceError('OCR 历史记录包含重复或无效数据')
       }
+      if (tableExists(db, 'ocr_usage')) {
+        requireColumns(db, 'ocr_usage', ['id', 'request_id', 'attempt_no', 'billing_month', 'created_at'])
+        counts.ocrUsage = countRows(db, moduleId, 'ocr_usage')
+        const invalidUsage = hasInvalidRow(db.prepare('SELECT id, request_id, attempt_no, billing_month, created_at FROM ocr_usage'), row => !Number.isSafeInteger(row.id) || row.id <= 0
+          || hasBlankText(row.request_id, 128) || !Number.isSafeInteger(row.attempt_no) || row.attempt_no < 1 || row.attempt_no > 10
+          || !isValidOcrBillingMonth(row.billing_month) || !isValidTimestamp(row.created_at))
+        const duplicateUsage = db.prepare('SELECT 1 FROM ocr_usage GROUP BY id HAVING COUNT(*) > 1 UNION ALL SELECT 1 FROM ocr_usage GROUP BY request_id, attempt_no HAVING COUNT(*) > 1 LIMIT 1').get()
+        if (invalidUsage || duplicateUsage) throw persistenceError('OCR 调用次数记录包含重复或无效数据')
+      }
       return counts
     }
     throw persistenceError(`未知持久化模块：${moduleId}`)
@@ -254,6 +265,7 @@ function restoreReceipt(sourcePath, targetDb, manifest, extracted, ocrKeyPath) {
     }
     const insertSale = targetDb.prepare('INSERT INTO sales (id, sale_date, amount, status, created_at) VALUES (@id, @sale_date, @amount, @status, @created_at)')
     const insertHistory = targetDb.prepare('INSERT INTO ocr_history (id, request_id, status, amount, matched_text, words_count, recognized_text, error_code, http_status, error_message, duration_ms, created_at) VALUES (@id, @request_id, @status, @amount, @matched_text, @words_count, @recognized_text, @error_code, @http_status, @error_message, @duration_ms, @created_at)')
+    const mergeUsage = targetDb.prepare('INSERT OR IGNORE INTO ocr_usage (request_id, attempt_no, billing_month, created_at) VALUES (@request_id, @attempt_no, @billing_month, @created_at)')
     const insertConfig = targetDb.prepare('INSERT INTO ocr_config (id, ciphertext, iv, auth_tag, version, updated_at) VALUES (@id, @ciphertext, @iv, @authTag, @version, @updated_at)')
     targetDb.transaction(() => {
       targetDb.prepare('DELETE FROM sales').run()
@@ -264,6 +276,9 @@ function restoreReceipt(sourcePath, targetDb, manifest, extracted, ocrKeyPath) {
       for (const row of source.prepare('SELECT id, sale_date, amount, status, created_at FROM sales ORDER BY id').iterate()) insertSale.run(row)
       if (tableExists(source, 'ocr_history')) {
         for (const row of source.prepare('SELECT id, request_id, status, amount, matched_text, words_count, recognized_text, error_code, http_status, error_message, duration_ms, created_at FROM ocr_history ORDER BY id').iterate()) insertHistory.run(row)
+      }
+      if (tableExists(source, 'ocr_usage')) {
+        for (const row of source.prepare('SELECT request_id, attempt_no, billing_month, created_at FROM ocr_usage ORDER BY id').iterate()) mergeUsage.run(row)
       }
       if (restoredConfig) insertConfig.run(restoredConfig)
     })()

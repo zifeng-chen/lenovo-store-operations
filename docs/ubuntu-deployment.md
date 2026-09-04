@@ -377,10 +377,10 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 发布新版本时，先更新根版本、README、CHANGELOG 和相关文档，完成验证并推送默认分支，再创建同版本 tag。例如：
 
 ```bash
-npm version 0.2.1 --no-git-tag-version --workspaces=false
+npm version 0.2.2 --no-git-tag-version --workspaces=false
 # 按实际日期更新文档和CHANGELOG，验证、提交并推送main后：
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.2.2
+git push origin v0.2.2
 ```
 
 `.github/workflows/release.yml` 会严格校验 tag 与根 `package.json`、`package-lock.json` 版本一致，并确认提交位于默认分支；随后执行 `npm ci`、全量构建、检查和高危依赖审计。全部成功后创建正式 GitHub Release：
@@ -522,7 +522,7 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 4. 浏览器下载一个 `lenovo-store-backup-<timestamp>.lsbackup` 文件；
 5. 将文件移动到权限受控、具备独立备份策略的目录，并记录来源服务器和创建时间。
 
-`.lsbackup` 一次包含三套 SQLite 在线一致性快照。本机 OCR 密钥模式下还包含配套密钥，因此该文件可以用于离线解密已保存的 OCR 凭据，必须按敏感密钥材料保护；环境密钥模式不会导出 `OCR_CONFIG_ENCRYPTION_KEY`，恢复付款凭证时目标服务必须配置相同环境密钥。文件最大 1GB，不压缩。清单和 SHA-256 能发现截断、重叠、尾随内容及传输损坏，但不能证明文件来源，只能使用从受信任服务器直接下载的文件。
+`.lsbackup` 一次包含三套 SQLite 在线一致性快照。本机 OCR 密钥模式下还包含配套密钥，因此该文件可以用于离线解密已保存的 OCR 凭据，必须按敏感密钥材料保护；环境密钥模式不会导出 `OCR_CONFIG_ENCRYPTION_KEY`，恢复付款凭证时目标服务必须配置相同环境密钥。付款凭证快照同时校验 OCR 调用次数账本；恢复时识别历史按备份替换，但用量账本只按请求与尝试编号合并、不清空目标已有记录，避免通过恢复旧备份增加免费剩余次数。文件最大 1GB，不压缩。清单和 SHA-256 能发现截断、重叠、尾随内容及传输损坏，但不能证明文件来源，只能使用从受信任服务器直接下载的文件。
 
 浏览器统一备份不能替代无人值守的服务器定时备份。页面下载依赖浏览器会话和本机磁盘；定时、升级前和灾难恢复仍使用下一节的 `npm run backup:data` 目录快照。
 
