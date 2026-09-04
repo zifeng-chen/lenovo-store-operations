@@ -12,6 +12,11 @@ const uptimeNow = ref(0);
 const updateLoading = ref(false);
 const updateError = ref('');
 const updateStatus = ref(null);
+const installSubmitting = ref(false);
+const lastInstallationResult = ref('');
+let updatePollTimer = null;
+let updateUnknownRetryCount = 0;
+const MAX_UPDATE_UNKNOWN_RETRIES = 30;
 let uptimeTimer = null;
 const backupLoading = ref(false);
 const inspectLoading = ref(false);
@@ -30,7 +35,7 @@ async function ensureMaintenanceAccess() {
   if (!health.value?.maintenanceAuthenticationRequired || maintenanceToken.value) return true;
   try {
     const result = await ElMessageBox.prompt(
-      '统一备份和恢复属于高风险维护操作，请输入服务器配置的维护令牌。令牌只保存在当前页面内存中。',
+      '统一备份、恢复和在线更新属于高风险维护操作，请输入服务器配置的维护令牌。令牌只保存在当前页面内存中。',
       '维护身份验证',
       {
         confirmButtonText: '验证并继续',
@@ -75,16 +80,58 @@ async function loadHealth() {
   }
 }
 
+function clearUpdatePolling() {
+  if (updatePollTimer) window.clearTimeout(updatePollTimer);
+  updatePollTimer = null;
+}
+
+function scheduleUpdatePolling({ retryUnknown = false } = {}) {
+  clearUpdatePolling();
+  const active = Boolean(updateStatus.value?.installation?.active);
+  if (!active && !retryUnknown) return;
+  const delay = document.visibilityState === 'hidden' ? 8000 : (active ? 2000 : 4000);
+  updatePollTimer = window.setTimeout(() => loadUpdateStatus({ silent: true }), delay);
+}
+
+async function applyUpdateSnapshot(snapshot, { notify = false } = {}) {
+  updateStatus.value = snapshot;
+  if (snapshot.lastError) updateError.value = snapshot.lastError;
+  const state = snapshot.installation?.state;
+  if (state && !['queued', 'running'].includes(state.status)) {
+    const marker = `${state.jobId}:${state.status}:${state.phase}`;
+    if (marker !== lastInstallationResult.value) {
+      lastInstallationResult.value = marker;
+      if (state.status === 'succeeded') {
+        ElMessage.success(`系统已更新到 ${state.targetTag}`);
+        await loadHealth();
+      } else if (state.rolledBack) {
+        ElMessage.warning('安装未通过健康检查，系统已自动回滚到原版本');
+        await loadHealth();
+      } else if (notify || state.status === 'rollback-failed') {
+        ElMessage.error(state.error?.message || '系统更新失败');
+      }
+    }
+  }
+  scheduleUpdatePolling();
+}
+
 async function loadUpdateStatus({ silent = false } = {}) {
   if (!silent) updateLoading.value = true;
   if (!silent) updateError.value = '';
   try {
     const response = await fetch('/api/system/update/status');
     const body = await readApiResponse(response);
-    updateStatus.value = body.data;
-    if (body.data.lastError) updateError.value = body.data.lastError;
+    updateUnknownRetryCount = 0;
+    await applyUpdateSnapshot(body.data);
   } catch (requestError) {
-    updateError.value = requestError.message;
+    const active = Boolean(updateStatus.value?.installation?.active);
+    if (!active) updateError.value = requestError.message;
+    if (active) {
+      scheduleUpdatePolling();
+    } else if (!updateStatus.value && updateUnknownRetryCount < MAX_UPDATE_UNKNOWN_RETRIES) {
+      updateUnknownRetryCount += 1;
+      scheduleUpdatePolling({ retryUnknown: true });
+    }
   } finally {
     if (!silent) updateLoading.value = false;
   }
@@ -96,7 +143,7 @@ async function checkForUpdates() {
   try {
     const response = await fetch('/api/system/update/check', { method: 'POST' });
     const body = await readApiResponse(response);
-    updateStatus.value = body.data;
+    await applyUpdateSnapshot(body.data);
     if (body.data.lastError) {
       updateError.value = body.data.lastError;
       ElMessage.warning('GitHub 暂时不可用，已保留上次成功的检查结果');
@@ -113,6 +160,69 @@ async function checkForUpdates() {
   } finally {
     updateLoading.value = false;
   }
+}
+
+async function installLatestUpdate() {
+  const release = updateStatus.value?.latestRelease;
+  if (!release || !canInstallUpdate.value || !await ensureMaintenanceAccess()) return;
+  try {
+    await ElMessageBox.prompt(
+      `将安装 v${release.version}。系统会先创建一致性备份，安装期间将短暂离线；健康检查失败会自动回滚。请输入“安装”确认。`,
+      `安装 ${release.tag}`,
+      {
+        confirmButtonText: '提交安装任务',
+        cancelButtonText: '取消',
+        inputPlaceholder: '请输入：安装',
+        inputPattern: /^安装$/,
+        inputErrorMessage: '必须完整输入“安装”',
+        type: 'warning',
+        closeOnClickModal: false,
+      },
+    );
+  } catch {
+    return;
+  }
+
+  installSubmitting.value = true;
+  updateError.value = '';
+  try {
+    const response = await fetch('/api/system/update/install', {
+      method: 'POST',
+      headers: {
+        ...maintenanceHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ tag: release.tag }),
+    });
+    const body = await readApiResponse(response);
+    await applyUpdateSnapshot(body.data, { notify: true });
+    ElMessage.success(body.msg);
+  } catch (requestError) {
+    updateError.value = requestError.message;
+    ElMessage.error(requestError.message);
+  } finally {
+    installSubmitting.value = false;
+  }
+}
+
+function installationPhaseText(phase) {
+  return {
+    queued: '等待更新器领取任务',
+    claimed: '更新器已领取任务',
+    'backing-up': '正在创建一致性备份',
+    downloading: '正在下载签名发布包',
+    verifying: '正在验证签名和发布包',
+    installing: '正在安装依赖并检查候选版本',
+    switching: '正在原子切换运行版本',
+    restarting: '正在重启服务',
+    'health-check': '正在验证版本、数据库和模块',
+    finalizing: '正在更新已签名的更新器程序',
+    'rolling-back': '安装失败，正在自动回滚',
+    completed: '安装及健康验证完成',
+    'rolled-back': '已自动回滚到原版本',
+    'failed-before-switch': '切换前安装失败，当前服务未变更',
+    'rollback-failed': '自动回滚未通过健康检查，需要人工处理',
+  }[phase] || '等待状态更新';
 }
 
 function formatUpdateTime(value) {
@@ -316,6 +426,35 @@ const currentBuild = computed(() => updateStatus.value?.current || health.value?
   channel: 'stable',
 });
 
+const installationState = computed(() => updateStatus.value?.installation?.state || null);
+const canInstallUpdate = computed(() => Boolean(
+  updateStatus.value?.installation?.enabled
+  && updateStatus.value?.installation?.configured
+  && !updateStatus.value?.installation?.active
+  && updateStatus.value?.updateAvailable
+  && updateStatus.value?.latestRelease
+  && updateStatus.value?.checkedAt
+  && !updateStatus.value?.stale
+  && !updateStatus.value?.lastError
+));
+const installationTagType = computed(() => {
+  const status = installationState.value?.status;
+  if (status === 'succeeded') return 'success';
+  if (status === 'failed' || status === 'rollback-failed') return 'danger';
+  if (status === 'queued' || status === 'running') return 'warning';
+  return 'info';
+});
+const installationStatusText = computed(() => {
+  const state = installationState.value;
+  if (!state) return updateStatus.value?.installation?.enabled ? '尚无安装任务' : '未启用';
+  if (state.status === 'succeeded') return '安装成功';
+  if (state.status === 'rollback-failed') return '回滚异常';
+  if (state.status === 'failed' && state.rolledBack) return '安装失败，已回滚';
+  if (state.status === 'failed') return '安装失败';
+  if (state.status === 'queued') return '等待执行';
+  return '执行中';
+});
+
 const updateStateText = computed(() => {
   if (!updateStatus.value?.checkedAt) return '尚未检查';
   if (!updateStatus.value.latestRelease) return '暂无正式 Release';
@@ -336,6 +475,7 @@ const sessionExpiresText = computed(() => restoreSession.value
 
 function handleVisibilityChange() {
   uptimeNow.value = window.performance.now();
+  if (updateStatus.value?.installation?.active) scheduleUpdatePolling();
 }
 
 onMounted(() => {
@@ -350,6 +490,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (uptimeTimer) window.clearInterval(uptimeTimer);
   uptimeTimer = null;
+  clearUpdatePolling();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   discardSession();
 });
@@ -380,15 +521,23 @@ onBeforeUnmount(() => {
         <div>
           <span class="card-kicker">GitHub 稳定通道</span>
           <h2 id="update-title">系统版本与更新</h2>
-          <p>检查固定 GitHub 仓库的正式版本；发现新版本后请先备份，再通过 Git 拉取并按 Ubuntu 部署文档人工升级。</p>
+          <p>检查固定 GitHub 正式版本；已配置签名更新平台的 Ubuntu 主机可直接安装最新版本，安装前自动备份，并在健康检查失败时自动回滚。</p>
         </div>
         <div class="update-heading-actions">
           <el-tag type="info" effect="plain">stable</el-tag>
-          <el-button type="primary" :loading="updateLoading" @click="checkForUpdates">检查更新</el-button>
+          <el-button type="primary" :loading="updateLoading" :disabled="updateStatus?.installation?.active" @click="checkForUpdates">检查更新</el-button>
+          <el-button
+            v-if="updateStatus?.installation?.enabled"
+            type="warning"
+            :loading="installSubmitting || updateStatus.installation.active"
+            :disabled="!canInstallUpdate"
+            @click="installLatestUpdate"
+          >{{ updateStatus.installation.active ? '安装进行中' : '安装最新版本' }}</el-button>
         </div>
       </div>
 
       <el-alert v-if="updateError" :title="`${updateError}；业务服务不受影响。`" type="warning" :closable="false" show-icon />
+      <el-alert v-if="updateStatus?.installation?.enabled && !updateStatus.installation.configured" title="在线安装已启用，但 Ubuntu 更新器目录或权限尚未配置完成；安装按钮保持禁用。" type="error" :closable="false" show-icon />
       <el-alert v-if="updateStatus?.searchTruncated" title="Release 数量超过检查上限，当前结果仅基于最近 300 条记录。" type="warning" :closable="false" show-icon />
 
       <div v-loading="updateLoading" class="update-content">
@@ -428,6 +577,33 @@ onBeforeUnmount(() => {
         </div>
         <p v-else class="update-empty-note">{{ updateStatus?.stale ? '当前显示上次成功检查的“无正式 Release”结果，本次无法连接 GitHub，暂时不能确认最新状态。' : (updateStatus?.checkedAt ? 'GitHub 仓库暂时没有正式 Release。' : '点击“检查更新”获取最新稳定版本。') }}</p>
 
+        <section v-if="updateStatus?.installation" class="installation-status" aria-labelledby="installation-status-title">
+          <div class="installation-status-heading">
+            <div>
+              <span>签名在线更新</span>
+              <strong id="installation-status-title">{{ installationStatusText }}</strong>
+            </div>
+            <el-tag :type="installationTagType" effect="light">{{ installationState?.targetTag || (updateStatus.installation.enabled ? '已启用' : '未启用') }}</el-tag>
+          </div>
+          <template v-if="installationState">
+            <div class="installation-progress" :class="{ active: updateStatus.installation.active }">
+              <i aria-hidden="true"></i>
+              <div>
+                <b>{{ installationPhaseText(installationState.phase) }}</b>
+                <span>任务 {{ installationState.jobId }} · 更新于 {{ formatUpdateTime(installationState.updatedAt) }}</span>
+              </div>
+            </div>
+            <el-alert
+              v-if="installationState.error"
+              :title="installationState.error.message"
+              :type="installationState.rolledBack ? 'warning' : 'error'"
+              :closable="false"
+              show-icon
+            />
+            <p v-if="installationState.rolledBack" class="installation-note">候选版本未通过验证，current 已切回原版本并重新通过健康检查，业务数据未自动覆盖。</p>
+          </template>
+          <p v-else class="installation-note">{{ updateStatus.installation.enabled ? '尚无安装任务。安装只接受刚检查到的最新签名稳定版本；可信局域网无维护令牌时可直接确认安装，令牌模式仍需维护令牌。' : '此环境只提供版本检查；需先按 Ubuntu 部署文档配置签名公钥和 systemd 更新平台。' }}</p>
+        </section>
       </div>
     </section>
 

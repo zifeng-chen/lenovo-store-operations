@@ -33,21 +33,24 @@ import { createGithubReleaseService } from './system/github-release-service.js';
 import { createPersistenceService } from './system/persistence-service.js';
 import { runtimeInfo } from './system/runtime-info.js';
 import { createSystemPersistenceRouter } from './system/router.js';
+import { createUpdateIpcService } from './system/update-ipc-service.js';
 import { createSystemUpdateRouter } from './system/update-router.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(currentDir, '../../..');
 const dataRoot = DATA_ROOT;
 const webDist = path.join(projectRoot, 'apps/web/dist');
+const webIndex = path.join(webDist, 'index.html');
 const host = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.PORT) || 8900;
 const maintenanceToken = String(process.env.LENOVO_STORE_MAINTENANCE_TOKEN || '').trim();
+const updateInstallationEnabled = String(process.env.LENOVO_STORE_UPDATE_ENABLED || '').trim().toLowerCase() === 'true';
 const githubToken = process.env.LENOVO_STORE_GITHUB_TOKEN || '';
 if (process.env.NODE_ENV === 'production' && maintenanceToken && maintenanceToken.length < 24) {
   throw new Error('生产环境的 LENOVO_STORE_MAINTENANCE_TOKEN 必须至少包含 24 个字符');
 }
 if (!maintenanceToken) {
-  console.warn('警告：未配置维护令牌，可信局域网客户端可执行系统备份和恢复');
+  console.warn('警告：未配置维护令牌，可信局域网客户端可执行系统备份、恢复和已启用的在线更新');
 }
 const app = express();
 
@@ -83,8 +86,16 @@ const persistenceService = createPersistenceService({
   ocrKeyPath: receiptOcrKeyPath
 });
 const githubReleaseService = createGithubReleaseService({ githubToken });
+const updateIpcService = createUpdateIpcService({
+  enabled: updateInstallationEnabled,
+  requestPath: process.env.LENOVO_STORE_UPDATE_REQUEST_PATH || '/run/lenovo-store-updater/request.json',
+  processingPath: process.env.LENOVO_STORE_UPDATE_PROCESSING_PATH || '/run/lenovo-store-updater/claimed/processing.json',
+  statePath: process.env.LENOVO_STORE_UPDATE_STATE_PATH || '/var/lib/lenovo-store-updater/status.json'
+});
 const systemUpdateRouter = createSystemUpdateRouter({
-  releaseService: githubReleaseService
+  releaseService: githubReleaseService,
+  ipcService: updateIpcService,
+  maintenanceToken
 });
 const systemPersistenceRouter = createSystemPersistenceRouter({
   persistenceService,
@@ -160,6 +171,9 @@ app.get('/api/system/health', (_req, res) => {
     persistentDataConfigured: EXTERNAL_DATA_ROOT_CONFIGURED,
     maintenanceAuthenticationRequired: Boolean(maintenanceToken),
     maintenanceAccessMode: maintenanceToken ? 'token' : 'trusted-lan',
+    updateInstallationEnabled,
+    updateAuthenticationRequired: Boolean(maintenanceToken),
+    portalReady: fs.existsSync(webIndex),
     modules: STORE_MODULES.map(moduleStatus)
   });
 });
@@ -201,7 +215,6 @@ for (const module of STORE_MODULES) {
   });
 }
 
-const webIndex = path.join(webDist, 'index.html');
 if (fs.existsSync(webIndex)) {
   app.use(express.static(webDist));
   const legacyPortalRoutes = ['/system', ...STORE_MODULES.map((module) => module.route)];

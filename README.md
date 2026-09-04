@@ -15,7 +15,7 @@
 
 每次功能、配置、部署方式或文档更新都必须同步维护 GitHub 仓库文档，并按 `YYYY-MM-DD` 记录更新日期和主要内容。最新更新与完整历史请查看 [CHANGELOG.md](CHANGELOG.md)。
 
-当前最新记录：`2026-09-04`，发布 `0.3.0`：仓库货品和周边货品新增可编辑的“添加日期”，旧数据及旧备份自动兼容；系统彻底移除受控在线安装器，保留 GitHub Release 检查和签名发布，Ubuntu 统一通过 Git 拉取人工升级。未配置维护令牌时默认允许可信局域网维护，不再限制为服务器本机。
+当前最新记录：`2026-09-04`，发布 `0.4.0`：系统状态页在检测到更高的签名 GitHub Release 后可直接安装；可信局域网默认免独立更新令牌，配置维护令牌时复用统一令牌。Ubuntu 更新平台保留 Ed25519/SHA-256 验证、升级前备份、独立 builder、原子 `current/previous`、连续健康检查、失败及断电自动回滚。
 
 ## 板块说明
 
@@ -339,25 +339,30 @@ npm run migrate:data
 
 迁移是一次性操作。目标文件已经存在时脚本会主动停止，这是防止覆盖现有业务数据的保护机制。
 
-## GitHub 更新检测与签名 Release
+## GitHub 更新检测、签名 Release 与在线安装
 
-系统状态页 `http://localhost:8900/#/system` 只读检查固定仓库 `zifeng-chen/lenovo-store-operations` 的稳定 Release，不提供远程安装、Shell、systemd 控制、版本切换或自动回滚能力：
+系统状态页 `http://localhost:8900/#/system` 检查固定仓库 `zifeng-chen/lenovo-store-operations` 的稳定 Release。完成 Ubuntu 更新平台安装后，检测到更高版本会显示“安装最新版本”按钮：
 
-- `GET /api/system/update/status`：读取当前版本和进程内最近一次检查结果，不主动连接 GitHub；
+- `GET /api/system/update/status`：读取当前版本、最近一次检查和安装任务状态，不主动连接 GitHub；
 - `POST /api/system/update/check`：仅接受同源页面触发，使用 8 秒超时、15 分钟成功缓存、GitHub 限流退避、`ETag` 条件请求，并在最多 300 条 Release 内比较严格 `vX.Y.Z` 稳定版本；
-- 可选 `LENOVO_STORE_GITHUB_TOKEN` 只由服务端访问固定仓库 Releases API，不进入浏览器、API 响应、日志或 Git；不配置时使用 GitHub 匿名额度；
-- 发现新版本后必须先创建外部一致性备份，再由维护人员在 Ubuntu 主机执行 `git pull --ff-only origin main`、`npm ci`、`npm run build`、`npm run check` 和 systemd 重启；完整步骤见 [Ubuntu 部署指南第 6 节](docs/ubuntu-deployment.md#6-日常升级流程)。
+- `POST /api/system/update/install`：只接受服务端刚成功检查、未过期、无错误且确认为 latest 的新版本 tag；请求必须带维护标识、非空同源 `Origin`，并拒绝 `Sec-Fetch-Site: cross-site`；
+- 未配置 `LENOVO_STORE_MAINTENANCE_TOKEN` 时，可信局域网 Portal 可免 Bearer 提交；配置后在线更新与备份恢复共同使用维护令牌。固定维护标识和同源检查不是账号认证，无令牌部署必须用 UFW、VLAN 或反向代理 ACL 限制可信网段，禁止公网暴露；
+- Web 服务不执行 Shell、npm 或 systemctl，只写入受限 `0600` 单任务文件；root-owned systemd oneshot 固定下载签名 GitHub Release，并验证 Ed25519、SHA-256、manifest/tag/version/full commit、下载域名和归档结构；
+- 更新器先创建外部一致性备份，以独立不可登录 builder 账号执行 `npm ci --include=dev` 和 `npm run check`，再原子切换 `current`/`previous`；新版本需连续三次通过版本、完整 commit、外部数据目录、前端模块和 SQLite 健康检查，否则自动回滚；
+- fsync 事务 journal 记录领取、准备、切换、恢复与提交阶段，进程终止或断电后由 systemd 启动门保守恢复。
 
-根 `package.json` 的 `version` 是整套产品的唯一发布版本。准备新版本时先更新版本、README、CHANGELOG 和相关文档并提交，再创建完全一致的严格 `vX.Y.Z` tag。例如发布 `0.3.0`：
+可选 `LENOVO_STORE_GITHUB_TOKEN` 只由服务端版本检查使用，不进入浏览器、API 响应、日志或 Git；root updater 当前使用 GitHub 公开 Release 下载接口，因此发布资产必须保持公开。首次启用、`0.3.0` Git checkout 迁移、故障演练和人工回退见 [Ubuntu 部署指南](docs/ubuntu-deployment.md)。
+
+根 `package.json` 的 `version` 是整套产品的唯一发布版本。准备新版本时先更新版本、README、CHANGELOG 和相关文档并提交，再创建完全一致的严格 `vX.Y.Z` tag。例如发布 `0.4.0`：
 
 ```bash
-npm version 0.3.0 --no-git-tag-version --workspaces=false
+npm version 0.4.0 --no-git-tag-version --workspaces=false
 # 按实际日期更新文档和 CHANGELOG，完成验证后提交并推送 main
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
-`.github/workflows/release.yml` 会校验 tag、根 package 与 lockfile 版本一致，并依次执行 `npm ci`、全量构建、检查和 `npm audit --audit-level=high`。全部通过后创建正式 GitHub Release，包含源码与构建产物 tar 包、`manifest.json`、Ed25519 `manifest.json.sig`、`SHA256SUMS` 和包内 `release-info.json`。签名用于验证发布资产完整性，不授予服务器自动安装能力；缺少签名 Secret、公钥指纹 Variable 或二者不匹配时发布失败。密钥生成工具位于 `ops/release/generate-signing-keypair.js`。
+`.github/workflows/release.yml` 会校验 tag、根 package 与 lockfile 版本一致，并依次执行 `npm ci`、全量构建、检查和 `npm audit --audit-level=high`。全部通过后创建正式 GitHub Release，包含源码与构建产物 tar 包、`manifest.json`、Ed25519 `manifest.json.sig`、`SHA256SUMS` 和包内 `release-info.json`。manifest 固定声明 updater contract `1`、`npm-ci-on-target` 和 `/api/system/health`；缺少签名 Secret、公钥指纹 Variable 或二者不匹配时发布失败。密钥生成工具位于 `ops/release/generate-signing-keypair.js`。
 
 ## 数据备份与恢复
 
@@ -410,7 +415,7 @@ npm run backup:data
 
 建议通过付款凭证页面配置 OCR 凭据。页面和配置查询接口只返回掩码状态，不返回明文 Secret Key。
 
-本项目定位为门店内部局域网工具，没有完整的用户账号系统或公网部署配置。默认 `HOST=0.0.0.0` 会允许局域网访问；未配置维护令牌时，任何能访问服务端口并发送固定维护标识的客户端都可能下载或覆盖业务数据库，因此必须使用防火墙、VLAN 或反向代理 ACL 限制可信网段，禁止暴露到公网。需要更强隔离时配置 `LENOVO_STORE_MAINTENANCE_TOKEN`；维护令牌仍不能替代全站登录系统。
+本项目定位为门店内部局域网工具，没有完整的用户账号系统或公网部署配置。默认 `HOST=0.0.0.0` 会允许局域网访问；未配置维护令牌时，任何能访问服务端口并构造维护请求的客户端都可能下载或覆盖业务数据库，并在服务端已检测到新版本时提交签名在线更新，因此必须使用防火墙、VLAN 或反向代理 ACL 限制可信网段，禁止暴露到公网。需要更强隔离时配置 `LENOVO_STORE_MAINTENANCE_TOKEN`；维护令牌仍不能替代全站登录系统。
 
 ## npm 脚本
 
@@ -447,7 +452,7 @@ curl http://127.0.0.1:8900/api/system/health
 
 - 根 `package.json` 的产品版本，以及当前构建的完整提交哈希、短提交和 `stable` 通道；
 - `persistentDataConfigured` 是否已使用外部持久化数据根；生产探针应要求该值为 `true`；
-- 每个业务板块的 SPA 构建产物是否存在；
+- `portalReady` 是否存在 Portal 构建产物，以及每个业务板块的 SPA 构建产物是否存在；
 - 有 API 的板块是否已挂载；
 - 使用 SQLite 的板块是否已有数据目录并成功连接数据库；
 - 板块处于“已迁移”或“已就绪”状态。

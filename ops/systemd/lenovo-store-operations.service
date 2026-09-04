@@ -6,8 +6,10 @@ After=network.target
 Type=simple
 User=<service-user>
 Group=<service-group>
-WorkingDirectory=/opt/lenovo-store-operations
+WorkingDirectory=/opt/lenovo-store-operations/current
 EnvironmentFile=/etc/lenovo-store-operations.env
+Environment=LENOVO_STORE_UPDATER_CONFIG=/etc/lenovo-store-updater.json
+ExecStartPre=+<node-path> /usr/local/lib/lenovo-store-updater/updater.mjs --recover-links-only
 ExecStart=/usr/bin/npm start
 Restart=on-failure
 RestartSec=5
@@ -16,7 +18,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/var/lib/lenovo-store-operations /var/backups/lenovo-store-operations
+ReadWritePaths=/opt/lenovo-store-operations /var/lib/lenovo-store-operations /var/backups/lenovo-store-operations /var/lib/lenovo-store-updater /run/lenovo-store-updater
 
 [Install]
 WantedBy=multi-user.target
