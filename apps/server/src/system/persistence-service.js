@@ -11,6 +11,7 @@ import {
   loadOrCreateLocalKey,
 } from '../modules/receipt-assistant/ocr-storage.js'
 import { writeBackupPackage } from './backup-package.js'
+import { normalizeAddedDate } from '../calendar-date.js'
 
 const MODULES = [
   { id: 'computer-labels', name: '仓库货品标签', entryId: 'computer-labels.database' },
@@ -45,12 +46,14 @@ function tableExists(db, table) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table))
 }
 
-function requireColumns(db, table, required) {
+function requireColumns(db, table, required, optional = []) {
   if (!tableExists(db, table)) throw persistenceError(`数据库缺少 ${table} 表`)
   const columns = db.prepare(`PRAGMA table_info(${table})`).all().map(column => column.name)
-  if (columns.length !== required.length || required.some(column => !columns.includes(column))) {
+  const allowed = new Set([...required, ...optional])
+  if (required.some(column => !columns.includes(column)) || columns.some(column => !allowed.has(column))) {
     throw persistenceError(`${table} 表结构与当前版本不兼容`)
   }
+  return new Set(columns)
 }
 
 function isValidCalendarDate(value) {
@@ -88,28 +91,32 @@ function validateDatabase(filePath, moduleId) {
     const integrity = db.pragma('integrity_check', { simple: true })
     if (integrity !== 'ok') throw persistenceError('SQLite 完整性检查失败')
     if (moduleId === 'computer-labels') {
-      requireColumns(db, 'products', ['id', 'name', 'config', 'color', 'sku', 'remark', 'created_at', 'updated_at'])
-      const invalid = hasInvalidRow(db.prepare('SELECT id, name, config, color, sku, remark, created_at, updated_at FROM products'), row => !Number.isSafeInteger(row.id) || row.id <= 0
+      const productColumns = requireColumns(db, 'products', ['id', 'name', 'config', 'color', 'sku', 'remark', 'created_at', 'updated_at'], ['added_date'])
+      const dateColumn = productColumns.has('added_date') ? ', added_date' : ''
+      const invalid = hasInvalidRow(db.prepare(`SELECT id, name, config, color, sku, remark, created_at, updated_at${dateColumn} FROM products`), row => !Number.isSafeInteger(row.id) || row.id <= 0
         || hasBlankText(row.name, 1000) || hasBlankText(row.sku, 1000)
         || ['config', 'color', 'remark'].some(field => row[field] !== null && (typeof row[field] !== 'string' || row[field].length > 10000))
         || (row.created_at !== null && !isValidTimestamp(row.created_at))
-        || (row.updated_at !== null && !isValidTimestamp(row.updated_at)))
+        || (row.updated_at !== null && !isValidTimestamp(row.updated_at))
+        || (productColumns.has('added_date') && !isValidCalendarDate(row.added_date)))
       const duplicate = db.prepare('SELECT 1 FROM products GROUP BY id HAVING COUNT(*) > 1 UNION ALL SELECT 1 FROM products GROUP BY sku HAVING COUNT(*) > 1 LIMIT 1').get()
       if (invalid || duplicate) throw persistenceError('products 表包含空白、超长、日期无效或重复 SKU 数据')
       return { products: countRows(db, moduleId, 'products') }
     }
     if (moduleId === 'price-labels') {
       requireColumns(db, 'categories', ['id', 'name', 'sort_order'])
-      requireColumns(db, 'products', ['id', 'name', 'category', 'price', 'created_at', 'updated_at'])
+      const productColumns = requireColumns(db, 'products', ['id', 'name', 'category', 'price', 'created_at', 'updated_at'], ['added_date'])
       if (db.prepare('PRAGMA foreign_key_check').all().length) throw persistenceError('价签数据库外键检查失败')
       const invalidCategory = hasInvalidRow(db.prepare('SELECT id, name, sort_order FROM categories'), row => !Number.isSafeInteger(row.id) || row.id <= 0
         || hasBlankText(row.name, 30) || row.name.trim() === '全部' || !Number.isSafeInteger(row.sort_order) || row.sort_order < 0)
-      const invalidProduct = hasInvalidRow(db.prepare('SELECT id, name, category, price, created_at, updated_at FROM products'), row => !Number.isSafeInteger(row.id) || row.id <= 0
+      const dateColumn = productColumns.has('added_date') ? ', added_date' : ''
+      const invalidProduct = hasInvalidRow(db.prepare(`SELECT id, name, category, price, created_at, updated_at${dateColumn} FROM products`), row => !Number.isSafeInteger(row.id) || row.id <= 0
         || hasBlankText(row.name, 100) || hasBlankText(row.category, 30)
         || typeof row.price !== 'number' || !Number.isFinite(row.price) || row.price < 0
         || Math.abs(row.price * 100 - Math.round(row.price * 100)) > 1e-8
         || !isValidTimestamp(row.created_at) || !isValidTimestamp(row.updated_at)
-        || Date.parse(row.created_at) > Date.parse(row.updated_at))
+        || Date.parse(row.created_at) > Date.parse(row.updated_at)
+        || (productColumns.has('added_date') && !isValidCalendarDate(row.added_date)))
       const duplicateOrOrphan = db.prepare(`
         SELECT 1 FROM categories GROUP BY id HAVING COUNT(*) > 1
         UNION ALL SELECT 1 FROM categories GROUP BY name HAVING COUNT(*) > 1
@@ -222,11 +229,17 @@ function resetSequence(db, table) {
 function restoreComputer(sourcePath, targetDb) {
   const source = openCandidate(sourcePath)
   try {
-    const insert = targetDb.prepare('INSERT INTO products (id, name, config, color, sku, remark, created_at, updated_at) VALUES (@id, @name, @config, @color, @sku, @remark, @created_at, @updated_at)')
+    const hasAddedDate = source.prepare('PRAGMA table_info(products)').all().some(column => column.name === 'added_date')
+    const sourceColumns = hasAddedDate
+      ? 'id, name, config, color, sku, remark, added_date, created_at, updated_at'
+      : 'id, name, config, color, sku, remark, created_at, updated_at'
+    const insert = targetDb.prepare('INSERT INTO products (id, name, config, color, sku, remark, added_date, created_at, updated_at) VALUES (@id, @name, @config, @color, @sku, @remark, @added_date, @created_at, @updated_at)')
     targetDb.transaction(() => {
       targetDb.prepare('DELETE FROM products').run()
       resetSequence(targetDb, 'products')
-      for (const row of source.prepare('SELECT id, name, config, color, sku, remark, created_at, updated_at FROM products ORDER BY id').iterate()) insert.run(row)
+      for (const row of source.prepare(`SELECT ${sourceColumns} FROM products ORDER BY id`).iterate()) {
+        insert.run({ ...row, added_date: normalizeAddedDate(row.added_date, row.created_at) })
+      }
     })()
   } finally {
     source.close()
@@ -236,15 +249,21 @@ function restoreComputer(sourcePath, targetDb) {
 function restorePrice(sourcePath, targetDb) {
   const source = openCandidate(sourcePath)
   try {
+    const hasAddedDate = source.prepare('PRAGMA table_info(products)').all().some(column => column.name === 'added_date')
+    const sourceColumns = hasAddedDate
+      ? 'id, name, category, price, added_date, created_at, updated_at'
+      : 'id, name, category, price, created_at, updated_at'
     const insertCategory = targetDb.prepare('INSERT INTO categories (id, name, sort_order) VALUES (@id, @name, @sort_order)')
-    const insertProduct = targetDb.prepare('INSERT INTO products (id, name, category, price, created_at, updated_at) VALUES (@id, @name, @category, @price, @created_at, @updated_at)')
+    const insertProduct = targetDb.prepare('INSERT INTO products (id, name, category, price, added_date, created_at, updated_at) VALUES (@id, @name, @category, @price, @added_date, @created_at, @updated_at)')
     targetDb.transaction(() => {
       targetDb.prepare('DELETE FROM products').run()
       targetDb.prepare('DELETE FROM categories').run()
       resetSequence(targetDb, 'products')
       resetSequence(targetDb, 'categories')
       for (const row of source.prepare('SELECT id, name, sort_order FROM categories ORDER BY id').iterate()) insertCategory.run(row)
-      for (const row of source.prepare('SELECT id, name, category, price, created_at, updated_at FROM products ORDER BY id').iterate()) insertProduct.run(row)
+      for (const row of source.prepare(`SELECT ${sourceColumns} FROM products ORDER BY id`).iterate()) {
+        insertProduct.run({ ...row, added_date: normalizeAddedDate(row.added_date, row.created_at) })
+      }
       if (targetDb.prepare('PRAGMA foreign_key_check').all().length) throw persistenceError('恢复后的价签数据未通过外键检查')
     })()
   } finally {

@@ -10,7 +10,24 @@ const props = defineProps({
 
 const emit = defineEmits(['submit', 'cancel-edit', 'create-category'])
 const LAST_CATEGORY_KEY = 'lenovo-price-label:last-category'
-const form = reactive({ name: '', category: '', price: '' })
+
+const shanghaiDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+function todayCalendarDate() {
+  const parts = Object.fromEntries(
+    shanghaiDateFormatter.formatToParts(new Date())
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value]),
+  )
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
+
+const form = reactive({ name: '', category: '', price: '', added_date: todayCalendarDate() })
 const newCategoryName = ref('')
 const isEditing = computed(() => Boolean(props.editingProduct))
 
@@ -37,18 +54,20 @@ watch(
     form.name = product.name
     form.category = product.category
     form.price = product.price
+    form.added_date = product.added_date || todayCalendarDate()
   },
 )
 
 function submitForm() {
   if (props.busy || props.categoryBusy) return
-  emit('submit', { name: form.name.trim(), category: form.category, price: Number(form.price) })
+  emit('submit', { name: form.name.trim(), category: form.category, price: Number(form.price), added_date: form.added_date })
 }
 
 function clearFields({ keepCategory = true } = {}) {
   const category = keepCategory ? form.category : ''
   form.name = ''
   form.price = ''
+  form.added_date = todayCalendarDate()
   form.category = category
   if (form.category) localStorage.setItem(LAST_CATEGORY_KEY, form.category)
 }
@@ -81,6 +100,7 @@ function selectCategory(name) {
 function resetAfterImport() {
   form.name = ''
   form.price = ''
+  form.added_date = todayCalendarDate()
   const savedCategory = localStorage.getItem(LAST_CATEGORY_KEY)
   form.category = props.categories.some(({ name }) => name === savedCategory)
     ? savedCategory
@@ -132,6 +152,10 @@ defineExpose({ clearFields, selectCategory, resetAfterImport })
         <label class="field">
           <span>价格（元）</span>
           <input v-model="form.price" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required />
+        </label>
+        <label class="field">
+          <span>添加日期</span>
+          <input v-model="form.added_date" type="date" required />
         </label>
         <button class="primary-button submit-button" type="submit" :disabled="busy || categoryBusy || !categories.length">
           {{ busy ? '保存中…' : (isEditing ? '保存修改' : '添加商品') }}

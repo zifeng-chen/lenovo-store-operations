@@ -69,7 +69,7 @@ function fileSelected(event, type) {
   <section class="left-panel">
     <div class="toolbar">
       <div class="search-row">
-        <el-input v-model="keyword" clearable placeholder="输入 SKU、名称或配置后自动筛选" @keyup.enter="submitSearch" />
+        <el-input v-model="keyword" clearable placeholder="输入 SKU、名称、配置或日期后自动筛选" @keyup.enter="submitSearch" />
         <el-button type="primary" @click="submitSearch">搜索</el-button>
         <el-button @click="clearSearch">清空</el-button>
       </div>
@@ -114,6 +114,7 @@ function fileSelected(event, type) {
         <el-table-column label="颜色" prop="color" width="90" align="center">
           <template #default="{ row }"><span :class="['color-pill', { empty: !row.color }]">{{ row.color || '—' }}</span></template>
         </el-table-column>
+        <el-table-column label="添加日期" prop="added_date" width="112" align="center" />
         <el-table-column label="数量" width="112" align="center">
           <template #default="{ row }">
             <el-input-number

@@ -4,6 +4,7 @@ import {
   PRICE_LABELS_DATA_DIR,
   PRICE_LABELS_DATABASE_PATH,
 } from '../../config/data-paths.js'
+import { currentCalendarDate, normalizeAddedDate } from '../../calendar-date.js'
 
 const DEFAULT_CATEGORIES = ['背包', '键鼠', '耳机', '充电器', '支架', '电脑配件', '音响', '打印机']
 const databaseDirectory = PRICE_LABELS_DATA_DIR
@@ -24,6 +25,7 @@ function createSchema(db) {
       name TEXT NOT NULL,
       category TEXT NOT NULL REFERENCES categories(name) ON UPDATE CASCADE,
       price REAL NOT NULL CHECK(price >= 0),
+      added_date TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -31,6 +33,21 @@ function createSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_price_labels_products_category ON products(category);
     CREATE INDEX IF NOT EXISTS idx_price_labels_products_updated_at ON products(updated_at DESC);
   `)
+}
+
+function migrateSchema(db) {
+  const columns = new Set(db.prepare('PRAGMA table_info(products)').all().map(column => column.name))
+  if (!columns.has('added_date')) db.exec('ALTER TABLE products ADD COLUMN added_date TEXT')
+
+  const fallback = currentCalendarDate()
+  const update = db.prepare('UPDATE products SET added_date = ? WHERE id = ?')
+  const rows = db.prepare('SELECT id, added_date, created_at FROM products').all()
+  db.transaction(() => {
+    rows.forEach(row => {
+      const normalized = normalizeAddedDate(row.added_date, row.created_at, fallback)
+      if (normalized !== row.added_date) update.run(normalized, row.id)
+    })
+  })()
 }
 
 function seedDefaultCategories(db) {
@@ -49,6 +66,7 @@ function openDatabase() {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   createSchema(db)
+  migrateSchema(db)
   seedDefaultCategories(db)
   database = db
   return db

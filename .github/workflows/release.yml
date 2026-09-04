@@ -25,7 +25,6 @@ jobs:
       contents: read
     env:
       LENOVO_STORE_MAINTENANCE_TOKEN: ''
-      LENOVO_STORE_UPDATE_TOKEN: ''
       BAIDU_OCR_API_KEY: ''
       BAIDU_OCR_SECRET_KEY: ''
       OCR_CONFIG_ENCRYPTION_KEY: ''

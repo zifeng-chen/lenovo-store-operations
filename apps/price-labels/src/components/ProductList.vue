@@ -65,6 +65,7 @@ function formatPrice(price) {
             <th>商品名称</th>
             <th>品类</th>
             <th>价格</th>
+            <th>添加日期</th>
             <th class="actions-column">操作</th>
           </tr>
         </thead>
@@ -81,6 +82,7 @@ function formatPrice(price) {
             <td class="product-name-cell">{{ product.name }}</td>
             <td><span class="category-badge">{{ product.category }}</span></td>
             <td class="price-cell">¥{{ formatPrice(product.price) }}</td>
+            <td class="date-cell">{{ product.added_date }}</td>
             <td class="actions-column">
               <div class="row-actions">
                 <button type="button" class="table-button" @click="emit('edit', product)">编辑</button>
@@ -89,7 +91,7 @@ function formatPrice(price) {
             </td>
           </tr>
           <tr v-if="!products.length">
-            <td colspan="5" class="empty-cell">没有找到符合条件的商品</td>
+            <td colspan="6" class="empty-cell">没有找到符合条件的商品</td>
           </tr>
         </tbody>
       </table>

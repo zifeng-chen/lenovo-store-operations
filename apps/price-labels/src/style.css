@@ -42,7 +42,7 @@ input[type='checkbox'] { width: 18px; height: 18px; margin: 0; accent-color: var
 .section-heading h2 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
 .text-button, .table-button { padding: 0; color: #4d4d4d; background: transparent; border: 0; font-weight: 700; }
 .text-button:hover, .table-button:hover { color: var(--lenovo-red); }
-.product-form { display: grid; grid-template-columns: minmax(260px, 2fr) minmax(150px, .8fr) minmax(150px, .8fr) auto; align-items: end; gap: 14px; }
+.product-form { display: grid; grid-template-columns: minmax(220px, 1.6fr) minmax(130px, .7fr) minmax(130px, .7fr) minmax(150px, .8fr) auto; align-items: end; gap: 14px; }
 .field { display: grid; gap: 8px; }
 .field > span { color: #4e4e4e; font-size: 13px; font-weight: 700; }
 .category-creator { display: flex; flex-wrap: wrap; gap: 10px; padding: 14px; background: #f7f6f4; border: 1px solid var(--line); }
@@ -72,7 +72,7 @@ input[type='checkbox'] { width: 18px; height: 18px; margin: 0; accent-color: var
 .list-heading { margin: 0; padding: 25px 28px 20px; border-bottom: 1px solid var(--line); }
 .result-count { color: var(--muted); font-size: 13px; font-weight: 600; }
 .table-scroll { overflow-x: auto; }
-.product-table { width: 100%; min-width: 720px; border-collapse: collapse; text-align: left; }
+.product-table { width: 100%; min-width: 840px; border-collapse: collapse; text-align: left; }
 .product-table th, .product-table td { padding: 17px 18px; border-bottom: 1px solid #ebeae7; }
 .product-table th { color: #626262; background: #fafaf9; font-size: 12px; font-weight: 800; letter-spacing: .04em; }
 .product-table tbody tr:last-child td { border-bottom: 0; }
@@ -81,6 +81,7 @@ input[type='checkbox'] { width: 18px; height: 18px; margin: 0; accent-color: var
 .product-name-cell { max-width: 430px; color: #1e1e1e; font-weight: 700; }
 .category-badge { display: inline-block; padding: 5px 9px; color: #4f4f4f; background: #f0efec; font-size: 12px; font-weight: 700; }
 .price-cell { color: var(--lenovo-red); font-weight: 900; }
+.date-cell { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .actions-column { width: 150px; }
 .row-actions { display: flex; gap: 18px; }
 .table-button { font-size: 13px; }

@@ -289,21 +289,3 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
   .inspection-meta div:last-child { border-bottom: 0; }
   .legacy-links { width: 100%; min-width: 0; }
 }
-
-.installation-status { margin-top: 14px; padding: 16px 18px; border: 1px solid #d9e4ef; border-radius: 10px; background: #f8fbfe; }
-.installation-status-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.installation-status-heading span { display: block; color: #718095; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
-.installation-status-heading strong { display: block; margin-top: 4px; color: #26394e; font-size: 14px; }
-.installation-progress { margin-top: 14px; padding: 13px 14px; display: flex; align-items: flex-start; gap: 12px; border-radius: 9px; background: #edf3f9; }
-.installation-progress > i { width: 10px; height: 10px; flex: 0 0 auto; margin-top: 3px; border: 2px solid #8ba5be; border-radius: 50%; }
-.installation-progress.active > i { border-color: #1a5e9c; border-top-color: transparent; animation: installation-spin .8s linear infinite; }
-.installation-progress div { min-width: 0; }
-.installation-progress b { display: block; color: #30465d; font-size: 12px; }
-.installation-progress span { display: block; margin-top: 4px; overflow-wrap: anywhere; color: #718095; font-size: 10px; line-height: 1.6; }
-.installation-status .el-alert { margin-top: 12px; }
-.installation-note { margin: 12px 0 0; color: #64758a; font-size: 11px; line-height: 1.7; }
-@keyframes installation-spin { to { transform: rotate(360deg); } }
-
-@media (prefers-reduced-motion: reduce) {
-  .installation-progress.active > i { animation: none; border-color: #1a5e9c; }
-}

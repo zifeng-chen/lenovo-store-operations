@@ -2,6 +2,13 @@
 
 本文件记录联想门店运营系统每次更新的日期和主要内容，最新记录排列在最前。功能、配置、部署方式或文档发生变化时，应同步更新相关说明，并在此补充一条记录。
 
+## 2026-09-04
+
+- 发布版本提升至 `0.3.0`：仓库货品和周边货品新增可编辑的 `added_date` 添加日期，统一使用 `YYYY-MM-DD`；新商品默认 `Asia/Shanghai` 当天，旧 SQLite 数据按 `created_at` 回填，旧备份、仓库 Excel 和周边 JSON v1 继续兼容。列表、搜索、表单、Excel/JSON 导入导出和统一备份恢复均已贯通。
+- 部署简化：彻底移除 Portal 在线安装、安装令牌、文件 IPC、root updater、systemd updater/path/tmpfiles、自动切换与回滚资源；系统状态页只保留 GitHub Release 检查，Ubuntu 统一通过外部备份、`git pull --ff-only`、锁定依赖、构建检查和 systemd 重启人工升级。
+- 局域网维护：删除 `LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE` 和无令牌时的服务器本机限制。未配置 `LENOVO_STORE_MAINTENANCE_TOKEN` 时默认允许可信局域网客户端执行统一备份恢复；配置令牌后仍强制 Bearer，并始终保留维护请求标识和同源检查。无令牌部署必须通过防火墙或 VLAN 限制可信网段，禁止公网暴露。
+- 发布流程继续生成 Ed25519 签名 Release，签名仅验证发布资产完整性，不再声明或提供自动安装能力；manifest 删除 updater 平台契约和安装模式，签名密钥生成工具移至 `ops/release/`。
+
 ## 2026-09-03
 
 - 发布版本提升至 `0.2.2`：付款凭证 OCR 新增识别记录管理，可查看详情、逐条删除并导出 CSV/JSON；页面显示每自然月 500 次免费额度的本机已用与剩余次数。额度按 `Asia/Shanghai` 月份和实际百度 OCR endpoint 调用计数，access token 获取不计、110/111 重试分别计次，删除历史不返还额度；统一备份校验该账本，恢复时只合并不清空，避免额度回退。

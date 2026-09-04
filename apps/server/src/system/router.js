@@ -23,11 +23,6 @@ function removeDirectory(directoryPath) {
   if (directoryPath && fs.existsSync(directoryPath)) fs.rmSync(directoryPath, { recursive: true, force: true })
 }
 
-function isLoopbackRequest(request) {
-  const address = request.socket.remoteAddress || ''
-  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1'
-}
-
 function matchesToken(value, expected) {
   const actualBuffer = Buffer.from(value || '')
   const expectedBuffer = Buffer.from(expected)
@@ -38,7 +33,6 @@ export function createSystemPersistenceRouter({
   persistenceService,
   onModuleRestored,
   maintenanceToken = '',
-  allowUnauthenticatedMaintenance = false,
 } = {}) {
   if (!persistenceService) throw new Error('系统备份路由缺少持久化服务')
   const router = Router()
@@ -81,6 +75,10 @@ export function createSystemPersistenceRouter({
   cleanupTimer.unref()
 
   router.use((request, response, next) => {
+    const isPersistenceRoute = request.path === '/backups/export'
+      || request.path.startsWith('/restores/')
+    if (!isPersistenceRoute) return next()
+
     response.set('Cache-Control', 'no-store')
     if (request.get('X-Lenovo-Store-Maintenance') !== '1') {
       return response.status(403).json({ code: 1, data: null, msg: '缺少系统维护请求标识' })
@@ -91,8 +89,6 @@ export function createSystemPersistenceRouter({
       if (!matchesToken(suppliedToken, maintenanceToken)) {
         return response.status(401).json({ code: 1, data: null, msg: '系统维护令牌无效' })
       }
-    } else if (!allowUnauthenticatedMaintenance && !isLoopbackRequest(request)) {
-      return response.status(403).json({ code: 1, data: null, msg: '未配置维护令牌时仅允许服务器本机操作' })
     }
     const origin = request.get('Origin')
     if (origin) {

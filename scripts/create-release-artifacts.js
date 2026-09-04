@@ -55,8 +55,6 @@ function validateReleaseTree(releaseRoot) {
     'apps/server/src/system/runtime-info.js',
     'packages/shared/package.json',
     'scripts/backup-data.js',
-    'ops/updater/updater.mjs',
-    'ops/systemd/lenovo-store-updater.service',
     ...requiredDistDirectories.map(directory => `${directory}/index.html`),
   ]
   for (const relativePath of requiredFiles) {
@@ -157,17 +155,12 @@ try {
       schemaVersion: 1,
       irreversibleMigration: false,
     },
-    platformCompatibility: {
-      updaterContractVersion: 1,
-    },
     artifact: {
       name: artifactName,
       bytes: artifactBytes,
       sha256: artifactDigest,
       format: 'tar+gzip',
-      installMode: 'npm-ci-on-target',
     },
-    healthCheckPath: '/api/system/health',
   }
   const manifestPath = path.join(outputDirectory, 'manifest.json')
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)

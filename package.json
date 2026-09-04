@@ -1,6 +1,6 @@
 {
   "name": "lenovo-store-operations",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -14,7 +14,7 @@
     "dev": "concurrently -k -n portal,computer,price,receipt,badge,server -c cyan,blue,red,magenta,yellow,green \"npm run dev --workspace @lenovo-store/web\" \"npm run dev --workspace @lenovo-store/computer-labels\" \"npm run dev --workspace @lenovo-store/price-labels\" \"npm run dev --workspace @lenovo-store/receipt-assistant\" \"npm run dev --workspace @lenovo-store/employee-badges\" \"npm run dev --workspace @lenovo-store/server\"",
     "build": "npm run build --workspace @lenovo-store/web && npm run build --workspace @lenovo-store/computer-labels && npm run build --workspace @lenovo-store/price-labels && npm run build --workspace @lenovo-store/receipt-assistant && npm run build --workspace @lenovo-store/employee-badges",
     "start": "npm run start --workspace @lenovo-store/server",
-    "check": "npm run check --workspaces --if-present && node --check scripts/migrate-legacy-data.js && node --check scripts/backup-data.js && node --check scripts/verify-release-tag.js && node --check scripts/create-release-artifacts.js && node --check scripts/sign-release-manifest.js && node --check ops/updater/updater.mjs && node --check ops/updater/generate-signing-keypair.js && bash -n ops/install-updater.sh",
+    "check": "npm run check --workspaces --if-present && node --check scripts/migrate-legacy-data.js && node --check scripts/backup-data.js && node --check scripts/verify-release-tag.js && node --check scripts/create-release-artifacts.js && node --check scripts/sign-release-manifest.js && node --check ops/release/generate-signing-keypair.js",
     "migrate:data": "node scripts/migrate-legacy-data.js",
     "backup:data": "node scripts/backup-data.js",
     "release:verify": "node scripts/verify-release-tag.js",

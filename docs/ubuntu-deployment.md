@@ -28,22 +28,17 @@ SQLite 使用 WAL 模式时，运行目录中可能同时出现 `database.sqlite
 生产环境应将代码、数据和备份彻底分离：
 
 ```text
-/opt/lenovo-store-operations/          # root-owned release 根目录
-├── current -> releases/<version>-<commit>
-├── previous -> releases/<version>-<commit>
-└── releases/                          # root-owned 不可变版本
+/opt/lenovo-store-operations/          # Git checkout，人工拉取和构建
 /var/lib/lenovo-store-operations/      # 持久化数据目录
-/var/lib/lenovo-store-updater/         # root 写、服务组只读的更新状态
 /var/backups/lenovo-store-operations/  # 备份目录
 /etc/lenovo-store-operations.env       # systemd 环境变量
-/etc/lenovo-store-updater.json         # root-only 更新器配置
 ```
 
-首次部署可以先按第 4 节建立普通 checkout；完成构建、外部数据迁移、备份验证和签名配置后，再按 6.3 节一次性转换为上述不可变 release 布局。
+系统不包含在线安装器、root updater、`current/previous/releases` 自动切换或自动回滚。首次部署和后续升级都在同一个 Git checkout 中执行，代码、数据和备份仍必须严格分离。
 
 推荐原则：
 
-1. Git、部署脚本和 release 清理程序只能操作 `/opt/lenovo-store-operations`；
+1. Git 和部署脚本只能操作 `/opt/lenovo-store-operations`；
 2. 所有版本固定使用 `/var/lib/lenovo-store-operations`；
 3. 备份目录不能位于代码目录或数据目录内部，也不能是符号链接；
 4. 应用不要使用 `root` 运行，以下示例用 `<service-user>` 和 `<service-group>` 表示实际服务账号；
@@ -132,19 +127,7 @@ sudo install -m 0600 -o root -g root /dev/null \
 sudoedit /etc/lenovo-store-operations.env
 ```
 
-推荐内容（维护令牌模式）：
-
-```ini
-NODE_ENV=production
-HOST=127.0.0.1
-PORT=8900
-LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations
-LENOVO_STORE_BACKUP_DIR=/var/backups/lenovo-store-operations
-# LENOVO_STORE_GITHUB_TOKEN=<固定仓库只读 GitHub token>
-LENOVO_STORE_MAINTENANCE_TOKEN=<至少24字符的随机维护令牌>
-```
-
-仅在受防火墙保护的可信局域网中，也可以不配置维护令牌，改用免令牌模式：
+推荐内容（可信局域网直接访问）：
 
 ```ini
 NODE_ENV=production
@@ -153,19 +136,17 @@ PORT=8900
 LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations
 LENOVO_STORE_BACKUP_DIR=/var/backups/lenovo-store-operations
 # LENOVO_STORE_GITHUB_TOKEN=<固定仓库只读 GitHub token>
-LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE=true
+# LENOVO_STORE_MAINTENANCE_TOKEN=<可选，至少24字符的随机维护令牌>
 ```
 
 说明：
 
-- 通过 Nginx 反向代理时建议使用 `HOST=127.0.0.1`；代理应保留原始 `Host`，并设置 `X-Forwarded-Proto $scheme`，否则统一维护接口的同源校验会拒绝请求；
-- 需要直接提供局域网访问时可改为 `HOST=0.0.0.0`，并使用 Ubuntu 防火墙只允许门店可信网段访问 `8900/tcp`，不得将端口直接暴露到公网；
+- 直接提供局域网访问时使用 `HOST=0.0.0.0`，并通过 Ubuntu 防火墙或 VLAN 只允许门店可信网段访问 `8900/tcp`，不得将端口暴露到公网；通过 Nginx 反向代理时可改用 `HOST=127.0.0.1`，代理必须保留原始 `Host` 并设置 `X-Forwarded-Proto $scheme`；
 - `LENOVO_STORE_DATA_DIR` 和 `LENOVO_STORE_BACKUP_DIR` 必须为绝对路径；
-- `LENOVO_STORE_GITHUB_TOKEN` 可选且只由服务端用于固定仓库的 Releases API。建议创建仅授权 `zifeng-chen/lenovo-store-operations`、只具备 Contents/Metadata 读取权限的 fine-grained PAT 或 GitHub App token；token 不得进入浏览器、API 响应、日志或 Git，也不得复用 `LENOVO_STORE_UPDATE_TOKEN`。不配置时会匿名检查，但共享出口受 GitHub 匿名配额限制；
-- 生产服务必须配置至少 24 个字符的 `LENOVO_STORE_MAINTENANCE_TOKEN`，或者在未配置令牌时显式设置 `LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE=true`，否则启动会失败；
-- 令牌可用 `openssl rand -base64 32` 生成，并写入权限为 `0600` 的环境文件；不要提交到 Git、聊天或工单。配置令牌后，即使免令牌开关同时为 `true`，服务仍优先使用令牌模式并强制 Bearer 鉴权；
-- 令牌模式下，系统状态页执行统一备份恢复时会要求输入令牌；令牌只保存在当前页面内存中。可信局域网免令牌模式无需输入令牌，但任何能访问服务端口的客户端都可能下载或覆盖业务数据库，因此禁止在公网启用；
-- `LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE` 只有去除首尾空格并忽略大小写后严格等于 `true` 才会启用；
+- `LENOVO_STORE_GITHUB_TOKEN` 可选且只由服务端用于固定仓库的 Releases API。建议只授予 `zifeng-chen/lenovo-store-operations` 的 Contents/Metadata 读取权限；不配置时使用 GitHub 匿名额度；
+- `LENOVO_STORE_MAINTENANCE_TOKEN` 可选。未配置时服务正常启动，可信局域网客户端无需 Bearer 即可执行统一备份恢复；配置后必须至少 24 个字符，所有统一维护请求都强制 Bearer 鉴权；
+- 无令牌模式仍要求 `X-Lenovo-Store-Maintenance: 1`，浏览器请求仍执行同源检查，但这两项不是身份认证，不能替代防火墙；任何能访问服务端口并构造请求的客户端都可能下载或覆盖数据库；
+- 可用 `openssl rand -base64 32` 生成维护令牌，并只写入权限 `0600` 的环境文件；页面令牌只保存在当前内存；
 - 如果使用 `OCR_CONFIG_ENCRYPTION_KEY`，应将它放在权限受控的环境文件或密钥管理系统中，不要提交到 Git。
 
 ### 4.3 创建 systemd 服务
@@ -310,6 +291,17 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 
 完成独立备份和业务验收前，不要删除旧仓库中的 `data/`。
 
+### 5.5 `0.3.0` 添加日期迁移与旧备份兼容
+
+升级到 `0.3.0` 后，服务启动时会幂等检查仓库货品和周边货品的 `products` 表。旧 SQLite 缺少 `added_date` 时会自动新增该列，并优先将每条记录的 UTC `created_at` 换算为 `Asia/Shanghai` 日历日期回填；无法派生时才使用迁移当天的上海日期。迁移不会重置已有 `added_date`，也不会修改 `created_at`。首次升级后应在两个商品页面抽查历史日期，并先完成外部备份再继续日常操作。
+
+兼容边界如下：
+
+- 仓库货品旧 Excel 不含日期列时仍可导入：新增 SKU 使用当天，覆盖已有 SKU 时保留原添加日期；新文件可使用 `added_date` 或“添加日期”；
+- 周边货品 JSON 导出使用 `schemaVersion: 2`；旧 `schemaVersion: 1` 仍可检查和导入，并从 `created_at` 派生添加日期；
+- 统一 `.lsbackup` 恢复同时接受迁移前后两种商品表结构，恢复旧快照时会补齐添加日期；
+- 单独恢复旧仓库货品 SQLite 后，服务也会在重新打开数据库时执行同一迁移。
+
 ## 6. 日常升级流程
 
 推荐每次升级使用以下顺序：
@@ -356,159 +348,81 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 
 当前部署直接更新正在使用的代码目录，构建期间静态资源可能短暂变化，建议在维护时段操作。如果构建或检查失败，不要重启服务；先查看命令输出并修复部署问题。
 
-### 6.1 GitHub Release、更新检测与受控安装（第二阶段已实现）
+### 6.1 GitHub Release 检查与人工升级
 
-> 当前代码已实现版本检查、签名 Release、外部 systemd 更新器、Portal 安装状态和失败自动回滚。在线安装默认关闭；只有 Ubuntu 主机完成本节的目录、权限、公钥、独立令牌和故障演练后才能启用。macOS 开发环境和未配置更新器的部署继续保持只读检查。
+系统状态页的“系统版本与更新”卡片只负责检查固定仓库 `zifeng-chen/lenovo-store-operations` 的稳定 Release，不提供在线安装、远程命令、systemd 控制、版本目录切换或自动回滚：
 
-更新源固定为公开仓库 `zifeng-chen/lenovo-store-operations` 的 `stable` 正式 Release，页面不能传入仓库、下载地址、分支或 Shell 命令。根 `package.json` 的 `version` 是产品唯一版本源；运行时健康接口同时报告发布版本、提交哈希和通道。源码 checkout 会以固定参数读取 Git commit，CI 发布包则通过包内 `release-info.json` 提供提交信息。
-
-系统状态页提供“系统版本与更新”卡片：
-
-- `GET /api/system/update/status` 只返回当前版本和进程内最近一次检查结果，不主动联网；
-- `POST /api/system/update/check` 同源触发检查，固定访问 GitHub Releases API；
+- `GET /api/system/update/status` 返回当前版本和进程内最近一次检查结果，不主动联网；
+- `POST /api/system/update/check` 仅接受同源页面触发，固定访问 GitHub Releases API；
 - 只接受非草稿、非预发布且 tag 严格符合 `vX.Y.Z` 的版本，在最多 300 条 Release 内按语义版本比较；
-- 使用 8 秒超时、1MB 单页响应限制、15 分钟成功缓存、按 GitHub 额度重置时间退避、`ETag` 条件请求和并发请求合并；
-- 可选 `LENOVO_STORE_GITHUB_TOKEN` 仅在服务端发往固定 GitHub API，绝不返回浏览器或写入日志；401、普通 403 和真实限流会分别报告，未配置时保留匿名降级；
-- GitHub 超时、限流或返回异常时不影响健康接口和业务 API；已有成功缓存时继续显示旧结果并标记错误；
-- Release 更新说明按纯文本显示；配置完成后，页面仅允许安装刚刚成功检查到的最新稳定版本，并显示备份、下载、签名验证、安装、切换、重启、健康检查和回滚状态；
-- `POST /api/system/update/install` 只接受一个严格 `vX.Y.Z` tag，要求固定 HTTPS Portal origin、`X-Lenovo-Store-Update: 1` 和独立更新管理员 Bearer 令牌；维护令牌及局域网免令牌模式不能授权安装；
-- Express 只在固定 `/run` 队列中原子创建白名单 JSON，不执行 `git pull`、`npm`、Shell、systemctl 或任何 root 命令。
+- 使用 8 秒超时、1MB 单页限制、15 分钟成功缓存、额度重置退避、`ETag` 和并发合并；
+- 可选 `LENOVO_STORE_GITHUB_TOKEN` 只在服务端访问固定 API，不返回浏览器或写入日志；
+- 发现新版本后仍按本章开头流程执行外部备份、`git pull --ff-only`、`npm ci`、构建、检查和 systemd 重启。
 
-发布新版本时，先更新根版本、README、CHANGELOG 和相关文档，完成验证并推送默认分支，再创建同版本 tag。例如：
-
-```bash
-npm version 0.2.2 --no-git-tag-version --workspaces=false
-# 按实际日期更新文档和CHANGELOG，验证、提交并推送main后：
-git tag v0.2.2
-git push origin v0.2.2
-```
-
-`.github/workflows/release.yml` 会严格校验 tag 与根 `package.json`、`package-lock.json` 版本一致，并确认提交位于默认分支；随后执行 `npm ci`、全量构建、检查和高危依赖审计。全部成功后创建正式 GitHub Release：
-
-- `lenovo-store-operations-vX.Y.Z.tar.gz`：Git 受控源码和本次 CI 生成的五套前端 `dist`，不包含 `node_modules`、`data`、数据库、备份、环境文件或密钥；
-- `manifest.json`：固定仓库、版本、提交、Node.js 要求、数据兼容标识、产物大小和 SHA-256；
-- `manifest.json.sig`：使用 GitHub Actions Secret 中的 Ed25519 私钥对 manifest 原始字节签名，目标机只信任 root-owned 固定公钥；
-- `SHA256SUMS`：发布包与 manifest 的摘要；
-- 包内 `release-info.json`：供运行时读取版本和提交。
-
-若工作流因权限无法创建 Release，在 GitHub 仓库 `Settings → Actions → General → Workflow permissions` 中允许工作流写入仓库内容；工作流自身只在发布 job 使用 `contents: write`，不需要额外 PAT。发布第二阶段版本前必须同时配置仓库 Secret `RELEASE_SIGNING_PRIVATE_KEY` 和 Variable `RELEASE_SIGNING_PUBLIC_KEY_SHA256`；工作流会从私钥派生公钥并核对固定部署指纹，再对签名进行自校验。任一值缺失或不匹配都会 fail-closed，不会发布目标机无法验证的 Release。
-
-实际安装安全边界如下：
-
-1. 版本安装到 `/opt/lenovo-store-operations/releases/<version>-<commit>/`，`current` 原子指向当前版本，`previous` 保留上一个已验证版本；数据、备份、环境文件和密钥始终位于 release 目录之外。
-2. root-owned `lenovo-store-updater.path` 监视固定请求文件并激活 oneshot；更新器只读取 root-owned 配置中的固定仓库、服务名、路径、uid/gid、公钥和资源限制。
-3. 更新器先从固定 GitHub Release 下载并验证 `manifest.json`、Ed25519 签名、`SHA256SUMS` 和 tar 包；候选依赖和检查完成后才短暂停止主服务并调用 `lenovo-store-backup.service` 创建无并发写入的一致性备份。签名通过前不信任 manifest 中的 SHA、commit 或文件名。
-4. 解包前拒绝绝对路径、`..`、多顶层、重复路径、符号/硬链接、设备、FIFO、文件数或总大小超限；解包后交叉核对根 package、lockfile、`release-info.json` 与签名 manifest。
-5. `npm ci` 和仓库检查以安装脚本创建的专用、不可登录 `lenovo-store-builder` uid/gid 运行，不与在线服务账号复用，也不以 root 执行依赖 lifecycle；构建前要求该 uid 无进程，构建后终止并确认其全部进程退出，复核候选更新器 SHA-256 未变化，再由 root 封存候选并原子更新 `current`。
-6. 切换后连续三次验证 `/api/system/health` 的完整版本、40 位 commit、外部持久化目录、五套前端和三套 SQLite；失败切回旧 release、重启并验证旧版本。代码回滚不会自动覆盖数据库，升级前备份保留用于人工灾难恢复。
-7. 只有 `dataCompatibility.schemaVersion=1` 且 `irreversibleMigration=false` 的 Release 可以自动安装；未知 schema 或不可逆迁移在切换前拒绝。
-8. 所有 symlink rename、状态和事务 journal 都执行文件及父目录 fsync；开机 oneshot 会检查未提交事务，进程被强杀或主机断电时保守切回旧 release 并验证。成功健康验证后才从已签名候选包原子更新更新器程序。
-9. `platformCompatibility.updaterContractVersion` 必须为当前支持的 `1`；需要修改 systemd/tmpfiles/权限契约的版本必须先人工运行新版平台迁移，旧更新器会拒绝静默安装。签名公钥轮换同样必须人工完成。
+根 `package.json` 的版本是产品唯一版本源。GitHub Actions 会在严格同版本 `vX.Y.Z` tag 上执行锁定依赖安装、全量构建、仓库检查和高危依赖审计，然后发布 tar 包、`manifest.json`、Ed25519 `manifest.json.sig`、`SHA256SUMS` 和包内 `release-info.json`。签名只用于验证发布资产完整性，不授予 Ubuntu 主机自动安装能力。
 
 ### 6.2 创建 Release 签名密钥
 
-在离线、权限受控的机器上生成一次 Ed25519 密钥对，不要在 Ubuntu 业务数据目录或仓库中生成：
+签名密钥只供 GitHub Release 工作流使用。在离线、权限受控的机器上生成一次 Ed25519 密钥对：
 
 ```bash
 mkdir -m 0700 /secure/offline/release-signing
-node ops/updater/generate-signing-keypair.js /secure/offline/release-signing
+node ops/release/generate-signing-keypair.js /secure/offline/release-signing
 base64 < /secure/offline/release-signing/release-signing-private.pem | tr -d '\n'
 ```
 
-将私钥 PEM 的 base64 单行结果保存为 GitHub Actions Secret `RELEASE_SIGNING_PRIVATE_KEY`，并把生成工具输出的 64 位“公钥 SHA-256 指纹”保存为 Actions Variable `RELEASE_SIGNING_PUBLIC_KEY_SHA256`。私钥原文件应进入离线密钥备份，不得复制到 Ubuntu 主机、代码仓库、聊天或工单。只把 root-owned `release-signing-public.pem` 安全复制到 Ubuntu，例如 `/root/release-signing-public.pem`；首次安装脚本要求公钥及全部祖先 root-owned 且不可写，先复制到 root-only staging，再校验 Ed25519 类型和固定指纹，最后安装到 `/etc/lenovo-store-release-signing.pub`。
+将私钥 PEM 的 base64 单行结果保存为 GitHub Actions Secret `RELEASE_SIGNING_PRIVATE_KEY`，并把工具输出的公钥 SHA-256 指纹保存为 Actions Variable `RELEASE_SIGNING_PUBLIC_KEY_SHA256`。私钥原文件进入离线密钥备份，不得复制到 Ubuntu 主机、代码仓库、聊天或工单。Ubuntu 的 Git 拉取人工部署不需要安装签名公钥。
 
-现有 `v0.1.0` 没有 `manifest.json.sig`，因此不能通过第二阶段自动安装；这是预期的 fail-closed 行为。首次可自动安装的版本必须是完成本次实现后发布的签名版本。
+### 6.3 已安装旧 updater 的主机迁回 Git checkout
 
-### 6.3 首次迁移并启用更新器
+仅曾部署 `0.2.0`–`0.2.2` 受控安装器的主机需要执行本节。迁移会停服并更换 `/opt/lenovo-store-operations` 的目录布局，应预留维护窗口；旧目录先整体改名保留，因此在确认新服务和数据无误前可以人工回退。
 
-前置条件：
+1. 记录 `readlink -f /opt/lenovo-store-operations/current`、当前提交和 systemd unit 内容，并执行一次外部一致性备份；
+2. 在旧目录旁创建新的临时 Git checkout，以服务账号执行 `npm ci`、`npm run build` 和 `npm run check`；
+3. 停止主服务，并禁用旧 `lenovo-store-updater.path` 与 `lenovo-store-updater.service`；
+4. 将旧 `/opt/lenovo-store-operations` 整体改名为带时间戳的 legacy 目录，再把已验证的临时 checkout 改名为 `/opt/lenovo-store-operations`；不要把旧 `current` 指向的 release 内容直接复制成新仓库，因为它可能没有 `.git`；
+5. 用仓库中的 `ops/systemd/lenovo-store-operations.service` 和 `ops/systemd/lenovo-store-backup.service` 更新实际 unit，确认两者 `WorkingDirectory` 都是 `/opt/lenovo-store-operations`；
+6. 从 `/etc/lenovo-store-operations.env` 删除全部旧安装器专用的 `LENOVO_STORE_UPDATE_*` 配置。保留数据目录、备份目录、可选维护令牌、可选 GitHub 只读 token 和 OCR 密钥；
+7. 删除旧 updater 的 systemd/path/tmpfiles 配置及 `/usr/local/lib/lenovo-store-updater` 程序，但暂时保留 legacy 目录和旧状态文件作为人工回退证据；
+8. `daemon-reload` 后启动主服务，核对 health 的版本、完整 commit、`maintenanceAccessMode`、三套数据库连接以及两个商品页面的添加日期；完成业务验收和新备份后再择期删除 legacy 目录。
 
-- 当前 checkout 位于 `/opt/lenovo-store-operations`，工作区干净且提交已推送；
-- `LENOVO_STORE_DATA_DIR` 已指向代码目录外的绝对路径；
-- `lenovo-store-backup.service` 已按本指南配置且能成功完成一致性备份；
-- Portal 通过固定 HTTPS 地址访问，例如 `https://store.example.com`；
-- 已在隔离 Ubuntu 主机验证脚本参数、实际 Node/npm 路径和 service user。
-
-脚本属于高权限迁移，会停止服务并重组 `/opt` 目录，因此必须人工检查参数并显式加入 `--confirm-migration`：
-
-```bash
-cd /opt/lenovo-store-operations
-sudo ./ops/install-updater.sh \
-  --service-user <service-user> \
-  --public-origin https://store.example.com \
-  --public-key /root/release-signing-public.pem \
-  --public-key-sha256 <RELEASE_SIGNING_PUBLIC_KEY_SHA256的64位值> \
-  --node-path /usr/bin/node \
-  --npm-path /usr/bin/npm \
-  --confirm-migration
-```
-
-脚本先连续验证旧版本 health，再创建专用、不可登录的 `lenovo-store-builder` 系统账号；它使用已推送的 Git `HEAD` 创建只含受控 tracked 文件的候选目录，并以该隔离账号执行 `npm ci`、全量构建和检查。构建结束后会终止并确认该 uid 没有遗留进程，且候选 `updater.mjs` 的 SHA-256 与构建前一致，才交由 root 封存；在线服务账号始终不能进入可写候选。除 `node_modules` 与各 workspace 的 `dist` 外，checkout 中存在任何 ignored 内容（例如 `.env`、私钥、数据库或 release assets）都会 fail-closed，既不会复制到 release，也不会被改权。候选完成后脚本才启动现有备份 oneshot 并停止主服务；备份或停服失败会恢复原服务并验证健康。随后它会创建不可变 release 布局、安装以下 root-owned 文件、生成独立更新令牌，并用版本和完整 commit 验证迁移后的健康接口：
-
-```text
-/opt/lenovo-store-operations/
-├── current -> releases/<version>-<commit>
-├── previous -> releases/<version>-<commit>
-└── releases/
-    └── <version>-<commit>/
-/usr/local/lib/lenovo-store-updater/updater.mjs
-/etc/lenovo-store-updater.json
-/etc/lenovo-store-release-signing.pub
-/etc/systemd/system/lenovo-store-updater.service
-/etc/systemd/system/lenovo-store-updater.path
-/var/lib/lenovo-store-updater/status.json
-/run/lenovo-store-updater/request.json
-```
-
-更新管理员令牌只在脚本成功结束时显示一次，应立即保存到受控密码管理器。专用 `lenovo-store-builder` 账号会保留给后续更新器使用，不得赋予登录 shell、业务数据权限或其他用途。迁移前 checkout 会原样保留为 `/opt/lenovo-store-operations.bootstrap-<commit前8位>`，成功后其顶层权限收紧为 `root:root 0700`；完成隔离故障演练并确认新布局稳定后再人工清理。脚本失败时会移除本次候选、专用构建账号和平台文件，恢复该 checkout 的原 owner/mode、环境文件和 unit，并要求旧版本 health 重新通过。脚本会把以下开关写入 root-only 环境文件：
-
-```ini
-LENOVO_STORE_UPDATE_ENABLED=true
-LENOVO_STORE_UPDATE_TOKEN=<至少32字符的独立随机令牌>
-LENOVO_STORE_PUBLIC_ORIGIN=https://store.example.com
-LENOVO_STORE_UPDATE_REQUEST_PATH=/run/lenovo-store-updater/request.json
-LENOVO_STORE_UPDATE_PROCESSING_PATH=/run/lenovo-store-updater/claimed/processing.json
-LENOVO_STORE_UPDATE_STATE_PATH=/var/lib/lenovo-store-updater/status.json
-```
-
-签名公钥、`/usr/bin/node` 及其全部祖先必须由 root 拥有且不能被组或其他用户写；禁止把服务账号可修改的 NVM Node 配为 root updater 解释器。更新令牌不能与 `LENOVO_STORE_MAINTENANCE_TOKEN` 相同，也不受 `LENOVO_STORE_ALLOW_UNAUTHENTICATED_MAINTENANCE` 影响。`LENOVO_STORE_PUBLIC_ORIGIN` 必须与浏览器地址栏的 scheme、host 和 port 完全一致；生产安装只允许无路径 HTTPS origin。
-
-### 6.4 日常在线安装与排查
-
-1. 打开 `https://<store-host>/#/system`，先点击“检查更新”；
-2. 仅当检查成功、结果非 stale、版本高于当前且更新器配置正常时，“安装最新版本”可用；
-3. 输入独立更新管理员令牌，再完整输入“安装”二次确认；
-4. 页面会轮询任务文件，服务重启期间短暂无法连接属于正常现象；
-5. 最终必须看到“安装成功”，并核对 health 的完整 commit。若显示“安装失败，已回滚”，当前服务已恢复旧版本，但仍应查看更新器 journal；若显示“回滚异常”，立即停止重复操作并人工处理。
-
-运维命令：
+示例骨架如下，执行前必须替换仓库 URL、服务账号和 unit 中的占位符：
 
 ```bash
-sudo systemctl status lenovo-store-updater.path lenovo-store-updater.service
-sudo journalctl -u lenovo-store-updater.service -n 200 --no-pager
-sudo journalctl -u lenovo-store-operations.service -n 200 --no-pager
-sudo cat /var/lib/lenovo-store-updater/status.json
-readlink -f /opt/lenovo-store-operations/current
-readlink -f /opt/lenovo-store-operations/previous
+set -Eeuo pipefail
+STAMP=$(date +%Y%m%d-%H%M%S)
+ROOT=/opt/lenovo-store-operations
+CHECKOUT="/opt/lenovo-store-operations.checkout-${STAMP}"
+LEGACY="/opt/lenovo-store-operations.legacy-${STAMP}"
+
+sudo systemctl start lenovo-store-backup.service
+sudo install -d -m 0750 -o <service-user> -g <service-group> "$CHECKOUT"
+sudo -u <service-user> -H git clone <repository-url> "$CHECKOUT"
+sudo -u <service-user> -H bash -lc "
+  set -Eeuo pipefail
+  cd '$CHECKOUT'
+  if [ -s \"\$HOME/.nvm/nvm.sh\" ]; then
+    . \"\$HOME/.nvm/nvm.sh\"
+    nvm use
+  fi
+  npm ci
+  npm run build
+  npm run check
+"
+
+sudo systemctl stop lenovo-store-operations
+sudo systemctl disable --now lenovo-store-updater.path lenovo-store-updater.service || true
+sudo mv "$ROOT" "$LEGACY"
+sudo mv "$CHECKOUT" "$ROOT"
+sudo chown -R <service-user>:<service-group> "$ROOT"
+
+# 更新 /etc/lenovo-store-operations.env 和主服务/备份 unit 后再继续。
+sudo systemctl daemon-reload
+sudo systemctl start lenovo-store-operations
 curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 ```
 
-不要手工编辑 `request.json`、`status.json`、manifest、签名或 release 目录，也不要给服务账号 `/opt/lenovo-store-operations`、`/etc`、`/usr/local/lib/lenovo-store-updater` 或状态目录写权限。更新器失败后不会循环重启；保留 journal、状态、备份和失败 release 供分析。
-
-### 6.5 正式启用前故障演练
-
-必须在隔离 Ubuntu 22.04 或更高版本主机逐项演练并记录结果：
-
-- GitHub 断网、限流和下载中断：`current` 不变，业务继续运行；
-- manifest 签名错误、SHA 错误、缺少资产、恶意重定向：切换前拒绝；
-- 路径穿越、链接、特殊文件、重复路径和压缩炸弹：不能在 staging 外创建文件；
-- `npm ci` 或 `npm run check` 失败、磁盘不足：切换前失败并清理 staging；
-- 候选启动失败、版本/commit 不符、前端缺失或任一数据库断连：自动切回 previous 并验证旧版本；
-- 旧版本也无法启动：状态为 `rollback-failed`，不循环重启，按人工恢复流程处理；
-- 并发点击：最多一个 request 被领取，其余返回 409；
-- 不可逆迁移或未知数据 schema：切换前拒绝。
-
-未完成以上演练时保持 `LENOVO_STORE_UPDATE_ENABLED=false`，继续使用只读检查和人工升级。
+如果新服务验收失败，先停服，把新 checkout 改名为 failed 目录，再将 `$LEGACY` 改回 `$ROOT`，恢复旧 unit 后人工启动；不要删除唯一的旧目录或外部数据备份。
 
 ## 7. 备份
 

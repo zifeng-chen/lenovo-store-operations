@@ -1,7 +1,9 @@
 import { Router, json } from 'express'
 import { getDatabase } from './database.js'
+import { currentCalendarDate, isValidCalendarDate, normalizeAddedDate } from '../../calendar-date.js'
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
+const SUPPORTED_SCHEMA_VERSIONS = new Set([1, SCHEMA_VERSION])
 const MAX_CATEGORIES = 500
 const MAX_PRODUCTS = 10000
 const MAX_CATEGORY_NAME_LENGTH = 30
@@ -24,23 +26,27 @@ function validateCategory(body = {}) {
   if (name === '全部') return { error: '“全部”是系统筛选项，不能作为品类名称' }
   return { value: name }
 }
-function validateProduct(db, body = {}) {
+function validateProduct(db, body = {}, fallbackAddedDate = currentCalendarDate()) {
   const name = typeof body.name === 'string' ? body.name.trim() : ''
   const category = typeof body.category === 'string' ? body.category.trim() : ''
   const price = body.price === '' || body.price === null ? Number.NaN : Number(body.price)
+  const addedDate = body.added_date == null || String(body.added_date).trim() === ''
+    ? fallbackAddedDate
+    : String(body.added_date).trim()
   if (!name) return { error: '请输入商品名称' }
   if (name.length > 100) return { error: '商品名称不能超过 100 个字符' }
   if (!category) return { error: '请选择品类' }
   if (!Number.isFinite(price) || price < 0) return { error: '请输入有效的非负价格' }
+  if (!isValidCalendarDate(addedDate)) return { error: '添加日期必须是有效的 YYYY-MM-DD 日期' }
   if (!db.prepare('SELECT 1 FROM categories WHERE name = ?').get(category)) return { error: '所选品类不存在，请刷新页面后重试' }
-  return { value: { name, category, price: Math.round(price * 100) / 100 } }
+  return { value: { name, category, price: Math.round(price * 100) / 100, added_date: addedDate } }
 }
 
 function validateImportPayload(payload) {
   const errors = []
   const addError = (message) => { if (errors.length < 20) errors.push(message) }
   if (!isRecord(payload)) return { errors: ['备份文件必须是 JSON 对象'] }
-  if (payload.schemaVersion !== SCHEMA_VERSION) addError(`不支持的备份格式版本，应为 ${SCHEMA_VERSION}`)
+  if (!SUPPORTED_SCHEMA_VERSIONS.has(payload.schemaVersion)) addError(`不支持的备份格式版本，应为 1 或 ${SCHEMA_VERSION}`)
   if (!isValidTimestamp(payload.exportedAt)) addError('exportedAt 必须是有效时间')
   if (!Array.isArray(payload.categories)) addError('categories 必须是数组')
   if (!Array.isArray(payload.products)) addError('products 必须是数组')
@@ -87,7 +93,11 @@ function validateImportPayload(payload) {
     if (!isValidTimestamp(product.created_at)) addError(`${itemPath}.created_at 必须是有效时间`)
     if (!isValidTimestamp(product.updated_at)) addError(`${itemPath}.updated_at 必须是有效时间`)
     if (isValidTimestamp(product.created_at) && isValidTimestamp(product.updated_at) && Date.parse(product.created_at) > Date.parse(product.updated_at)) addError(`${itemPath}.created_at 不能晚于 updated_at`)
-    return { id: product.id, name, category, price: Math.round(product.price * 100) / 100, created_at: product.created_at, updated_at: product.updated_at }
+    const addedDate = payload.schemaVersion === 1
+      ? normalizeAddedDate(null, product.created_at)
+      : product.added_date
+    if (!isValidCalendarDate(addedDate)) addError(`${itemPath}.added_date 必须是有效的 YYYY-MM-DD 日期`)
+    return { id: product.id, name, category, price: Math.round(product.price * 100) / 100, added_date: addedDate, created_at: product.created_at, updated_at: product.updated_at }
   }).filter(Boolean)
   return { errors, value: { schemaVersion: SCHEMA_VERSION, exportedAt: payload.exportedAt, categories, products } }
 }
@@ -127,28 +137,29 @@ export function createPriceLabelsRouter() {
   })
 
   router.get('/products', (_request, response) => {
-    const rows = getDatabase().prepare('SELECT id, name, category, price, created_at, updated_at FROM products ORDER BY updated_at DESC, id DESC').all()
+    const rows = getDatabase().prepare('SELECT id, name, category, price, added_date, created_at, updated_at FROM products ORDER BY updated_at DESC, id DESC').all()
     response.json(rows)
   })
   router.post('/products', (request, response) => {
     const db = getDatabase()
     const validation = validateProduct(db, request.body)
     if (validation.error) return response.status(400).json({ message: validation.error })
-    const { name, category, price } = validation.value
+    const { name, category, price, added_date: addedDate } = validation.value
     const now = new Date().toISOString()
-    const result = db.prepare('INSERT INTO products (name, category, price, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(name, category, price, now, now)
-    return response.status(201).json(db.prepare('SELECT id, name, category, price, created_at, updated_at FROM products WHERE id = ?').get(result.lastInsertRowid))
+    const result = db.prepare('INSERT INTO products (name, category, price, added_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(name, category, price, addedDate, now, now)
+    return response.status(201).json(db.prepare('SELECT id, name, category, price, added_date, created_at, updated_at FROM products WHERE id = ?').get(result.lastInsertRowid))
   })
   router.put('/products/:id', (request, response) => {
     const id = parseId(request.params.id)
     if (!id) return response.status(400).json({ message: '无效的商品 ID' })
     const db = getDatabase()
-    const selectProduct = db.prepare('SELECT id, name, category, price, created_at, updated_at FROM products WHERE id = ?')
-    if (!selectProduct.get(id)) return response.status(404).json({ message: '商品不存在' })
-    const validation = validateProduct(db, request.body)
+    const selectProduct = db.prepare('SELECT id, name, category, price, added_date, created_at, updated_at FROM products WHERE id = ?')
+    const existing = selectProduct.get(id)
+    if (!existing) return response.status(404).json({ message: '商品不存在' })
+    const validation = validateProduct(db, request.body, existing.added_date)
     if (validation.error) return response.status(400).json({ message: validation.error })
-    const { name, category, price } = validation.value
-    db.prepare('UPDATE products SET name = ?, category = ?, price = ?, updated_at = ? WHERE id = ?').run(name, category, price, new Date().toISOString(), id)
+    const { name, category, price, added_date: addedDate } = validation.value
+    db.prepare('UPDATE products SET name = ?, category = ?, price = ?, added_date = ?, updated_at = ? WHERE id = ?').run(name, category, price, addedDate, new Date().toISOString(), id)
     return response.json(selectProduct.get(id))
   })
   router.delete('/products/:id', (request, response) => {
@@ -166,7 +177,7 @@ export function createPriceLabelsRouter() {
       schemaVersion: SCHEMA_VERSION,
       exportedAt,
       categories: db.prepare('SELECT id, name, sort_order FROM categories ORDER BY sort_order ASC, id ASC').all(),
-      products: db.prepare('SELECT id, name, category, price, created_at, updated_at FROM products ORDER BY id ASC').all(),
+      products: db.prepare('SELECT id, name, category, price, added_date, created_at, updated_at FROM products ORDER BY id ASC').all(),
     }
     const timestamp = exportedAt.replaceAll(':', '-').replace(/\.\d{3}Z$/, 'Z')
     response.set('Content-Disposition', `attachment; filename="lenovo-price-label-backup-${timestamp}.json"`)
@@ -181,7 +192,7 @@ export function createPriceLabelsRouter() {
     try {
       const db = getDatabase()
       const insertCategory = db.prepare('INSERT INTO categories (id, name, sort_order) VALUES (@id, @name, @sort_order)')
-      const insertProduct = db.prepare('INSERT INTO products (id, name, category, price, created_at, updated_at) VALUES (@id, @name, @category, @price, @created_at, @updated_at)')
+      const insertProduct = db.prepare('INSERT INTO products (id, name, category, price, added_date, created_at, updated_at) VALUES (@id, @name, @category, @price, @added_date, @created_at, @updated_at)')
       db.transaction((payload) => {
         db.prepare('DELETE FROM products').run()
         db.prepare('DELETE FROM categories').run()

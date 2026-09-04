@@ -28,7 +28,7 @@ const filteredProducts = computed(() => {
   const query = searchTerm.value.trim().toLocaleLowerCase('zh-CN')
   return products.value.filter((product) => {
     const matchesCategory = activeCategory.value === '全部' || product.category === activeCategory.value
-    const searchable = `${product.name} ${product.category} ${product.price}`.toLocaleLowerCase('zh-CN')
+    const searchable = `${product.name} ${product.category} ${product.price} ${product.added_date}`.toLocaleLowerCase('zh-CN')
     return matchesCategory && (!query || searchable.includes(query))
   })
 })
@@ -249,7 +249,7 @@ onMounted(loadData)
               <div><p class="eyebrow">快速查找</p><h2 id="filter-title">筛选商品</h2></div>
               <span class="filter-result-count">{{ filteredProducts.length }} 条结果</span>
             </div>
-            <label class="search-box"><span class="search-icon" aria-hidden="true"></span><span class="visually-hidden">搜索商品</span><input v-model="searchTerm" type="search" placeholder="搜索商品名称 / 品类 / 价格" /></label>
+            <label class="search-box"><span class="search-icon" aria-hidden="true"></span><span class="visually-hidden">搜索商品</span><input v-model="searchTerm" type="search" placeholder="搜索商品名称 / 品类 / 价格 / 添加日期" /></label>
             <CategoryTabs v-model="activeCategory" :categories="categories" />
             <div class="filter-selection-row">
               <span>已选 {{ selectedIds.size }} 个<span v-if="filteredSelectedCount">，当前结果 {{ filteredSelectedCount }} 个</span></span>

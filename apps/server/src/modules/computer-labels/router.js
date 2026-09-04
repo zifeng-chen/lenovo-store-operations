@@ -10,6 +10,7 @@ import {
   getDatabase,
   restoreDatabase
 } from './database.js';
+import { currentCalendarDate, isValidCalendarDate } from '../../calendar-date.js';
 
 const excelUpload = multer({
   storage: multer.memoryStorage(),
@@ -40,6 +41,13 @@ const clean = (value) => {
 
 const requiredText = (value) => String(value ?? '').trim();
 
+function validateAddedDate(value, fallback) {
+  const normalized = value == null || String(value).trim() === '' ? fallback : String(value).trim();
+  return isValidCalendarDate(normalized)
+    ? { value: normalized }
+    : { error: '添加日期必须是有效的 YYYY-MM-DD 日期' };
+}
+
 function timestamp() {
   const now = new Date();
   const pad = (value) => String(value).padStart(2, '0');
@@ -59,12 +67,12 @@ export function createComputerLabelsRouter() {
 
   router.get('/products/export', (_req, res) => {
     const rows = getDatabase().prepare(
-      'SELECT sku, name, config, color, remark FROM products ORDER BY id DESC'
+      'SELECT sku, name, config, color, added_date, remark FROM products ORDER BY id DESC'
     ).all();
     const worksheet = XLSX.utils.json_to_sheet(rows, {
-      header: ['sku', 'name', 'config', 'color', 'remark']
+      header: ['sku', 'name', 'config', 'color', 'added_date', 'remark']
     });
-    worksheet['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 42 }, { wch: 18 }, { wch: 28 }];
+    worksheet['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 42 }, { wch: 18 }, { wch: 14 }, { wch: 28 }];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, '商品数据');
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
@@ -88,13 +96,13 @@ export function createComputerLabelsRouter() {
 
     const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
     const db = getDatabase();
-    const findBySku = db.prepare('SELECT id FROM products WHERE sku = ?');
+    const findBySku = db.prepare('SELECT id, added_date FROM products WHERE sku = ?');
     const insert = db.prepare(
-      'INSERT INTO products (sku, name, config, color, remark) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO products (sku, name, config, color, added_date, remark) VALUES (?, ?, ?, ?, ?, ?)'
     );
     const update = db.prepare(`
       UPDATE products
-      SET name = ?, config = ?, color = ?, remark = ?, updated_at = datetime('now')
+      SET name = ?, config = ?, color = ?, added_date = COALESCE(?, added_date), remark = ?, updated_at = datetime('now')
       WHERE sku = ?
     `);
     const errors = [];
@@ -111,10 +119,19 @@ export function createComputerLabelsRouter() {
           errors.push({ row: index + 2, reason: !sku ? 'SKU不能为空' : '商品名称不能为空' });
           return;
         }
+        const rawAddedDate = normalized.added_date || normalized['添加日期'];
+        const addedDate = rawAddedDate == null || String(rawAddedDate).trim() === ''
+          ? null
+          : String(rawAddedDate).trim();
+        if (addedDate && !isValidCalendarDate(addedDate)) {
+          errors.push({ row: index + 2, reason: '添加日期必须是有效的 YYYY-MM-DD 日期' });
+          return;
+        }
         try {
-          const values = [clean(normalized.config), clean(normalized.color), clean(normalized.remark)];
-          if (findBySku.get(sku)) update.run(name, ...values, sku);
-          else insert.run(sku, name, ...values);
+          const values = [clean(normalized.config), clean(normalized.color)];
+          const existing = findBySku.get(sku);
+          if (existing) update.run(name, ...values, addedDate, clean(normalized.remark), sku);
+          else insert.run(sku, name, ...values, addedDate || currentCalendarDate(), clean(normalized.remark));
           success += 1;
         } catch (error) {
           errors.push({ row: index + 2, reason: error.message });
@@ -142,10 +159,10 @@ export function createComputerLabelsRouter() {
     let sql = 'SELECT * FROM products';
     let params = [];
     if (q) {
-      sql += " WHERE sku LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' OR config LIKE ? ESCAPE '\\'";
+      sql += " WHERE sku LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' OR config LIKE ? ESCAPE '\\' OR added_date LIKE ? ESCAPE '\\'";
       const escaped = q.replace(/[\\%_]/g, '\\$&');
       const like = `%${escaped}%`;
-      params = [like, like, like];
+      params = [like, like, like, like];
     }
     sql += ' ORDER BY id DESC';
     sendSuccess(res, getDatabase().prepare(sql).all(...params));
@@ -154,12 +171,14 @@ export function createComputerLabelsRouter() {
   router.post('/products', (req, res) => {
     const name = requiredText(req.body.name);
     const sku = requiredText(req.body.sku);
+    const addedDate = validateAddedDate(req.body.added_date, currentCalendarDate());
     if (!name || !sku) return sendValidationError(res, 'name和sku为必填字段');
+    if (addedDate.error) return sendValidationError(res, addedDate.error);
 
     const db = getDatabase();
     const info = db.prepare(
-      'INSERT INTO products (name, sku, config, color, remark) VALUES (?, ?, ?, ?, ?)'
-    ).run(name, sku, clean(req.body.config), clean(req.body.color), clean(req.body.remark));
+      'INSERT INTO products (name, sku, config, color, added_date, remark) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(name, sku, clean(req.body.config), clean(req.body.color), addedDate.value, clean(req.body.remark));
     sendSuccess(res, db.prepare('SELECT * FROM products WHERE id = ?').get(info.lastInsertRowid), '新增成功');
   });
 
@@ -171,12 +190,15 @@ export function createComputerLabelsRouter() {
     if (!name || !sku) return sendValidationError(res, 'name和sku为必填字段');
 
     const db = getDatabase();
-    const info = db.prepare(`
+    const existing = db.prepare('SELECT added_date FROM products WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ code: 1, data: null, msg: '商品不存在' });
+    const addedDate = validateAddedDate(req.body.added_date, existing.added_date);
+    if (addedDate.error) return sendValidationError(res, addedDate.error);
+    db.prepare(`
       UPDATE products
-      SET name = ?, sku = ?, config = ?, color = ?, remark = ?, updated_at = datetime('now')
+      SET name = ?, sku = ?, config = ?, color = ?, added_date = ?, remark = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).run(name, sku, clean(req.body.config), clean(req.body.color), clean(req.body.remark), id);
-    if (!info.changes) return res.status(404).json({ code: 1, data: null, msg: '商品不存在' });
+    `).run(name, sku, clean(req.body.config), clean(req.body.color), addedDate.value, clean(req.body.remark), id);
     sendSuccess(res, db.prepare('SELECT * FROM products WHERE id = ?').get(id), '更新成功');
   });
 

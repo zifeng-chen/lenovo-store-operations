@@ -6,6 +6,7 @@ import {
   COMPUTER_LABELS_DATA_DIR,
   COMPUTER_LABELS_DATABASE_PATH
 } from '../../config/data-paths.js';
+import { currentCalendarDate, normalizeAddedDate } from '../../calendar-date.js';
 
 const databaseDir = COMPUTER_LABELS_DATA_DIR;
 
@@ -22,6 +23,7 @@ function createSchema(db) {
       color TEXT,
       sku TEXT UNIQUE NOT NULL,
       remark TEXT,
+      added_date TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -30,12 +32,28 @@ function createSchema(db) {
   `);
 }
 
+function migrateSchema(db) {
+  const columns = new Set(db.prepare('PRAGMA table_info(products)').all().map(column => column.name));
+  if (!columns.has('added_date')) db.exec('ALTER TABLE products ADD COLUMN added_date TEXT');
+
+  const fallback = currentCalendarDate();
+  const update = db.prepare('UPDATE products SET added_date = ? WHERE id = ?');
+  const rows = db.prepare('SELECT id, added_date, created_at FROM products').all();
+  db.transaction(() => {
+    rows.forEach(row => {
+      const normalized = normalizeAddedDate(row.added_date, row.created_at, fallback);
+      if (normalized !== row.added_date) update.run(normalized, row.id);
+    });
+  })();
+}
+
 function openDatabase() {
   fs.mkdirSync(databaseDir, { recursive: true });
   database = new Database(DATABASE_PATH);
   database.pragma('foreign_keys = ON');
   database.pragma('journal_mode = WAL');
   createSchema(database);
+  migrateSchema(database);
   return database;
 }
 

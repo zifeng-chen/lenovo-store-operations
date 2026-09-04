@@ -10,10 +10,26 @@ const props = defineProps({
 });
 const emit = defineEmits(['update:modelValue', 'save']);
 
+const shanghaiDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+});
+
+function todayCalendarDate() {
+  const parts = Object.fromEntries(
+    shanghaiDateFormatter.formatToParts(new Date())
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 const formRef = ref();
 const skuInput = ref();
 const submitAction = ref('');
-const form = reactive({ sku: '', name: '', config: '', color: '', remark: '' });
+const form = reactive({ sku: '', name: '', config: '', color: '', added_date: todayCalendarDate(), remark: '' });
 const isEdit = computed(() => props.mode === 'edit');
 const title = computed(() => ({
   create: '新增商品',
@@ -22,7 +38,8 @@ const title = computed(() => ({
 }[props.mode] || '新增商品'));
 const rules = {
   sku: [{ required: true, message: '请输入 SKU', trigger: 'blur' }],
-  name: [{ required: true, message: '请输入商品名称', trigger: 'blur' }]
+  name: [{ required: true, message: '请输入商品名称', trigger: 'blur' }],
+  added_date: [{ required: true, message: '请选择添加日期', trigger: 'change' }]
 };
 
 async function initializeForm() {
@@ -32,6 +49,7 @@ async function initializeForm() {
     name: source?.name ?? '',
     config: source?.config ?? '',
     color: source?.color ?? '',
+    added_date: props.mode === 'edit' ? (source?.added_date ?? todayCalendarDate()) : todayCalendarDate(),
     remark: source?.remark ?? ''
   });
   await nextTick();
@@ -95,6 +113,16 @@ async function submit(continueAdding = false) {
       </el-form-item>
       <el-form-item label="颜色" prop="color">
         <el-input v-model="form.color" maxlength="80" placeholder="可留空，例如：黑色/白色" />
+      </el-form-item>
+      <el-form-item label="添加日期" prop="added_date">
+        <el-date-picker
+          v-model="form.added_date"
+          type="date"
+          value-format="YYYY-MM-DD"
+          format="YYYY-MM-DD"
+          placeholder="选择添加日期"
+          style="width: 100%"
+        />
       </el-form-item>
       <el-form-item label="备注" prop="remark">
         <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="500" show-word-limit />
