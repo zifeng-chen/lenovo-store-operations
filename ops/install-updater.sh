@@ -110,8 +110,8 @@ wait_for_health() {
     if curl -fsS http://127.0.0.1:8900/api/system/health | "$NODE_PATH" -e '
       let text=""; process.stdin.on("data", chunk => text += chunk); process.stdin.on("end", () => {
         const body = JSON.parse(text); const data = body.data;
-        const expectedIds = ["computer-labels", "price-labels", "receipt-assistant", "employee-badges"];
-        const sqliteIds = new Set(["computer-labels", "price-labels", "receipt-assistant"]);
+        const expectedIds = ["computer-labels", "price-labels", "receipt-assistant", "price-placards", "employee-badges"];
+        const sqliteIds = new Set(["computer-labels", "price-labels", "receipt-assistant", "price-placards"]);
         const modules = Array.isArray(data?.modules) ? data.modules : [];
         const moduleById = new Map(modules.map(module => [module?.id, module]));
         const modulesHealthy = modules.length === expectedIds.length && expectedIds.every(id => {

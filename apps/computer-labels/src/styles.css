@@ -130,14 +130,14 @@ button, input, textarea { font: inherit; }
   left: 50%;
   width: 210mm;
   height: 297mm;
-  padding: 8mm;
+  padding: 0 8mm 8mm;
   transform: translateX(-50%) scale(var(--preview-scale));
   transform-origin: top center;
   background: #fff;
   box-shadow: 0 8px 28px rgba(38, 57, 78, 0.14);
   overflow: hidden;
 }
-.page-number { position: absolute; right: 8mm; top: 2.3mm; color: #8797a9; font-size: 9px; }
+.page-number { position: absolute; right: 8mm; bottom: 2.3mm; color: #8797a9; font-size: 9px; }
 .label-grid {
   width: 100%;
   height: 100%;
@@ -219,7 +219,7 @@ button, input, textarea { font: inherit; }
   .main-content, .right-panel, .preview-scroll, .preview-container { display: block !important; width: 210mm !important; height: auto !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; background: #fff !important; }
   .preview-page-shell { width: 210mm !important; height: 297mm !important; margin: 0 !important; break-after: page !important; page-break-after: always !important; }
   .preview-page-shell:last-child { break-after: auto !important; page-break-after: auto !important; }
-  .a4-wrapper { position: relative !important; top: auto !important; left: auto !important; width: 210mm !important; height: 297mm !important; margin: 0 !important; padding: 8mm !important; transform: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+  .a4-wrapper { position: relative !important; top: auto !important; left: auto !important; width: 210mm !important; height: 297mm !important; margin: 0 !important; padding: 0 8mm 8mm !important; transform: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
   .page-number { display: none !important; }
   .label-item { border: 1px solid #000 !important; }
   .color-block { background: #000 !important; color: #fff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }

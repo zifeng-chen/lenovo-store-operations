@@ -5,6 +5,7 @@ import path from 'node:path'
 import { Router } from 'express'
 import multer from 'multer'
 import { inspectAndExtractBackupPackage, MAX_BACKUP_BYTES } from './backup-package.js'
+import { createMaintenanceAuthorizer } from './maintenance-auth.js'
 
 const SESSION_TTL_MS = 30 * 60 * 1000
 
@@ -21,12 +22,6 @@ function apiError(message, status = 400, code = 'SYSTEM_BACKUP_ERROR') {
 
 function removeDirectory(directoryPath) {
   if (directoryPath && fs.existsSync(directoryPath)) fs.rmSync(directoryPath, { recursive: true, force: true })
-}
-
-function matchesToken(value, expected) {
-  const actualBuffer = Buffer.from(value || '')
-  const expectedBuffer = Buffer.from(expected)
-  return actualBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(actualBuffer, expectedBuffer)
 }
 
 export function createSystemPersistenceRouter({
@@ -48,6 +43,7 @@ export function createSystemPersistenceRouter({
   fs.chmodSync(workRoot, 0o700)
   process.once('exit', () => removeDirectory(workRoot))
   const sessions = new Map()
+  const authorizeMaintenance = createMaintenanceAuthorizer({ maintenanceToken, operation: '系统备份恢复' })
   const upload = multer({
     storage: multer.diskStorage({
       destination: workRoot,
@@ -78,28 +74,10 @@ export function createSystemPersistenceRouter({
     const isPersistenceRoute = request.path === '/backups/export'
       || request.path.startsWith('/restores/')
     if (!isPersistenceRoute) return next()
-
-    response.set('Cache-Control', 'no-store')
-    if (request.get('X-Lenovo-Store-Maintenance') !== '1') {
-      return response.status(403).json({ code: 1, data: null, msg: '缺少系统维护请求标识' })
-    }
-    if (maintenanceToken) {
-      const authorization = request.get('Authorization') || ''
-      const suppliedToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
-      if (!matchesToken(suppliedToken, maintenanceToken)) {
-        return response.status(401).json({ code: 1, data: null, msg: '系统维护令牌无效' })
-      }
-    }
-    const origin = request.get('Origin')
-    if (origin) {
-      try {
-        if (new URL(origin).origin !== `${request.protocol}://${request.get('host')}`) return response.status(403).json({ code: 1, data: null, msg: '仅允许同源执行系统维护操作' })
-      } catch {
-        return response.status(403).json({ code: 1, data: null, msg: '请求来源无效' })
-      }
-    }
-    cleanupExpiredSessions()
-    return next()
+    return authorizeMaintenance(request, response, () => {
+      cleanupExpiredSessions()
+      next()
+    })
   })
 
   router.get('/backups/export', async (_request, response, next) => {
@@ -128,13 +106,13 @@ export function createSystemPersistenceRouter({
     }
   })
 
-  router.post('/restores/inspect', upload.single('file'), (request, response, next) => {
+  router.post('/restores/inspect', upload.single('file'), async (request, response, next) => {
     if (!request.file) return next(apiError('请选择 .lsbackup 统一备份文件'))
     const sessionId = crypto.randomUUID()
     const sessionDirectory = path.join(workRoot, `session-${sessionId}`)
     try {
       const { manifest, extracted } = inspectAndExtractBackupPackage(request.file.path, sessionDirectory)
-      const inspection = persistenceService.inspect(manifest, extracted)
+      const inspection = await persistenceService.inspect(manifest, extracted)
       const expiresAt = Date.now() + SESSION_TTL_MS
       const session = { directory: sessionDirectory, manifest, extracted, inspection, expiresAt, moduleStatuses: new Map() }
       sessions.set(sessionId, session)

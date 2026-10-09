@@ -7,16 +7,25 @@ const HEADER_SIZE = 12
 const MAX_MANIFEST_BYTES = 256 * 1024
 export const MAX_BACKUP_BYTES = 1024 * 1024 * 1024
 
-const REQUIRED_DATABASE_ENTRIES = new Map([
-  ['computer-labels.database', 'computer-labels'],
-  ['price-labels.database', 'price-labels'],
-  ['receipt-assistant.database', 'receipt-assistant'],
+const DATABASE_ENTRIES_BY_VERSION = new Map([
+  [1, new Map([
+    ['computer-labels.database', 'computer-labels'],
+    ['price-labels.database', 'price-labels'],
+    ['receipt-assistant.database', 'receipt-assistant'],
+  ])],
+  [2, new Map([
+    ['computer-labels.database', 'computer-labels'],
+    ['price-labels.database', 'price-labels'],
+    ['receipt-assistant.database', 'receipt-assistant'],
+    ['price-placards.database', 'price-placards'],
+  ])],
 ])
 const OPTIONAL_ENTRY_IDS = new Set(['receipt-assistant.ocr-key'])
 const EXTRACTED_NAMES = new Map([
   ['computer-labels.database', 'computer-labels.sqlite'],
   ['price-labels.database', 'price-labels.sqlite'],
   ['receipt-assistant.database', 'receipt-assistant.sqlite'],
+  ['price-placards.database', 'price-placards.sqlite'],
   ['receipt-assistant.ocr-key', 'receipt-ocr.key'],
 ])
 
@@ -83,13 +92,14 @@ export function writeBackupPackage({ outputPath, backupId, createdAt, payloads, 
     return entry
   })
   const manifest = {
-    formatVersion: 1,
+    formatVersion: 2,
     application: 'lenovo-store-operations',
     backupId,
     createdAt,
     entries,
     ocrEncryption,
   }
+  validateManifest(manifest, offset)
   const manifestBuffer = Buffer.from(JSON.stringify(manifest), 'utf8')
   if (manifestBuffer.length > MAX_MANIFEST_BYTES) throw new Error('备份清单过大')
   const header = Buffer.alloc(HEADER_SIZE)
@@ -108,7 +118,10 @@ export function writeBackupPackage({ outputPath, backupId, createdAt, payloads, 
 }
 
 function validateManifest(manifest, payloadLength) {
-  if (!isPlainObject(manifest) || manifest.formatVersion !== 1 || manifest.application !== 'lenovo-store-operations') {
+  const requiredDatabaseEntries = isPlainObject(manifest)
+    ? DATABASE_ENTRIES_BY_VERSION.get(manifest.formatVersion)
+    : null
+  if (!requiredDatabaseEntries || manifest.application !== 'lenovo-store-operations') {
     throw packageError('不支持的统一备份格式或版本')
   }
   if (typeof manifest.backupId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(manifest.backupId)) throw packageError('备份编号无效')
@@ -119,8 +132,8 @@ function validateManifest(manifest, payloadLength) {
   }
 
   const seen = new Set()
-  const requiredModules = new Set(REQUIRED_DATABASE_ENTRIES.values())
-  const expectedOrder = [...REQUIRED_DATABASE_ENTRIES.keys(), ...(manifest.ocrEncryption.mode === 'local' ? ['receipt-assistant.ocr-key'] : [])]
+  const requiredModules = new Set(requiredDatabaseEntries.values())
+  const expectedOrder = [...requiredDatabaseEntries.keys(), ...(manifest.ocrEncryption.mode === 'local' ? ['receipt-assistant.ocr-key'] : [])]
   if (manifest.entries.length !== expectedOrder.length) throw packageError('备份条目数量无效')
   let expectedOffset = 0
   for (const [entryIndex, entry] of manifest.entries.entries()) {
@@ -128,7 +141,7 @@ function validateManifest(manifest, payloadLength) {
     if (entry.id !== expectedOrder[entryIndex]) throw packageError('备份条目顺序无效')
     if (seen.has(entry.id)) throw packageError(`备份包含重复条目：${entry.id}`)
     seen.add(entry.id)
-    const expectedModule = REQUIRED_DATABASE_ENTRIES.get(entry.id)
+    const expectedModule = requiredDatabaseEntries.get(entry.id)
     const isOptional = OPTIONAL_ENTRY_IDS.has(entry.id)
     if (!expectedModule && !isOptional) throw packageError(`备份包含未知条目：${entry.id}`)
     if (expectedModule) {

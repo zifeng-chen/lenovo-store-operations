@@ -3,10 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import {
+  createDatabaseBackup as createPricePlacardsDatabaseBackup,
+  validateDatabaseFile as validatePricePlacardsDatabaseFile
+} from '../apps/server/src/modules/price-placards/database.js';
+import {
   COMPUTER_LABELS_DATABASE_PATH,
   DATA_ROOT,
   isSameOrWithin,
   PRICE_LABELS_DATABASE_PATH,
+  PRICE_PLACARDS_DATABASE_PATH,
   PROJECT_ROOT,
   RECEIPT_ASSISTANT_DATABASE_PATH,
   RECEIPT_OCR_KEY_PATH,
@@ -37,7 +42,13 @@ const stagingDirectory = path.join(backupRoot, `.${timestamp}.${process.pid}.sta
 const databases = [
   { id: 'computer-labels', source: COMPUTER_LABELS_DATABASE_PATH },
   { id: 'price-labels', source: PRICE_LABELS_DATABASE_PATH },
-  { id: 'receipt-assistant', source: RECEIPT_ASSISTANT_DATABASE_PATH }
+  { id: 'receipt-assistant', source: RECEIPT_ASSISTANT_DATABASE_PATH },
+  {
+    id: 'price-placards',
+    source: PRICE_PLACARDS_DATABASE_PATH,
+    backup: createPricePlacardsDatabaseBackup,
+    validate: validatePricePlacardsDatabaseFile
+  }
 ];
 
 function sha256(filePath) {
@@ -68,14 +79,19 @@ async function backupDatabase(item) {
   const target = path.join(targetDirectory, 'database.sqlite');
   fs.mkdirSync(targetDirectory, { recursive: true, mode: 0o700 });
 
-  const sourceDatabase = new Database(item.source, { readonly: true, fileMustExist: true });
-  try {
-    await sourceDatabase.backup(target);
-  } finally {
-    sourceDatabase.close();
+  if (item.backup) await item.backup(target);
+  else {
+    const sourceDatabase = new Database(item.source, { readonly: true, fileMustExist: true });
+    try {
+      await sourceDatabase.backup(target);
+    } finally {
+      sourceDatabase.close();
+    }
   }
 
-  const inspection = inspectDatabase(target);
+  const inspection = item.validate
+    ? { integrity: 'ok', counts: await item.validate(target) }
+    : inspectDatabase(target);
   return {
     id: item.id,
     source: item.source,
