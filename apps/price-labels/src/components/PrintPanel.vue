@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { printPriceLabelPages } from '../printLabels.js'
 
 const props = defineProps({ products: { type: Array, required: true } })
 const emit = defineEmits(['clear'])
@@ -13,6 +14,7 @@ const isPreviewOpen = ref(false)
 const previewButtonRef = ref(null)
 const previewDialogRef = ref(null)
 const previewCloseButtonRef = ref(null)
+const printRootRef = ref(null)
 const nameMeasureElements = new Map()
 let fitRequestId = 0
 
@@ -126,8 +128,17 @@ onBeforeUnmount(() => {
 
 async function printLabels() {
   if (!props.products.length) return
-  await fitLabelNames()
-  window.print()
+  const previewWasOpen = isPreviewOpen.value
+  try {
+    await fitLabelNames()
+    await nextTick()
+    closePreview({ restoreFocus: false })
+    await nextTick()
+    await printPriceLabelPages(printRootRef.value)
+  } catch (error) {
+    if (previewWasOpen) await openPreview()
+    window.alert(error?.message || '价格标签打印准备失败，请检查图片和网络后重试')
+  }
 }
 </script>
 
@@ -192,7 +203,7 @@ async function printLabels() {
     </Transition>
   </Teleport>
 
-  <div class="print-root" aria-hidden="true">
+  <div ref="printRootRef" class="print-root" aria-hidden="true">
     <section v-for="(page, pageIndex) in printPages" :key="pageIndex" class="print-page">
       <main class="print-sheet">
         <article v-for="product in page" :key="product.id" class="price-label">

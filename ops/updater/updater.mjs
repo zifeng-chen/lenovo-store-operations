@@ -17,8 +17,11 @@ const ALLOWED_DOWNLOAD_HOSTS = new Set([
 ])
 const REQUEST_KEYS = ['action', 'jobId', 'requestedAt', 'schemaVersion', 'tag']
 const REQUIRED_ASSETS = ['manifest.json', 'manifest.json.sig', 'SHA256SUMS']
-const EXPECTED_MODULE_IDS = ['computer-labels', 'price-labels', 'receipt-assistant', 'employee-badges']
-const SQLITE_MODULE_IDS = new Set(['computer-labels', 'price-labels', 'receipt-assistant'])
+const LEGACY_MODULE_IDS = ['computer-labels', 'price-labels', 'receipt-assistant', 'employee-badges']
+const LEGACY_SQLITE_MODULE_IDS = new Set(['computer-labels', 'price-labels', 'receipt-assistant'])
+const CURRENT_MODULE_IDS = ['computer-labels', 'price-labels', 'receipt-assistant', 'price-placards', 'employee-badges']
+const CURRENT_SQLITE_MODULE_IDS = new Set(['computer-labels', 'price-labels', 'receipt-assistant', 'price-placards'])
+const HEALTH_CONTRACT_V2_TAG = 'v0.5.0'
 const DEFAULT_CONFIG_PATH = '/etc/lenovo-store-updater.json'
 const MAX_REQUEST_BYTES = 4096
 const MAX_MANIFEST_BYTES = 1024 * 1024
@@ -447,6 +450,7 @@ function validateExtractedTree(root) {
     'apps/computer-labels/dist/index.html',
     'apps/price-labels/dist/index.html',
     'apps/receipt-assistant/dist/index.html',
+    'apps/price-placards/dist/index.html',
     'apps/employee-badges/dist/index.html',
   ]
   for (const relative of required) {
@@ -618,21 +622,32 @@ async function restartService(config) {
 }
 
 async function waitForHealth(config, expected) {
+  const usesCurrentContract = compareVersions(expected.tag, HEALTH_CONTRACT_V2_TAG) >= 0
+  const expectedModuleIds = usesCurrentContract ? CURRENT_MODULE_IDS : LEGACY_MODULE_IDS
+  const sqliteModuleIds = usesCurrentContract ? CURRENT_SQLITE_MODULE_IDS : LEGACY_SQLITE_MODULE_IDS
   const deadline = Date.now() + config.healthTimeoutMs
   let consecutive = 0
   let lastMessage = '服务尚未响应'
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(config.healthUrl, { method: 'GET', redirect: 'error', signal: AbortSignal.timeout(5000) })
+      const response = await fetch(config.healthUrl, {
+        method: 'GET',
+        redirect: 'error',
+        signal: AbortSignal.timeout(5000),
+        headers: {
+          'User-Agent': 'lenovo-store-operations-updater/2',
+          'X-Lenovo-Store-Health-Contract': usesCurrentContract ? '2' : '1',
+        },
+      })
       const body = await response.json()
       const data = body?.data
       const modules = Array.isArray(data?.modules) ? data.modules : []
       const moduleById = new Map(modules.map(module => [module?.id, module]))
-      const expectedModulesHealthy = modules.length === EXPECTED_MODULE_IDS.length
-        && EXPECTED_MODULE_IDS.every(moduleId => {
+      const expectedModulesHealthy = modules.length === expectedModuleIds.length
+        && expectedModuleIds.every(moduleId => {
           const module = moduleById.get(moduleId)
           if (!module || module.moduleReady !== true) return false
-          if (!SQLITE_MODULE_IDS.has(moduleId)) return module.persistence === 'none'
+          if (!sqliteModuleIds.has(moduleId)) return module.persistence === 'none'
           return module.persistence === 'sqlite'
             && module.apiReady === true
             && module.dataDirectoryReady === true

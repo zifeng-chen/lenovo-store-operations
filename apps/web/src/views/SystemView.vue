@@ -397,6 +397,20 @@ function stageText(stage) {
   return '待处理';
 }
 
+function formatByteCount(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return '未知';
+  if (bytes < 1024) return `${bytes.toLocaleString()} B`;
+  const units = ['KiB', 'MiB', 'GiB'];
+  let amount = bytes;
+  let unitIndex = -1;
+  do {
+    amount /= 1024;
+    unitIndex += 1;
+  } while (amount >= 1024 && unitIndex < units.length - 1);
+  return `${amount.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} ${units[unitIndex]}`;
+}
+
 function restoreStatusText(module) {
   return {
     ready: '检查通过',
@@ -404,13 +418,33 @@ function restoreStatusText(module) {
     succeeded: '已恢复',
     failed: '恢复失败',
     incompatible: '不兼容',
+    absent: '旧版备份未包含',
     expired: '会话已过期',
   }[module.status] || module.status;
 }
 
-function formatCounts(counts) {
-  const labels = { products: '商品', categories: '品类', sales: '销售', ocrConfig: 'OCR 配置', ocrHistory: 'OCR 历史' };
-  return Object.entries(counts).map(([key, value]) => `${labels[key] || key} ${value.toLocaleString()} 条`).join('，');
+function restoreErrorText(error) {
+  return error === 'not-in-backup' ? '此 v1 备份创建时尚未包含价格展牌数据库' : error;
+}
+
+function formatCounts(module) {
+  if (module.present === false) return '此备份中无此模块数据';
+  const labels = {
+    products: '商品',
+    categories: '品类',
+    sales: '销售',
+    ocrConfig: 'OCR 配置',
+    ocrHistory: 'OCR 历史',
+    ocrUsage: 'OCR 调用',
+    placards: '展牌',
+    versions: '版本',
+    images: '图片',
+    imageBytes: '图片容量',
+  };
+  return Object.entries(module.counts).map(([key, value]) => {
+    if (key === 'imageBytes') return `${labels[key]} ${formatByteCount(value)}`;
+    return `${labels[key] || key} ${value.toLocaleString()} 条`;
+  }).join('，');
 }
 
 const liveUptimeSeconds = computed(() => {
@@ -627,7 +661,7 @@ onBeforeUnmount(() => {
         <div>
           <span class="card-kicker">统一数据保护</span>
           <h2 id="persistence-title">全部备份，按模块恢复</h2>
-          <p>一次下载仓库货品标签、周边货品价签和付款凭证打印的数据库；上传后只检查，不会立即覆盖数据。</p>
+          <p>一次下载仓库货品标签、周边货品价签、付款凭证打印和价格展牌四个模块的数据库；上传后只检查，不会立即覆盖数据。</p>
         </div>
         <el-button type="primary" :loading="backupLoading" @click="downloadBackup">下载全部数据库备份</el-button>
       </div>
@@ -659,17 +693,17 @@ onBeforeUnmount(() => {
             <tbody>
               <tr v-for="module in restoreSession.modules" :key="module.id">
                 <td><strong>{{ module.name }}</strong></td>
-                <td>{{ formatCounts(module.counts) }}</td>
+                <td>{{ formatCounts(module) }}</td>
                 <td>
                   <span :class="['restore-state', module.status]">{{ restoreStatusText(module) }}</span>
-                  <small v-if="module.error">{{ module.error }}</small>
+                  <small v-if="module.error">{{ restoreErrorText(module.error) }}</small>
                 </td>
-                <td><el-button type="danger" plain :loading="module.status === 'restoring'" :disabled="['restoring', 'expired', 'incompatible'].includes(module.status)" @click="restoreModule(module)">恢复此模块</el-button></td>
+                <td><el-button type="danger" plain :loading="module.status === 'restoring'" :disabled="['restoring', 'expired', 'incompatible', 'absent'].includes(module.status)" @click="restoreModule(module)">恢复此模块</el-button></td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p class="restore-note">没有“一键恢复全部”：三个模块相互独立，请核对统计后逐个恢复。某个模块失败不会覆盖其他模块。</p>
+        <p class="restore-note">没有“一键恢复全部”：四个模块相互独立，请核对统计后逐个恢复。v1 备份只包含前三个模块，价格展牌会明确显示为未包含；某个模块失败不会覆盖其他模块。</p>
       </div>
     </section>
 
@@ -682,6 +716,7 @@ onBeforeUnmount(() => {
       <div class="legacy-links">
         <a href="/#/computer-labels">仓库货品标签：Excel / SQLite <span>→</span></a>
         <a href="/#/price-labels">周边货品价签：JSON <span>→</span></a>
+        <a href="/#/price-placards">价格展牌：JSON / SQLite <span>→</span></a>
         <span>付款凭证打印：当前通过本页统一入口恢复</span>
       </div>
     </section>

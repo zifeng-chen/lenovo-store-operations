@@ -8,14 +8,17 @@
 - 每次升级前可以生成完整、可校验的外部备份；
 - 数据异常时可以安全恢复或回滚，而不是直接覆盖现有数据库。
 
+> 使用 Ubuntu ARM64（`arm64/aarch64`）部署时，请优先按照 [Ubuntu ARM64 从零部署、迁移、在线更新与灾难恢复手册](ubuntu-arm64-deployment.md)逐条执行；本文保留跨架构的持久化、恢复和 updater 原理说明。ARM 生产部署不支持 `armhf`、ARMv7 或 32 位用户空间。
+
 ## 1. 持久化范围
 
-系统中只有三个板块使用服务器端 SQLite：
+系统中有四个板块使用服务器端 SQLite：
 
 | 板块 | 数据文件 |
 | --- | --- |
 | 仓库货品标签 | `$LENOVO_STORE_DATA_DIR/computer-labels/database.sqlite` |
 | 周边货品价签 | `$LENOVO_STORE_DATA_DIR/price-labels/database.sqlite` |
+| 价格展牌打印 | `$LENOVO_STORE_DATA_DIR/price-placards/database.sqlite` |
 | 付款凭证打印 | `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` |
 | 付款凭证 OCR 密钥 | `$LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key` |
 
@@ -60,7 +63,9 @@ SQLite 使用 WAL 模式时，运行目录中可能同时出现 `database.sqlite
 ### 3.1 软件要求
 
 - Ubuntu 22.04 LTS 或更新版本；
+- ARM 生产部署仅支持 64 位 `arm64/aarch64`：`dpkg --print-architecture` 必须为 `arm64`、`uname -m` 必须为 `aarch64`；不支持 `armhf`、ARMv7 或 32 位用户空间；
 - Git、curl、tar、systemd 和常用 GNU 工具；
+- ARM64 必须安装 `build-essential` 和 `python3`，供 `better-sqlite3` 无可用预编译包时执行 `node-gyp` 源码构建回退；
 - Node.js `22.21.1`，最低要求为 `22.12.0`；
 - npm；
 - 可选：Nginx，用于 HTTPS 或反向代理。
@@ -273,7 +278,7 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 sudo journalctl -u lenovo-store-operations -n 100 --no-pager
 ```
 
-记录三个板块的业务记录数量和最新一条记录。不要仅凭目录名称判断哪套数据库正在使用。
+记录四个持久化板块的业务记录数量和最新一条记录。若旧数据来自 `0.4.x` 或更早版本，价格展牌库可能尚不存在；这表示新模块没有旧数据来源，不应伪造第四份旧库。不要仅凭目录名称判断哪套数据库正在使用。
 
 ### 5.2 停服并制作冷备份
 
@@ -293,6 +298,11 @@ sudo cp -a "$OLD_REPO/data" "$COLD_BACKUP"
 sudo test -f "$COLD_BACKUP/computer-labels/database.sqlite"
 sudo test -f "$COLD_BACKUP/price-labels/database.sqlite"
 sudo test -f "$COLD_BACKUP/receipt-assistant/database.sqlite"
+if sudo test -f "$COLD_BACKUP/price-placards/database.sqlite"; then
+  echo '已包含 0.5.0 价格展牌库。'
+else
+  echo '旧于 0.5.0 的数据可不含价格展牌库；首次 0.5.0 启动将创建空库。'
+fi
 ```
 
 OCR 加密密钥有两种来源，迁移前必须确认当前服务使用哪一种：
@@ -330,6 +340,11 @@ sudo cp -a "$OLD_REPO/data" "$STAGING"
 sudo test -f "$STAGING/computer-labels/database.sqlite"
 sudo test -f "$STAGING/price-labels/database.sqlite"
 sudo test -f "$STAGING/receipt-assistant/database.sqlite"
+if sudo test -f "$STAGING/price-placards/database.sqlite"; then
+  echo '迁移现有价格展牌库。'
+else
+  echo '来源早于 0.5.0：允许缺少价格展牌库，首次启动将创建空库。'
+fi
 sudo chown -R <service-user>:<service-group> "$STAGING"
 sudo chmod 0750 "$STAGING"
 sudo mv "$STAGING" "$TARGET"
@@ -351,9 +366,10 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 必须确认：
 
 - `persistentDataConfigured` 为 `true`；
-- 三个 SQLite 板块的 `databaseConnected` 均为 `true`；
+- 四个 SQLite 板块的 `databaseConnected` 均为 `true`；
 - 启动日志中的数据根路径正确；
-- 三个板块记录数量和最新记录与迁移前一致；
+- 三个旧业务的记录数量和最新记录与迁移前一致；
+- 若来源已有 0.5.0 数据，价格展牌记录、版本和图片引用与迁移前一致；若来源早于 0.5.0，则新建的价格展牌库应为空；
 - 付款凭证 OCR 配置可正常使用。
 
 完成独立备份和业务验收前，不要删除旧仓库中的 `data/`。
@@ -378,7 +394,7 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 3. 无维护令牌的可信局域网可直接继续；配置维护令牌时按页面提示输入，令牌只保存在当前页面内存；
 4. 在二次确认框完整输入“安装”；
 5. 保持页面打开，观察排队、备份、下载、验签、构建、切换、重启、连续健康检查和完成/回滚阶段；
-6. 完成后核对 health 的版本和完整 commit，并检查三套数据库及关键业务记录。
+6. 完成后核对 health 的版本和完整 commit，并检查五个业务模块、四套数据库及关键业务记录。
 
 Web 服务只提交 tag 和任务编号，不接收 URL、commit、Shell 参数或任意历史版本。root updater 会重新从固定 GitHub Release 获取 `manifest.json`、Ed25519 签名、`SHA256SUMS` 和发布包；只有四项身份与摘要绑定、候选构建检查和升级前备份全部成功后才切换 `current`。健康检查失败会自动把 `current`、`previous` 恢复到旧 release 并重新验证；数据目录不会随代码切换。
 
@@ -466,7 +482,9 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 4. 浏览器下载一个 `lenovo-store-backup-<timestamp>.lsbackup` 文件；
 5. 将文件移动到权限受控、具备独立备份策略的目录，并记录来源服务器和创建时间。
 
-`.lsbackup` 一次包含三套 SQLite 在线一致性快照。本机 OCR 密钥模式下还包含配套密钥，因此该文件可以用于离线解密已保存的 OCR 凭据，必须按敏感密钥材料保护；环境密钥模式不会导出 `OCR_CONFIG_ENCRYPTION_KEY`，恢复付款凭证时目标服务必须配置相同环境密钥。付款凭证快照同时校验 OCR 调用次数账本；恢复时识别历史按备份替换，但用量账本只按请求与尝试编号合并、不清空目标已有记录，避免通过恢复旧备份增加免费剩余次数。文件最大 1GB，不压缩。清单和 SHA-256 能发现截断、重叠、尾随内容及传输损坏，但不能证明文件来源，只能使用从受信任服务器直接下载的文件。
+`.lsbackup` 当前 writer 固定生成 `formatVersion: 2`，一次包含仓库货品、周边价签、付款凭证和价格展牌四套 SQLite 在线一致性快照。本机 OCR 密钥模式下还包含配套密钥，因此该文件可以用于离线解密已保存的 OCR 凭据，必须按敏感密钥材料保护；环境密钥模式不会导出 `OCR_CONFIG_ENCRYPTION_KEY`，恢复付款凭证时目标服务必须配置相同环境密钥。付款凭证快照同时校验 OCR 调用次数账本；恢复时识别历史按备份替换，但用量账本只按请求与尝试编号合并、不清空目标已有记录，避免通过恢复旧备份增加免费剩余次数。文件最大 1GB，不压缩。清单和 SHA-256 能发现截断、重叠、尾随内容及传输损坏，但不能证明文件来源，只能使用从受信任服务器直接下载的文件。
+
+reader 继续接受历史 `formatVersion: 1` 三库包和当前 v2 四库包。检查 v1 时，价格展牌明确显示“未包含（not-in-backup）”，不能从 v1 恢复，也不会把当前价格展牌库清空；原三模块仍可分别恢复。旧 `0.4.x` 服务不能读取 v2，这是向前版本边界：需要导入 v2 时，必须先更新代码并重启到支持 v2 的服务，再上传检查，不能先用旧服务恢复。
 
 浏览器统一备份不能替代无人值守的服务器定时备份。页面下载依赖浏览器会话和本机磁盘；定时、升级前和灾难恢复仍使用下一节的 `npm run backup:data` 目录快照。
 
@@ -484,7 +502,7 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 
 备份脚本会：
 
-- 使用 SQLite backup API 分别生成三个一致性快照；
+- 使用 SQLite backup API 分别生成四个一致性快照；
 - 对每个快照执行 `PRAGMA integrity_check`；
 - 记录表记录数、文件大小和 SHA-256；
 - 备份并验证付款凭证 OCR 加密密钥；
@@ -497,6 +515,7 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 /var/backups/lenovo-store-operations/<timestamp>/
 ├── computer-labels/database.sqlite
 ├── price-labels/database.sqlite
+├── price-placards/database.sqlite
 ├── receipt-assistant/database.sqlite
 ├── secrets/receipt-ocr.key
 └── manifest.json
@@ -566,13 +585,15 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 
 在线恢复有以下边界：
 
-- 三个模块没有跨库事务，因此不提供“一键恢复全部”；某模块失败不会回滚之前已明确成功的其他模块；
-- 每个模块在一个 SQLite 事务内清空并复制已知表，失败会保留该模块恢复前数据；
+- 四个持久化模块没有跨库事务，因此不提供“一键恢复全部”；某模块失败不会回滚之前已明确成功的其他模块；
+- 仓库货品、周边价签和付款凭证在各自 SQLite 事务中替换已知表；价格展牌先严格校验完整数据集，再通过 staged/rollback 整库替换，失败保留恢复前数据库；
 - 付款凭证存在进行中的 OCR 识别或配置保存时会拒绝恢复；成功后会重建 OCR runtime；
 - 本机密钥备份会先用包内密钥解密，再用目标服务器当前有效密钥重新加密，不直接覆盖目标密钥；
-- 环境密钥指纹不匹配时，付款凭证显示“不兼容”且按钮禁用，但另外两个模块仍可恢复；
+- 环境密钥指纹不匹配时，付款凭证显示“不兼容”且按钮禁用，另外三个模块仍可恢复；
+- 当前 v2 包可恢复四个模块；历史 v1 只含原三库，inspect 会把价格展牌显示为“未包含”，价格展牌恢复按钮禁用且不会清空现有数据；
+- 旧 `0.4.x` 服务不能读取 v2；恢复 v2 前必须先更新代码并重启服务，再上传检查；
 - 上传检查验证格式、摘要、SQLite 完整性、表结构、业务字段与计数，但不证明备份来源；
-- 仓库货品标签原 Excel/SQLite 入口和周边货品价签原 JSON 入口继续保留。
+- 仓库货品标签原 Excel/SQLite、周边货品价签原 JSON，以及价格展牌 JSON/SQLite DB 入口继续保留。
 
 生产环境维护接口始终要求同源请求和 `X-Lenovo-Store-Maintenance: 1`。令牌模式还要求正确的 Bearer 维护令牌；不要通过命令行历史直接拼接真实令牌，自动化应从 root-only 环境文件或密钥管理系统读取。可信局域网免令牌模式只取消 Bearer 要求，不取消同源和维护标识检查；任何能访问服务端口并构造请求的客户端仍可能执行备份或覆盖业务数据，因此必须通过防火墙限制可信网段，禁止在公网启用。人工操作优先使用系统状态页。
 
@@ -595,6 +616,7 @@ SNAPSHOT=/var/backups/lenovo-store-operations/<timestamp>
 sudo test -f "$SNAPSHOT/manifest.json"
 sudo test -f "$SNAPSHOT/computer-labels/database.sqlite"
 sudo test -f "$SNAPSHOT/price-labels/database.sqlite"
+sudo test -f "$SNAPSHOT/price-placards/database.sqlite"
 sudo test -f "$SNAPSHOT/receipt-assistant/database.sqlite"
 sudo cat "$SNAPSHOT/manifest.json"
 
@@ -664,18 +686,21 @@ sudo test ! -e "$FAILED" || {
 sudo install -d -m 0750 -o <service-user> -g <service-group> "$STAGING"
 sudo cp -a "$SNAPSHOT/computer-labels" "$STAGING/"
 sudo cp -a "$SNAPSHOT/price-labels" "$STAGING/"
+sudo cp -a "$SNAPSHOT/price-placards" "$STAGING/"
 sudo cp -a "$SNAPSHOT/receipt-assistant" "$STAGING/"
 if sudo test -d "$SNAPSHOT/secrets"; then
   sudo cp -a "$SNAPSHOT/secrets" "$STAGING/"
 fi
 sudo test -f "$STAGING/computer-labels/database.sqlite"
 sudo test -f "$STAGING/price-labels/database.sqlite"
+sudo test -f "$STAGING/price-placards/database.sqlite"
 sudo test -f "$STAGING/receipt-assistant/database.sqlite"
 sudo chown -R <service-user>:<service-group> "$STAGING"
 
 for database in \
   "$STAGING/computer-labels/database.sqlite" \
   "$STAGING/price-labels/database.sqlite" \
+  "$STAGING/price-placards/database.sqlite" \
   "$STAGING/receipt-assistant/database.sqlite"
 do
   result=$(sudo sqlite3 "$database" 'PRAGMA integrity_check;')
@@ -721,7 +746,7 @@ fi
 
 ### 8.4 业务验收和人工回滚
 
-健康接口只能证明数据库可打开，不能证明恢复了正确的业务版本。切换成功后必须核对三个板块的记录数量、最新记录和付款凭证 OCR 解密；确认无误前保留 `$ROLLBACK`。
+健康接口只能证明数据库可打开，不能证明恢复了正确的业务版本。切换成功后必须核对四个持久化板块的记录数量和最新记录、价格展牌版本/图片引用，以及付款凭证 OCR 解密；确认无误前保留 `$ROLLBACK`。
 
 ```bash
 curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
@@ -732,20 +757,51 @@ sudo journalctl -u lenovo-store-operations -n 100 --no-pager
 
 ### 8.5 代码 release 人工回退
 
-正常更新失败由 updater 自动回滚。只有 updater 已停止、`/var/lib/lenovo-store-updater/transaction.json` 不存在，且维护人员已核对 `current`、`previous` 都直接指向同一 `releases` 目录下的普通 release 时，才可人工交换链接。存在事务 journal 时应先查看 `lenovo-store-updater.service` journal 并让恢复流程处理，不能绕过 journal 强改链接。
+正常更新失败由 updater 自动回滚。人工交换链接前必须建立静默窗口：停止 `lenovo-store-updater.path` 和 `lenovo-store-updater.service`，完成在线备份后停止主服务，再确认 request、processing 和事务 journal 都不存在。先停主服务可防止 Web 在最终检查后重新发布请求。还必须核对 `current`、`previous` 都直接指向同一 `releases` 目录下的普通 release。
 
 ```bash
 set -Eeuo pipefail
 ROOT=/opt/lenovo-store-operations
-sudo test ! -e /var/lib/lenovo-store-updater/transaction.json
-CURRENT=$(readlink -f "$ROOT/current")
-PREVIOUS=$(readlink -f "$ROOT/previous")
+
+sudo systemctl stop lenovo-store-updater.path
+sudo systemctl stop lenovo-store-updater.service
+if sudo systemctl is-active --quiet lenovo-store-updater.path; then
+  echo '停止：lenovo-store-updater.path 仍 active。' >&2
+  exit 1
+fi
+if sudo systemctl is-active --quiet lenovo-store-updater.service; then
+  echo '停止：lenovo-store-updater.service 仍 active。' >&2
+  exit 1
+fi
+
+# 主服务运行时创建一致性备份，随后停止请求发布者。
+sudo systemctl start lenovo-store-backup.service
+[ "$(sudo systemctl show lenovo-store-backup.service -p Result --value)" = "success" ]
+sudo systemctl stop lenovo-store-operations.service
+if sudo systemctl is-active --quiet lenovo-store-operations.service; then
+  echo '停止：主服务仍 active。' >&2
+  exit 1
+fi
+
+for path in \
+  /run/lenovo-store-updater/request.json \
+  /run/lenovo-store-updater/claimed/processing.json \
+  /var/lib/lenovo-store-updater/transaction.json
+do
+  sudo test ! -e "$path" || {
+    echo "停止：仍存在 updater 状态文件：$path" >&2
+    exit 1
+  }
+done
+
+CURRENT=$(sudo readlink -f "$ROOT/current")
+PREVIOUS=$(sudo readlink -f "$ROOT/previous")
 sudo test "$(dirname "$CURRENT")" = "$ROOT/releases"
 sudo test "$(dirname "$PREVIOUS")" = "$ROOT/releases"
+sudo test "$CURRENT" != "$PREVIOUS"
 sudo test -f "$CURRENT/release-info.json"
 sudo test -f "$PREVIOUS/release-info.json"
 
-sudo systemctl stop lenovo-store-operations.service
 sudo ln -s "releases/$(basename "$PREVIOUS")" "$ROOT/.current.manual"
 sudo ln -s "releases/$(basename "$CURRENT")" "$ROOT/.previous.manual"
 sudo mv -Tf "$ROOT/.previous.manual" "$ROOT/previous"
@@ -753,6 +809,39 @@ sudo mv -Tf "$ROOT/.current.manual" "$ROOT/current"
 sudo systemctl start lenovo-store-operations.service
 curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 ```
+
+保持 updater path 停止，核对 health 的版本/完整 commit 与回退目标 `release-info.json`，并检查六套前端构建产物（Portal + 5 个业务 SPA）、四套 SQLite 和业务数据。验收失败时不要连续交换链接。
+
+验收成功后，再次停止主服务并检查三个状态文件；确认验收期间没有新请求后，先恢复 path，再启动主服务：
+
+```bash
+set -Eeuo pipefail
+sudo systemctl stop lenovo-store-operations.service
+if sudo systemctl is-active --quiet lenovo-store-operations.service; then
+  echo '停止：主服务仍 active。' >&2
+  exit 1
+fi
+if sudo systemctl is-active --quiet lenovo-store-updater.service; then
+  echo '停止：updater service 意外 active。' >&2
+  exit 1
+fi
+for path in \
+  /run/lenovo-store-updater/request.json \
+  /run/lenovo-store-updater/claimed/processing.json \
+  /var/lib/lenovo-store-updater/transaction.json
+do
+  sudo test ! -e "$path" || {
+    echo "停止：验收期间出现 updater 状态文件：$path" >&2
+    exit 1
+  }
+done
+sudo systemctl start lenovo-store-updater.path
+sudo systemctl is-active --quiet lenovo-store-updater.path
+sudo systemctl start lenovo-store-operations.service
+curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
+```
+
+任一状态文件存在时，保持主服务和 path 停止，保存 status/journal 并先处理未完成事务；不能删除 journal 后强改链接。
 
 核对 health 的版本/commit 与回退目标 `release-info.json` 一致，并复核业务数据。人工回退只切换代码，不恢复数据库；当前 contract 禁止自动安装声明不可逆数据迁移的 Release。完成排障前保留两个 release、外部备份、updater 状态和 journal 日志。
 
@@ -825,8 +914,9 @@ volumes:
 - [ ] updater 配置、公钥、程序、状态目录和 claimed 目录的 owner/mode 符合 root 边界；
 - [ ] 启动日志中的数据根为 `/var/lib/lenovo-store-operations`；
 - [ ] 健康接口 `persistentDataConfigured` 和 `updateInstallationEnabled` 均为 `true`；
-- [ ] 三个 SQLite 板块 `databaseConnected` 为 `true`；
-- [ ] 三个板块记录数量和最新记录正确；
+- [ ] 四个 SQLite 板块 `databaseConnected` 为 `true`；
+- [ ] 三个旧业务的记录数量和最新记录正确；来源已运行 0.5.0 时还已核对价格展牌历史/图片，旧来源则确认新价格展牌库为空；
+- [ ] health/updater 已识别五个业务模块、四套 SQLite 和六套前端构建产物（Portal + 5 个业务 SPA）；
 - [ ] 付款凭证 OCR 配置可用；
 - [ ] 员工工牌页面可访问，并理解其数据不会持久化；
 - [ ] 手动备份成功生成时间戳目录和 `manifest.json`；

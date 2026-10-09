@@ -1,30 +1,32 @@
 # 联想门店运营系统
 
-联想门店运营系统将四个业务边界彼此独立的门店工具统一到一个品牌、一个入口、一个服务进程和一个维护仓库中：
+联想门店运营系统将五个业务边界彼此独立的门店工具统一到一个品牌、一个入口、一个服务进程和一个维护仓库中：
 
 1. 仓库货品标签：管理并打印仓库电脑 SKU、配置和颜色标签；
 2. 周边货品价签：管理并打印电脑、手机、平板及周边商品价格标签；
-3. 付款凭证打印：合成客户付款后的商务存根和购物小票，辅助识别并记录金额；
-4. 员工工牌制作：批量制作员工工牌并完成 A4 排版与打印。
+3. 价格展牌打印：制作带图片、来源快照和版本历史的 110mm × 110mm 价格展牌；
+4. 付款凭证打印：合成客户付款后的商务存根和购物小票，辅助识别并记录金额；
+5. 员工工牌制作：批量制作员工工牌并完成 A4 排版与打印。
 
-项目默认通过 `http://localhost:8900` 提供统一 Portal 和四个独立 SPA。Portal 工作台首页集中展示全部业务板块，并在“业务板块”标题右侧提供当前项目的 GitHub 仓库入口；该入口会在新标签页中打开，不影响当前工作台。前三个业务板块拥有独立 API 与 SQLite 数据库；员工工牌板块完全在浏览器内运行，不创建 API、数据库或本地持久化数据。
+项目默认通过 `http://localhost:8900` 提供统一 Portal 和五个独立业务 SPA，共六个前端构建产物。Portal 工作台首页集中展示全部业务板块，并在“业务板块”标题右侧提供当前项目的 GitHub 仓库入口；该入口会在新标签页中打开，不影响当前工作台。仓库货品标签、周边货品价签、价格展牌打印和付款凭证打印拥有独立 API 与 SQLite 数据库；员工工牌板块完全在浏览器内运行，不创建 API、数据库或本地持久化数据。
 
-> 本项目只统一联想品牌、入口、部署、健康检查和维护方式，不合并各业务的数据模型。三个既有业务继续使用独立前端、API、SQLite 数据库和打印流程；员工工牌使用独立的浏览器内 A4 打印流程，不接触其他板块数据。
+> 本项目只统一联想品牌、入口、部署、健康检查和维护方式，不合并各业务的数据模型。四个持久化业务继续使用独立前端、API、SQLite 数据库和打印流程；员工工牌使用独立的浏览器内 A4 打印流程，不接触其他板块数据。
 
 ## 更新记录
 
 每次功能、配置、部署方式或文档更新都必须同步维护 GitHub 仓库文档，并按 `YYYY-MM-DD` 记录更新日期和主要内容。最新更新与完整历史请查看 [CHANGELOG.md](CHANGELOG.md)。
 
-当前最新记录：`2026-09-04`，发布 `0.4.0`：系统状态页在检测到更高的签名 GitHub Release 后可直接安装；可信局域网默认免独立更新令牌，配置维护令牌时复用统一令牌。Ubuntu 更新平台保留 Ed25519/SHA-256 验证、升级前备份、独立 builder、原子 `current/previous`、连续健康检查、失败及断电自动回滚。
+当前最新记录：`2026-09-07`，发布 `0.5.0`：新增独立价格展牌模块、110mm 成品、全局想帮帮服务库、不可变版本历史、图片和商品来源快照、JSON/DB 导入导出及 A4 打印队列；五个打印模块统一从 A4 顶边向下排列，周边货品多页打印改为隔离 iframe；统一备份升级为 `.lsbackup` v2 四库格式，读取端继续兼容历史 v1 三库包；Portal、Release 和 updater 同步为五个业务模块、四套 SQLite、Portal + 5 个 SPA。
 
 ## 板块说明
 
 | 业务板块 | 业务用途 | Portal 路由 | 独立 SPA | API | 数据库 | 当前输出能力 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 仓库货品标签 | 管理电脑 SKU、名称、配置、颜色、添加日期和备注 | `/computer-labels` | `/modules/computer-labels/` | `/api/computer-labels` | `$LENOVO_STORE_DATA_DIR/computer-labels/database.sqlite` | 46mm × 45mm，A4 纵向，24 张/页 |
-| 周边货品价签 | 管理电脑、手机、平板及周边商品的品类、名称、价格和添加日期 | `/price-labels` | `/modules/price-labels/` | `/api/price-labels` | `$LENOVO_STORE_DATA_DIR/price-labels/database.sqlite` | 70mm × 28mm，A4 横向，28 张/页 |
-| 付款凭证打印 | 将商务存根和购物小票合成到一张 A4，识别并记录付款金额 | `/receipt-assistant` | `/modules/receipt-assistant/` | `/api/receipt-assistant` | `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` | 存根 + 小票，A4 打印或 PNG 下载 |
-| 员工工牌制作 | 批量录入员工姓名、岗位和二维码，生成 A4 工牌排版 | `/employee-badges` | `/modules/employee-badges/` | 无 | 无 | 54mm × 85mm，A4 横向，10 张/页 |
+| 仓库货品标签 | 管理电脑 SKU、名称、配置、颜色、添加日期和备注 | `/#/computer-labels` | `/modules/computer-labels/` | `/api/computer-labels` | `$LENOVO_STORE_DATA_DIR/computer-labels/database.sqlite` | 46mm × 45mm，A4 纵向，24 张/页 |
+| 周边货品价签 | 管理电脑、手机、平板及周边商品的品类、名称、价格和添加日期 | `/#/price-labels` | `/modules/price-labels/` | `/api/price-labels` | `$LENOVO_STORE_DATA_DIR/price-labels/database.sqlite` | 70mm × 28mm，A4 横向，28 张/页 |
+| 价格展牌打印 | 制作含产品、图片、服务区和来源快照的价格展牌 | `/#/price-placards` | `/modules/price-placards/` | `/api/price-placards` | `$LENOVO_STORE_DATA_DIR/price-placards/database.sqlite` | 110mm × 110mm，A4 纵向，2 张/页 |
+| 付款凭证打印 | 将商务存根和购物小票合成到一张 A4，识别并记录付款金额 | `/#/receipt-assistant` | `/modules/receipt-assistant/` | `/api/receipt-assistant` | `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` | 存根 + 小票，A4 打印或 PNG 下载 |
+| 员工工牌制作 | 批量录入员工姓名、岗位和二维码，生成 A4 工牌排版 | `/#/employee-badges` | `/modules/employee-badges/` | 无 | 无 | 54mm × 85mm，A4 横向，10 张/页 |
 
 仅在 `npm run dev`、`NODE_ENV=development` 或测试模式下，未设置 `LENOVO_STORE_DATA_DIR` 才会使用仓库内的 `data/`；生产启动缺少该变量会直接失败，防止新 release 静默创建空库。
 
@@ -56,6 +58,22 @@
 - 70mm × 28mm 标签预览和 A4 横向批量打印。
 
 该模块覆盖电脑、手机、平板和周边商品价格，不要求电脑 SKU，也不复用电脑商品标签数据库。
+
+### 价格展牌打印
+
+- 独立入口为 `/#/price-placards`，SPA 为 `/modules/price-placards/`，API 为 `/api/price-placards`，数据保存在 `$LENOVO_STORE_DATA_DIR/price-placards/database.sqlite`；
+- 单张最终成品固定 **110mm × 110mm**：外层使用 110mm 裁切区，内层保持 120mm 设计坐标并按 `11/12` 缩放。产品头图、卖点、产品/价格行、配件和“想帮帮”服务区使用冻结 DOM/CSS；预览和隔离打印 iframe 共用该契约，不自动缩字或改变几何尺寸；
+- 保存、历史恢复、加入打印队列和最终打印前都会测量真实 DOM 溢出；任何区域溢出都会明确阻止写入或打印。历史版本复制采用兼容规则，即使旧内容不符合当前校验或版式也可复制为新记录后继续修改。新上传且尚未进入历史的自定义图片必须先显式保存，才能加入打印队列，避免草稿租约释放后队列图片失效；
+- 保存必须显式触发；仅内容或来源快照实际变化时追加不可变版本，每张展牌最多保留 100 个历史版本。恢复旧版本会把旧内容追加为新的当前版本，复制历史会创建新展牌，不覆盖既有历史；
+- 支持 PNG/JPEG/WEBP 图片，浏览器生成受限副本，服务端使用受限像素解码复核完整内容、真实格式、尺寸和摘要并按 SHA-256 去重；未保存图片使用 24 小时多租约 claim，放弃草稿或租约过期后安全回收，任一历史版本引用的图片不会被提前删除；
+- 产品只能从仓库货品标签导入，配件只能从周边货品价签导入，并保存为只读来源快照，不建立跨库实时外键；来源刷新先显示逐字段差异，只有用户勾选的字段才覆盖。仓库货品来源不拥有价格字段，刷新颜色或配置时会保留人工价格；没有价格的来源必须人工补充有效价格后才能保存或入队；
+- “想帮帮”服务库使用价格展牌 SQLite 全局持久化，可供每张展牌选择后继续手工编辑；支持中文表头 `.xlsx` 导入导出，同名服务覆盖价格、新名称追加。保存库提供标题搜索、高亮、四种排序、九宫格卡片和分批加载；
+- 提供单模块 JSON 和 SQLite DB 导入导出。JSON 包含展牌、全部版本、图片与版本引用，并采用流式解析/导出和 staging SQLite，避免大备份整体常驻内存；JSON/DB 导入均可先执行仅校验预检，确认“导入”后才全量替换。导入在文件上传前要求同源维护请求及已配置的维护令牌，数据库替换使用持久化 journal、fsync 和启动恢复，进程终止或断电后只会恢复完整旧库或完整新库；
+- 打印队列保存加入时的内容快照，后续修改草稿不会静默改变队列；队列项支持上移、下移、删除及 1–99 份；
+- 打印为 A4 纵向、100% 实际大小、每页 2 张：从页面顶边开始向下排列，两张之间保持 **4.5mm**，末页单张位于页面顶部。iframe 会等待字体和全部图片解码后再打开打印窗口；
+- “想帮帮”服务区默认使用用户提供的正式 Logo，模型保留 `serviceLogoAssetId` 供数据库自定义素材覆盖；产品名称右侧默认使用“AI 元启”图片，自定义产品图片仍优先显示。
+
+价格展牌使用自己的商品内容、历史、图片和来源快照数据库，不与仓库货品或周边价签数据库合并；来源导入只是可审计快照。
 
 ### 付款凭证打印
 
@@ -90,13 +108,13 @@
 - 联想红工牌保留原 Lenovo 红色背景、姓名岗位分割线、二维码下移和“联想官方体验店”“请您添加企业微信”文案；原始背景文件保持不变，渲染时向四周扩展 2mm，使素材内置白边和阴影位于裁切区外；
 - 同一员工的多份工牌复用同一个二维码 Object URL，不复制图片数据，也不改变原有释放生命周期；
 - 单张工牌裁切格固定为 54mm × 85mm，0.1mm 内缩轮廓线只作为裁切边界，不进入工牌盒模型；
-- 打印文档使用完整的 297mm × 210mm A4 横向页面，按 5 列 × 2 行排列；每张 54mm × 85mm 工牌之间保留 2mm 横纵裁剪通道，总网格为 278mm × 172mm，物理边距左右各 9.5mm、上下各 19mm；
+- 打印文档使用完整的 297mm × 210mm A4 横向页面，按 5 列 × 2 行排列；每张 54mm × 85mm 工牌之间保留 2mm 横纵裁剪通道，总网格为 278mm × 172mm，左右各留 9.5mm，网格从页面顶边向下排列，剩余 38mm 留在底部；
 - 右侧实时预览使用显式 297:210 A4 页面和绝对定位的 278mm × 172mm 网格，不依赖 padding 盒模型；每个裁切格显式保持 54:85，并等比显示 2mm 裁剪通道，裁切线加深，页码不参与纸张阴影；10 张工牌可完整显示，预览区域受限时提供滚动；
 - 桌面端工作区取消固定最大宽度，左右卡片等高拉伸并占满页头下方空间；左侧保持适合录入的宽度，右侧自动使用 1080P 屏幕的全部剩余宽度；
 - 打印使用隔离 iframe，等待字体、背景和二维码图片加载完成后再打开浏览器打印窗口；
 - 页面关闭或刷新后数据自动消失，不调用 API，不使用 localStorage、sessionStorage、IndexedDB 或数据库。
 
-二维码通过临时 Object URL 在浏览器内显示。替换、删除、清空或离开页面时会主动释放对应 URL。员工资料不会发送到服务器，也不会进入其他三个板块。打印时必须选择 A4、横向、实际大小（100%），关闭“适合页面”和页眉页脚；实体尺寸以灰色裁切边界为准，不以联想红背景的阴影边缘为准，并应在首张样张上复核 54mm × 85mm。
+二维码通过临时 Object URL 在浏览器内显示。替换、删除、清空或离开页面时会主动释放对应 URL。员工资料不会发送到服务器，也不会进入其他四个板块。打印时必须选择 A4、横向、实际大小（100%），关闭“适合页面”和页眉页脚；实体尺寸以灰色裁切边界为准，不以联想红背景的阴影边缘为准，并应在首张样张上复核 54mm × 85mm。
 
 ## 系统架构
 
@@ -106,27 +124,30 @@ Browser
   | http://localhost:8900
   v
 Express 5 unified server
-  |-- /                          Portal SPA
-  |-- /modules/computer-labels   仓库货品标签 SPA
-  |-- /modules/price-labels      周边货品价签 SPA
-  |-- /modules/receipt-assistant 付款凭证打印 SPA
-  |-- /modules/employee-badges   员工工牌制作 SPA（纯浏览器状态）
-  |-- /api/computer-labels       仓库货品标签 API
-  |-- /api/price-labels          周边货品价签 API
-  |-- /api/receipt-assistant     付款凭证 API
-  `-- /api/system                健康检查与统一备份恢复 API
+  |-- /                           Portal SPA
+  |-- /modules/computer-labels    仓库货品标签 SPA
+  |-- /modules/price-labels       周边货品价签 SPA
+  |-- /modules/price-placards     价格展牌打印 SPA
+  |-- /modules/receipt-assistant  付款凭证打印 SPA
+  |-- /modules/employee-badges    员工工牌制作 SPA（纯浏览器状态）
+  |-- /api/computer-labels        仓库货品标签 API
+  |-- /api/price-labels           周边货品价签 API
+  |-- /api/price-placards         价格展牌 API
+  |-- /api/receipt-assistant      付款凭证 API
+  `-- /api/system                 健康检查与统一备份恢复 API
          |
          |-- $LENOVO_STORE_DATA_DIR/computer-labels/database.sqlite
          |-- $LENOVO_STORE_DATA_DIR/price-labels/database.sqlite
+         |-- $LENOVO_STORE_DATA_DIR/price-placards/database.sqlite
          |-- $LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite
          `-- $LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key
 ```
 
-Portal 通过同源 iframe 加载四个独立 SPA。四套打印实现分别维护自己的纸张方向、毫米尺寸、分页和资源加载流程；员工工牌使用独立 iframe 打印 A4 横向页面，不向其他模块注入打印样式。
+Portal 通过同源 iframe 加载五个独立业务 SPA。五套打印实现分别维护自己的纸张方向、毫米尺寸、分页和资源加载流程；价格展牌使用冻结 DOM/CSS 和隔离 iframe，员工工牌使用独立 iframe 打印 A4 横向页面，均不向其他模块注入打印样式。所有模块的页面级打印内容统一从 A4 顶边开始向下排列，末页不再垂直居中或落在页面底部；标签、展牌、工牌和票据自身内部的固定布局保持独立。
 
 ## 前端视觉与打印隔离
 
-五个前端（Portal + 四个业务 SPA）通过 `@lenovo-store/shared/theme.css` 使用同一套屏幕设计令牌，并共享用户指定的红色联想 SVG Logo，统一字体、画布、色板、间距、圆角、阴影、卡片、表单和按钮。Portal 将板块工具栏与 iframe 组合成一个完整工作区，四个业务 SPA 仍可通过各自地址独立开发和打开。
+六个前端（Portal + 五个业务 SPA）通过 `@lenovo-store/shared/theme.css` 使用同一套屏幕设计令牌，并共享用户指定的红色联想 SVG Logo，统一字体、画布、色板、间距、圆角、阴影、卡片、表单和按钮。Portal 将板块工具栏与 iframe 组合成一个完整工作区，五个业务 SPA 仍可通过各自地址独立开发和打开。
 
 共享主题遵循以下边界：
 
@@ -134,21 +155,23 @@ Portal 通过同源 iframe 加载四个独立 SPA。四套打印实现分别维�
 - 每个 SPA 主动导入主题，Portal 不向 iframe 注入 CSS；
 - 电脑商品标签继续由模块自身维护 46mm × 45mm 标签和 A4 纵向打印规则；
 - 商品价格标签继续维护独立的字号测量 DOM、70mm × 28mm 标签和 A4 横向打印规则；
+- 价格展牌预览与打印共用冻结 DOM/CSS，维护 110mm × 110mm 成品、A4 纵向两张布局、溢出阻断和图片等待；
 - 付款凭证继续通过 Canvas 合成图片，并在临时隔离 iframe 中打印 A4；
 - 员工工牌通过独立 DOM/CSS 打印文档维护 54mm × 85mm 工牌、A4 横向 5×2 网格和裁切边界；
-- 统一的是屏幕操作体验，不是四种打印文档的几何尺寸或业务模型。
+- 统一的是屏幕操作体验，不是五种打印文档的几何尺寸或业务模型。
 
 ## 技术栈
 
 - Node.js `22.21.1`；
 - npm workspaces；
-- Vue `3.5.13`；
+- Vue `3.5.43`；
 - Vite `7.3.6`；
 - Element Plus `2.14.4`；
 - Apache ECharts `6.1.0`（付款凭证销售趋势）；
 - Express `5.1.0`；
 - better-sqlite3 `12.0.0`；
-- Multer `2.2.0`；
+- Multer `2.4.0`；
+- Sharp `0.35.5`；
 - SheetJS `0.20.3`。
 
 ## 目录结构
@@ -159,18 +182,23 @@ lenovo-store-operations/
 │   ├── web/                    # 统一 Portal
 │   ├── computer-labels/        # 电脑商品标签 SPA
 │   ├── price-labels/           # 商品价格标签 SPA
+│   ├── price-placards/         # 价格展牌 SPA 与冻结打印布局
 │   ├── receipt-assistant/      # 付款凭证打印 SPA
 │   ├── employee-badges/        # 员工工牌制作 SPA（无持久化）
-│   └── server/                 # Express 服务和三个持久化后端模块
+│   └── server/                 # Express 服务和四个持久化后端模块
 ├── packages/
 │   └── shared/                 # 板块元数据、共享屏幕主题与联想 Logo
+├── docs/
+│   ├── ubuntu-arm64-deployment.md # Ubuntu ARM64 逐条部署与恢复手册
+│   └── ubuntu-deployment.md    # 通用 Ubuntu 持久化与恢复指南
 ├── data/
 │   ├── computer-labels/        # 电脑商品标签数据库
 │   ├── price-labels/           # 商品价格标签数据库
+│   ├── price-placards/         # 价格展牌、版本和图片数据库
 │   ├── receipt-assistant/      # 付款凭证数据库
 │   └── secrets/                # OCR 加密密钥
 ├── scripts/
-│   └── migrate-legacy-data.js  # 旧项目数据一次性迁移脚本
+│   └── migrate-legacy-data.js  # 三个旧项目数据一次性迁移脚本
 ├── package.json
 └── package-lock.json
 ```
@@ -197,7 +225,9 @@ node --version
 
 ## 安装与生产运行
 
-Ubuntu 生产服务器建议先阅读 [Ubuntu 部署、数据持久化与备份恢复指南](docs/ubuntu-deployment.md)。该指南包含首次部署、systemd 服务、仓库内数据无损外迁、日常升级、定时备份、冷恢复、回滚和“升级后数据为空”的应急排查步骤；以下内容保留为快速参考。
+Ubuntu ARM64（`arm64/aarch64`）生产服务器应优先阅读 [Ubuntu ARM64 从零部署、迁移、在线更新与灾难恢复手册](docs/ubuntu-arm64-deployment.md)。该手册按部署机实际执行顺序覆盖架构与资源检查、系统依赖、固定 Node.js ARM64、服务账号、UFW、数据迁移、systemd、签名在线更新、备份、故障演练和安全回退；不支持 `armhf`/ARMv7 生产部署。
+
+其他 Ubuntu 部署及通用数据恢复原理请阅读 [Ubuntu 部署、数据持久化与备份恢复指南](docs/ubuntu-deployment.md)。该指南包含首次部署、systemd 服务、仓库内数据无损外迁、日常升级、定时备份、冷恢复、回滚和“升级后数据为空”的应急排查步骤；以下内容保留为快速参考。
 
 生产环境必须将数据目录放在 Git checkout、release 目录和容器临时层之外。以下示例中的目录应由实际服务账号拥有并保持持久化：
 
@@ -223,18 +253,18 @@ http://localhost:8900
 HOST=127.0.0.1 PORT=8900 LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations npm start
 ```
 
-统一服务需要先完成 `npm run build`，因为 Express 会直接托管四个应用的 `dist` 目录。启动日志会输出当前实际使用的数据根目录及其来源。
+统一服务需要先完成 `npm run build`，因为 Express 会直接托管 Portal 和五个业务 SPA 的六套 `dist` 目录。启动日志会输出当前实际使用的数据根目录及其来源。
 
 ### 现有服务器一次性无损迁移
 
-如果服务器目前仍使用仓库内 `data/`，应在下一次拉取或切换 release 前完成一次迁移：
+如果服务器目前仍使用仓库内 `data/`，应在下一次拉取或切换 release 前完成一次迁移。来源已运行 `0.5.0` 时必须原样包含价格展牌库；来源为 `0.4.x` 或更早版本时可以没有该库，首次启动 0.5.0 会创建空库，不能凭空迁移不存在的展牌数据：
 
 1. 停止 Node/PM2/systemd/容器服务，确保没有 SQLite 写入；
 2. 将当前仓库的整个 `data/` 目录额外备份到独立位置；
 3. 创建代码目录之外的持久化目录，并将 `data/` 内全部内容原样复制过去，付款凭证数据库与 `secrets/receipt-ocr.key` 必须成对迁移；
 4. 为实际服务账号设置目录读写权限，并在进程管理器中永久配置 `LENOVO_STORE_DATA_DIR`；
 5. 拉取代码、执行 `npm ci && npm run build`，然后启动服务；
-6. 从启动日志确认实际数据目录，再检查健康接口及三个板块的记录数量和最新记录。
+6. 从启动日志确认实际数据目录，再检查五个业务模块、四套 SQLite；三个旧业务的记录应与迁移前一致，已有 0.5.0 数据时还要核对价格展牌历史和图片，旧来源则确认新库为空。
 
 示例（请将 `<repo>` 和 `<service-user>` 替换为服务器实际值；目标或 staging 已存在时命令会停止，不会合并覆盖）：
 
@@ -249,6 +279,11 @@ sudo cp -a <repo>/data "$STAGING"
 sudo test -f "$STAGING/computer-labels/database.sqlite"
 sudo test -f "$STAGING/price-labels/database.sqlite"
 sudo test -f "$STAGING/receipt-assistant/database.sqlite"
+if sudo test -f "$STAGING/price-placards/database.sqlite"; then
+  echo '迁移现有 0.5.0 价格展牌库。'
+else
+  echo '旧来源未包含价格展牌；首次 0.5.0 启动将创建空库。'
+fi
 sudo chown -R <service-user>:<service-user> "$STAGING"
 sudo mv "$STAGING" "$TARGET"
 ```
@@ -263,11 +298,12 @@ Portal 使用 hash 路由，`#` 后的业务路径只由浏览器解析，刷新
 - 系统状态：`http://localhost:8900/#/system`
 - 仓库货品标签：`http://localhost:8900/#/computer-labels`
 - 周边货品价签：`http://localhost:8900/#/price-labels`
+- 价格展牌打印：`http://localhost:8900/#/price-placards`
 - 付款凭证打印：`http://localhost:8900/#/receipt-assistant`
 - 员工工牌制作：`http://localhost:8900/#/employee-badges`
 - 系统健康接口：`http://localhost:8900/api/system/health`
 
-服务器仍兼容 `/system`、`/computer-labels`、`/price-labels`、`/receipt-assistant` 和 `/employee-badges` 旧直链，并使用 `308` 跳转到对应 hash 地址；新链接统一使用 hash 地址，避免部署环境未配置 history rewrite 时刷新落入 API 404。
+服务器仍兼容 `/system`、`/computer-labels`、`/price-labels`、`/price-placards`、`/receipt-assistant` 和 `/employee-badges` 旧直链，并使用 `308` 跳转到对应 hash 地址；新链接统一使用 hash 地址，避免部署环境未配置 history rewrite 时刷新落入 API 404。
 
 ### 反向代理与刷新
 
@@ -281,7 +317,7 @@ Portal 使用 hash 路由，`#` 后的业务路径只由浏览器解析，刷新
 npm run dev
 ```
 
-该命令同时启动统一后端、Portal 和四个业务板块开发服务器：
+该命令同时启动统一后端、Portal 和五个业务板块开发服务器：
 
 | 服务 | 开发地址 |
 | --- | --- |
@@ -290,6 +326,7 @@ npm run dev
 | 周边货品价签 | `http://localhost:5175/modules/price-labels/` |
 | 付款凭证打印 | `http://localhost:5176/modules/receipt-assistant/` |
 | 员工工牌制作 | `http://localhost:5177/modules/employee-badges/` |
+| 价格展牌打印 | `http://localhost:5178/modules/price-placards/` |
 | API 服务 | `http://localhost:8900/` |
 
 开发模式下应使用上表中的独立 Vite 地址调试业务模块。需要验证统一 Portal iframe、静态托管和生产路径时，请执行 `npm run build && npm start`，并通过 8900 端口访问。
@@ -353,27 +390,29 @@ npm run migrate:data
 
 可选 `LENOVO_STORE_GITHUB_TOKEN` 只由服务端版本检查使用，不进入浏览器、API 响应、日志或 Git；root updater 当前使用 GitHub 公开 Release 下载接口，因此发布资产必须保持公开。首次启用、`0.3.0` Git checkout 迁移、故障演练和人工回退见 [Ubuntu 部署指南](docs/ubuntu-deployment.md)。
 
-根 `package.json` 的 `version` 是整套产品的唯一发布版本。准备新版本时先更新版本、README、CHANGELOG 和相关文档并提交，再创建完全一致的严格 `vX.Y.Z` tag。例如发布 `0.4.0`：
+根 `package.json` 的 `version` 是整套产品的唯一发布版本。准备新版本时先更新版本、README、CHANGELOG 和相关文档并提交，再创建完全一致的严格 `vX.Y.Z` tag。例如发布 `0.5.0`：
 
 ```bash
-npm version 0.4.0 --no-git-tag-version --workspaces=false
+npm version 0.5.0 --no-git-tag-version --workspaces=false
 # 按实际日期更新文档和 CHANGELOG，完成验证后提交并推送 main
-git tag v0.4.0
-git push origin v0.4.0
+git tag v0.5.0
+git push origin v0.5.0
 ```
 
 `.github/workflows/release.yml` 会校验 tag、根 package 与 lockfile 版本一致，并依次执行 `npm ci`、全量构建、检查和 `npm audit --audit-level=high`。全部通过后创建正式 GitHub Release，包含源码与构建产物 tar 包、`manifest.json`、Ed25519 `manifest.json.sig`、`SHA256SUMS` 和包内 `release-info.json`。manifest 固定声明 updater contract `1`、`npm-ci-on-target` 和 `/api/system/health`；缺少签名 Secret、公钥指纹 Variable 或二者不匹配时发布失败。密钥生成工具位于 `ops/release/generate-signing-keypair.js`。
 
 ## 数据备份与恢复
 
-系统状态页 `http://localhost:8900/#/system` 提供统一数据保护入口。员工工牌不保存数据；其余三个板块一次生成一个 `.lsbackup` 文件，恢复时上传同一个文件并逐个选择模块：
+系统状态页 `http://localhost:8900/#/system` 提供统一数据保护入口。员工工牌不保存数据；其余四个板块一次生成一个 `.lsbackup` 文件，恢复时上传同一个文件并逐个选择模块：
 
 1. 点击“下载全部数据库备份”；维护令牌模式按页面提示输入令牌，可信局域网免令牌模式可直接下载；
-2. 备份包含仓库货品标签、周边货品价签和付款凭证打印三套 SQLite 一致性快照；付款凭证快照包含 OCR 识别历史和调用次数账本，本机密钥模式下还会包含配套 OCR 密钥；
+2. 当前 writer 固定生成 `.lsbackup` `formatVersion: 2`，包含仓库货品标签、周边货品价签、付款凭证打印和价格展牌四套 SQLite 一致性快照；付款凭证快照包含 OCR 识别历史和调用次数账本，本机密钥模式下还会包含配套 OCR 密钥；
 3. 恢复时选择 `.lsbackup` 并点击“上传并检查”；上传只检查格式、长度、SHA-256、SQLite 完整性、表结构、业务字段和记录数，不会立即覆盖数据；
 4. 核对备份编号、创建时间和各表记录数，在目标模块点击“恢复此模块”；
-5. 二次确认弹窗中完整输入“恢复”。每次只在一个 SQLite 事务中覆盖一个模块，没有“一键恢复全部”；
+5. 二次确认弹窗中完整输入“恢复”。每次只恢复一个模块，没有跨四库的“一键恢复全部”；价格展牌采用严格校验后的 staged/rollback 整库替换；
 6. 用完后点击“清除”。服务端恢复会话最长保留 30 分钟，过期后必须重新上传。
+
+reader 同时接受历史 v1 三库包和当前 v2 四库包。v1 inspect 会将价格展牌明确显示为“未包含（not-in-backup）”，不能恢复价格展牌，也不会把现有价格展牌库恢复为空；v1 内原三个模块仍可分别恢复。旧 `0.4.x` 服务不能读取 v2，这是向前版本边界：升级时必须先更新代码并重启服务，再导入 v2，不能用旧服务预先恢复。
 
 恢复付款凭证模块时，销售和识别历史按备份替换；OCR 调用次数账本只按请求与尝试编号合并，不会清空目标服务器已有次数，避免通过恢复旧备份增加当月免费剩余次数。
 
@@ -385,6 +424,7 @@ git push origin v0.4.0
 
 - 仓库货品标签：板块内 Excel 导入导出和 SQLite `.db` 备份恢复；
 - 周边货品价签：板块内 JSON 导入导出，导入前校验并在单事务中全量恢复；
+- 价格展牌打印：板块内 JSON 与 SQLite DB 导入导出；两种导入都支持仅校验预检，确认后全量替换，DB 使用 staged/rollback 恢复；
 - 付款凭证打印：当前使用系统状态页统一入口恢复；
 - 员工工牌制作：页面刷新或关闭后自动清空，没有数据库备份。
 
@@ -398,7 +438,7 @@ LENOVO_STORE_BACKUP_DIR=/var/backups/lenovo-store-operations \
 npm run backup:data
 ```
 
-该命令通过 SQLite backup API 分别创建三个一致性快照，执行 `PRAGMA integrity_check`，记录各表数量、文件大小和 SHA-256，同时备份当前实际使用的 32 字节 OCR 加密密钥并验证它能够解密快照中的凭据，最后生成 `manifest.json`。无论运行时密钥来自本机文件还是 `OCR_CONFIG_ENCRYPTION_KEY`，备份内都统一保存为权限 `0600` 的 `secrets/receipt-ocr.key`；无法确认可恢复时整个备份会失败。备份先写入 staging 目录，全部成功后再发布为时间戳目录，不会覆盖已有备份。`LENOVO_STORE_BACKUP_DIR` 必须是绝对普通目录，不能是符号链接，也不能与代码目录或数据目录重叠。
+该命令通过 SQLite backup API 分别创建四个一致性快照，执行 `PRAGMA integrity_check`，记录各表数量、文件大小和 SHA-256，同时备份当前实际使用的 32 字节 OCR 加密密钥并验证它能够解密快照中的凭据，最后生成 `manifest.json`。价格展牌快照包含展牌、不可变版本、图片和来源快照。无论运行时密钥来自本机文件还是 `OCR_CONFIG_ENCRYPTION_KEY`，备份内都统一保存为权限 `0600` 的 `secrets/receipt-ocr.key`；无法确认可恢复时整个备份会失败。备份先写入 staging 目录，全部成功后再发布为时间戳目录，不会覆盖已有备份。`LENOVO_STORE_BACKUP_DIR` 必须是绝对普通目录，不能是符号链接，也不能与代码目录或数据目录重叠。
 
 付款凭证数据库中的 OCR 凭据是密文。只有配套的 `receipt-ocr.key` 才能解密；丢失密钥后不能从数据库恢复原凭据，需要在页面重新配置。
 
@@ -421,12 +461,12 @@ npm run backup:data
 
 | 命令 | 用途 |
 | --- | --- |
-| `npm run dev` | 同时启动五个前端开发服务器和统一后端 |
-| `npm run build` | 构建 Portal 和四个业务 SPA |
+| `npm run dev` | 同时启动六个前端开发服务器和统一后端 |
+| `npm run build` | 构建 Portal 和五个业务 SPA |
 | `npm start` | 启动 8900 统一生产服务 |
-| `npm run check` | 构建检查四个业务 SPA，并检查后端、数据脚本和 Release 脚本语法 |
-| `npm run migrate:data` | 一次性迁移三个旧项目数据库和 OCR 密钥，目标由 `LENOVO_STORE_DATA_DIR` 决定 |
-| `npm run backup:data` | 在线一致性备份三套 SQLite、OCR 密钥和校验清单 |
+| `npm run check` | 构建检查五个业务 SPA，并检查后端、数据脚本和 Release 脚本语法 |
+| `npm run migrate:data` | 一次性迁移三个旧项目数据库和 OCR 密钥；0.5.0 首次启动另建空价格展牌库 |
+| `npm run backup:data` | 在线一致性备份四套 SQLite、OCR 密钥和校验清单 |
 | `npm run release:verify -- vX.Y.Z` | 校验稳定版 tag 与根 package、lockfile 版本一致 |
 | `npm run release:pack -- vX.Y.Z` | 在全量构建后生成签名 Release 的源码与构建产物包、manifest 和 SHA-256 校验文件 |
 | `npm run release:sign` | 使用私钥签名 manifest，并核对 `RELEASE_SIGNING_PUBLIC_KEY_SHA256` 固定部署公钥指纹 |
@@ -457,7 +497,7 @@ curl http://127.0.0.1:8900/api/system/health
 - 使用 SQLite 的板块是否已有数据目录并成功连接数据库；
 - 板块处于“已迁移”或“已就绪”状态。
 
-员工工牌制作在健康接口中会返回 `apiReady: null`、`dataDirectoryReady: null` 和 `databaseConnected: null`，表示这些能力不适用，而不是运行异常。
+员工工牌制作在健康接口中会返回 `apiReady: null`、`dataDirectoryReady: null` 和 `databaseConnected: null`，表示这些能力不适用，而不是运行异常。当前 health、Release 和 updater 契约固定检查五个业务模块、四套 SQLite，以及 Portal + 5 个业务 SPA 的六套前端构建产物。
 
 ## 打印验收
 
@@ -466,15 +506,17 @@ curl http://127.0.0.1:8900/api/system/health
 1. 电脑商品标签是否为 46mm × 45mm，A4 纵向且每页 24 张；
 2. 商品价格标签是否为 70mm × 28mm，A4 横向且每页 28 张；
 3. 价格标签中的长商品名称字号自适应是否与改造前一致；
-4. 付款凭证是否在一张 A4 上正确显示存根和小票；
-5. 付款凭证 PNG 下载结果是否与打印预览内容一致；
-6. 员工工牌是否为 54mm × 85mm，A4 横向、5 列 × 2 行且每页 10 张；
-7. 员工工牌之间是否保留 2mm 横纵裁剪通道，裁切线是否未占用 54mm × 85mm 成品尺寸；
-8. 每名员工的打印份数是否可在 1–99 之间设置，人数、总张数和页数统计是否正确；
-9. 1 人 × 10 份是否恰好为 1 页，1 人 × 11 份是否为 2 页且第二页只有 1 张，没有额外空白页；
-10. “默认工牌”和“联想红工牌”的姓名、岗位、二维码、文案和裁切边界是否完整，二维码是否可正常扫码；
-11. 浏览器打印缩放是否为实际大小（100%），是否关闭“适合页面”和页眉页脚；
-12. 打印机驱动的纸张尺寸、方向、边距和缩放是否与浏览器一致。
+4. 价格展牌成品是否精确为 110mm × 110mm，A4 纵向、100% 实际大小且每页 2 张；
+5. 价格展牌是否从 A4 顶边开始打印、两张间距是否为 4.5mm，末页单张是否保持在顶部；
+6. 价格展牌长内容是否明确阻止保存/入队/打印，而不是自动缩字、裁切或改变冻结 DOM/CSS；图片是否全部加载后才打印；
+7. 付款凭证是否在一张 A4 上正确显示存根和小票，PNG 下载结果是否与打印预览一致；
+8. 员工工牌是否为 54mm × 85mm，A4 横向、5 列 × 2 行且每页 10 张；
+9. 员工工牌之间是否保留 2mm 横纵裁剪通道，裁切线是否未占用 54mm × 85mm 成品尺寸；
+10. 每名员工的打印份数是否可在 1–99 之间设置，人数、总张数和页数统计是否正确；
+11. 1 人 × 10 份是否恰好为 1 页，1 人 × 11 份是否为 2 页且第二页只有 1 张，没有额外空白页；
+12. “默认工牌”和“联想红工牌”的姓名、岗位、二维码、文案和裁切边界是否完整，二维码是否可正常扫码；
+13. 浏览器打印缩放是否为实际大小（100%），是否关闭“适合页面”和页眉页脚；
+14. 打印机驱动的纸张尺寸、方向、边距和缩放是否与浏览器一致。
 
 员工工牌的浏览器预览按真实毫米比例生成，打印文档使用完整的 297mm × 210mm A4 横向页面；5 × 2 个 54mm × 85mm 裁切格之间保留 2mm 横纵裁剪通道，总网格为 278mm × 172mm。打印机驱动仍可能执行二次缩放；首次使用时应打印 10 张和 11 张两组样张，确认分页无额外空白页，并测量单张 54mm × 85mm、相邻裁切线间距 2mm、整页网格 278mm × 172mm。若尺寸不符，应确认纸张为 A4、缩放为 100%，并关闭“适合页面”“缩放到可打印区域”等选项后重新打印。
 
@@ -488,7 +530,7 @@ curl http://127.0.0.1:8900/api/system/health
 PORT=8910 npm start
 ```
 
-对应的 Vite API 代理默认仍指向 8900。长期修改开发端口时，需要同步调整使用 API 代理的四个 `vite.config.js`；员工工牌没有 API 代理。
+对应的 Vite API 代理默认仍指向 8900。长期修改开发端口时，需要同步调整使用 API 代理的业务 `vite.config.js`；员工工牌没有 API 代理。
 
 ### `better-sqlite3` 原生模块架构不匹配
 
@@ -523,14 +565,15 @@ $LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key
 
 ## 项目状态
 
-四个联想业务板块已统一运行在 8900 端口：
+五个联想业务板块已统一运行在 8900 端口：
 
-- 三个既有板块的独立 SPA、API 和 SQLite 数据库已接入；
+- 仓库货品标签、周边货品价签、价格展牌打印和付款凭证打印均有独立 SPA、API 和 SQLite 数据库；员工工牌为纯浏览器 SPA；
+- 价格展牌支持冻结 110mm × 110mm DOM/CSS、溢出阻断、显式保存、100 版本上限、图片和来源快照、JSON/DB 导入导出及 A4 两张打印队列；
 - 员工工牌制作支持多员工录入、每人独立设置 1–99 打印份数及默认工牌/联想红工牌主题，使用真实 54mm × 85mm 裁切格、2mm 裁剪通道和完整 A4 横向页面完成 10 张/页预览与打印，不持久化员工信息；
-- 用户指定的联想 SVG Logo 已作为共享屏幕品牌资产，Portal 和四个业务 SPA 的中文命名已统一；
-- 旧数据库及 OCR 密钥支持一致性迁移；
-- Portal、健康检查、构建和生产静态托管已完成；
-- Portal 和四个业务 SPA 已接入共享屏幕设计令牌，板块工作区、页头、卡片、表单和按钮风格保持一致；
-- 四套打印实现分别维护，员工工牌通过隔离 iframe 打印，不会覆盖其他模块打印 CSS；
+- 用户指定的联想 SVG Logo 已作为共享屏幕品牌资产，Portal 和五个业务 SPA 的中文命名已统一；价格展牌已接入正式“想帮帮”Logo及产品名称右侧“AI 元启”默认图，数据库自定义图片保持优先；
+- 三个旧项目数据库及 OCR 密钥支持一致性迁移；价格展牌是 0.5.0 新模块，没有旧来源时首次启动创建空库；
+- Portal、五模块 health、四库备份恢复、六套前端构建和生产静态托管已完成；
+- Portal 和五个业务 SPA 已接入共享屏幕设计令牌，板块工作区、页头、卡片、表单和按钮风格保持一致；
+- 五套打印实现分别维护，价格展牌和员工工牌通过隔离 iframe 打印，不会覆盖其他模块打印 CSS；
 - 数据查询、导出、备份和 OCR 配置解密已通过无破坏冒烟验证；
-- 实体标签、员工工牌和 A4 付款凭证仍需在实际打印机上完成最终尺寸与颜色验收。
+- 实体标签、价格展牌、员工工牌和 A4 付款凭证仍需在实际打印机上完成最终尺寸与颜色验收。

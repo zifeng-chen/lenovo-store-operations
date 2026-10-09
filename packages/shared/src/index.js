@@ -26,6 +26,19 @@ export const STORE_MODULES = Object.freeze([
     stage: 'migrated'
   },
   {
+    id: 'price-placards',
+    name: '价格展牌打印',
+    shortName: '价格展牌打印',
+    iconText: '展',
+    description: '制作并打印 110mm × 110mm 价格展牌，也支持 A4 纸张输出。',
+    route: '/price-placards',
+    moduleBase: '/modules/price-placards/',
+    apiBase: '/api/price-placards',
+    persistence: 'sqlite',
+    accent: '#d2382f',
+    stage: 'migrated'
+  },
+  {
     id: 'receipt-assistant',
     name: '付款凭证打印',
     shortName: '付款凭证打印',

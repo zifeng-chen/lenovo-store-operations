@@ -107,7 +107,7 @@ body.print-preview-open { overflow: hidden; }
 .print-preview-page-card:last-child { margin-bottom: 0; }
 .print-preview-page-caption { margin: 0 0 8px; color: #55544f; font-size: 13px; font-weight: 800; text-align: center; }
 .print-preview-page { position: relative; width: 100%; aspect-ratio: 297 / 210; overflow: hidden; background: #fff; box-shadow: 0 10px 30px rgb(0 0 0 / 16%); }
-.print-preview-sheet { position: absolute; top: 3.095238%; left: 2.861953%; display: grid; width: 94.276094%; height: 93.333333%; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(7, minmax(0, 1fr)); gap: 0; }
+.print-preview-sheet { position: absolute; top: 0; left: 2.861953%; display: grid; width: 94.276094%; height: 93.333333%; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(7, minmax(0, 1fr)); gap: 0; }
 .print-preview-label { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: #fff; border: 1px solid #111; color: #000; container-type: inline-size; }
 .print-preview-label-top { position: absolute; top: 8.928571%; right: 3.571429%; left: 3.571429%; display: flex; height: 28.571429%; align-items: flex-start; justify-content: space-between; gap: 2.857143%; }
 .print-preview-logo { display: block; flex: 0 1 48.571429%; width: 48.571429%; max-width: 52%; height: auto; }
@@ -160,9 +160,9 @@ body.print-preview-open { overflow: hidden; }
   html, body, #app, .app-shell { width: 297mm; height: auto; min-width: 297mm; min-height: 0; margin: 0 !important; padding: 0 !important; overflow: visible !important; background: #fff !important; }
   .management-ui, .print-actions, .print-name-measurer, .print-preview-overlay, .toast { display: none !important; }
   .print-root { position: static; display: block !important; width: 297mm; height: auto; margin: 0; padding: 0; overflow: visible; }
-  .print-page { position: relative; width: 297mm; height: 209mm; margin: 0; padding: 0; overflow: hidden; break-inside: avoid-page; page-break-inside: avoid; }
-  .print-page + .print-page { break-before: page; page-break-before: always; }
-  .print-sheet { position: absolute; top: 50%; left: 50%; display: grid; width: 280mm; height: 196mm; max-height: 196mm; margin: 0; padding: 0; transform: translate(-50%, -50%); grid-template-columns: repeat(4, 70mm); grid-template-rows: repeat(7, 28mm); gap: 0; overflow: hidden; box-sizing: border-box; break-inside: avoid-page; page-break-inside: avoid; }
+  .print-page { position: relative; width: 297mm; height: 210mm; margin: 0; padding: 0; overflow: hidden; break-after: page; break-inside: avoid-page; page-break-after: always; page-break-inside: avoid; }
+  .print-page:last-child { break-after: auto; page-break-after: auto; }
+  .print-sheet { position: absolute; top: 0; left: 8.5mm; display: grid; width: 280mm; height: 196mm; max-height: 196mm; margin: 0; padding: 0; grid-template-columns: repeat(4, 70mm); grid-template-rows: repeat(7, 28mm); gap: 0; overflow: hidden; box-sizing: border-box; break-inside: avoid-page; page-break-inside: avoid; }
   .price-label { position: relative; width: 70mm; height: 28mm; overflow: hidden; break-inside: avoid; box-sizing: border-box; background: #fff; border: .5pt solid #000 !important; color: #000; page-break-inside: avoid; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .label-top-row { position: absolute; top: 2.5mm; right: 2.5mm; left: 2.5mm; display: flex; height: 8mm; align-items: flex-start; justify-content: space-between; gap: 2mm; }
   .label-logo { display: block; flex: 0 1 34mm; width: 34mm; max-width: 52%; height: auto; }

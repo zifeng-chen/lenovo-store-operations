@@ -16,6 +16,14 @@ import priceLabelsRouter, {
   getDatabase as getPriceLabelsDatabase,
   initializeDatabase as initializePriceLabelsDatabase
 } from './modules/price-labels/index.js';
+import {
+  apiBase as pricePlacardsApiBase,
+  createPricePlacardsRouter,
+  DATABASE_PATH as pricePlacardsDatabasePath,
+  getDatabase as getPricePlacardsDatabase,
+  initializeDatabase as initializePricePlacardsDatabase,
+  jsonParserLimit as pricePlacardsJsonParserLimit
+} from './modules/price-placards/index.js';
 import receiptAssistantRouter, {
   apiBase as receiptAssistantApiBase,
   DATABASE_PATH as receiptAssistantDatabasePath,
@@ -30,6 +38,7 @@ import {
   EXTERNAL_DATA_ROOT_CONFIGURED
 } from './config/data-paths.js';
 import { createGithubReleaseService } from './system/github-release-service.js';
+import { createMaintenanceAuthorizer, createSameOriginAuthorizer } from './system/maintenance-auth.js';
 import { createPersistenceService } from './system/persistence-service.js';
 import { runtimeInfo } from './system/runtime-info.js';
 import { createSystemPersistenceRouter } from './system/router.js';
@@ -53,6 +62,10 @@ if (!maintenanceToken) {
   console.warn('警告：未配置维护令牌，可信局域网客户端可执行系统备份、恢复和已启用的在线更新');
 }
 const app = express();
+const pricePlacardsRouter = createPricePlacardsRouter({
+  authorizeMutation: createSameOriginAuthorizer('价格展牌写操作必须来自同源页面'),
+  authorizeImport: createMaintenanceAuthorizer({ maintenanceToken, operation: '价格展牌全量导入' })
+});
 
 const moduleRuntimes = new Map([
   ['computer-labels', {
@@ -68,6 +81,13 @@ const moduleRuntimes = new Map([
     databasePath: priceLabelsDatabasePath,
     initializeDatabase: initializePriceLabelsDatabase
   }],
+  ['price-placards', {
+    apiBase: pricePlacardsApiBase,
+    router: pricePlacardsRouter,
+    databasePath: pricePlacardsDatabasePath,
+    initializeDatabase: initializePricePlacardsDatabase,
+    jsonParser: express.json({ limit: pricePlacardsJsonParserLimit })
+  }],
   ['receipt-assistant', {
     apiBase: receiptAssistantApiBase,
     router: receiptAssistantRouter,
@@ -80,6 +100,7 @@ const persistenceService = createPersistenceService({
   runtimes: new Map([
     ['computer-labels', { getDatabase: getComputerLabelsDatabase }],
     ['price-labels', { getDatabase: getPriceLabelsDatabase }],
+    ['price-placards', { getDatabase: getPricePlacardsDatabase }],
     ['receipt-assistant', { getDatabase: getReceiptAssistantDatabase }]
   ]),
   receiptMaintenance: receiptAssistantMaintenance,
@@ -111,7 +132,8 @@ app.enable('strict routing');
 const corsMiddleware = cors();
 app.use((request, response, next) => {
   const isRestrictedSystemRoute = request.path === '/api/system/health'
-    || request.path.startsWith('/api/system/update');
+    || request.path.startsWith('/api/system/update')
+    || request.path.startsWith('/api/price-placards');
   return isRestrictedSystemRoute ? next() : corsMiddleware(request, response, next);
 });
 
@@ -158,12 +180,35 @@ function moduleStatus(module) {
   };
 }
 
+const LEGACY_HEALTH_MODULE_IDS = new Set([
+  'computer-labels',
+  'price-labels',
+  'receipt-assistant',
+  'employee-badges'
+]);
+
+function moduleIsOperational(module) {
+  if (module.moduleReady !== true) return false;
+  if (module.persistence === 'none') return true;
+  return module.persistence === 'sqlite'
+    && module.apiReady === true
+    && module.dataDirectoryReady === true
+    && module.databaseConnected === true;
+}
+
 initializeDatabases();
 
-app.get('/api/system/health', (_req, res) => {
+app.get('/api/system/health', (req, res) => {
   res.removeHeader('Access-Control-Allow-Origin');
+  res.set('Cache-Control', 'no-store');
+  res.vary('User-Agent');
+  res.vary('X-Lenovo-Store-Health-Contract');
+  const allModules = STORE_MODULES.map(moduleStatus);
+  // v0.4 updater 使用 Node fetch 且没有契约头，并严格要求旧四模块集合。
+  const legacyUpdater = req.get('User-Agent') === 'node'
+    && req.get('X-Lenovo-Store-Health-Contract') !== '2';
   success(res, {
-    status: 'ok',
+    status: allModules.every(moduleIsOperational) ? 'ok' : 'degraded',
     service: 'lenovo-store-operations',
     version: runtimeInfo.version,
     build: runtimeInfo,
@@ -174,7 +219,9 @@ app.get('/api/system/health', (_req, res) => {
     updateInstallationEnabled,
     updateAuthenticationRequired: Boolean(maintenanceToken),
     portalReady: fs.existsSync(webIndex),
-    modules: STORE_MODULES.map(moduleStatus)
+    modules: legacyUpdater
+      ? allModules.filter(module => LEGACY_HEALTH_MODULE_IDS.has(module.id))
+      : allModules
   });
 });
 
@@ -232,8 +279,16 @@ app.use((_req, res) => {
 
 app.use((error, _req, res, _next) => {
   console.error(error);
-  const status = Number.isInteger(error.status) ? error.status : 500;
-  res.status(status).json({ code: 1, data: null, msg: error.message || '服务器内部错误' });
+  if (error?.type === 'entity.too.large') {
+    return res.status(413).json({ code: 1, data: null, msg: 'JSON 请求内容不能超过模块配置上限' });
+  }
+  if (error instanceof SyntaxError && error?.type === 'entity.parse.failed') {
+    return res.status(400).json({ code: 1, data: null, msg: 'JSON 请求内容无效' });
+  }
+  const status = Number.isInteger(error.status)
+    ? error.status
+    : Number.isInteger(error.statusCode) ? error.statusCode : 500;
+  return res.status(status).json({ code: 1, data: null, msg: error.message || '服务器内部错误' });
 });
 
 app.listen(port, host, () => {

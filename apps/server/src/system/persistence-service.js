@@ -10,6 +10,11 @@ import {
   isValidOcrBillingMonth,
   loadOrCreateLocalKey,
 } from '../modules/receipt-assistant/ocr-storage.js'
+import {
+  createDatabaseBackup as createPricePlacardsDatabaseBackup,
+  restoreDatabase as restorePricePlacardsDatabase,
+  validateDatabaseFile as validatePricePlacardsDatabaseFile,
+} from '../modules/price-placards/database.js'
 import { writeBackupPackage } from './backup-package.js'
 import { normalizeAddedDate } from '../calendar-date.js'
 
@@ -17,6 +22,7 @@ const MODULES = [
   { id: 'computer-labels', name: '仓库货品标签', entryId: 'computer-labels.database' },
   { id: 'price-labels', name: '周边货品价签', entryId: 'price-labels.database' },
   { id: 'receipt-assistant', name: '付款凭证打印', entryId: 'receipt-assistant.database' },
+  { id: 'price-placards', name: '价格展牌', entryId: 'price-placards.database' },
 ]
 const ROW_LIMITS = {
   'computer-labels.products': 200000,
@@ -26,6 +32,11 @@ const ROW_LIMITS = {
   'receipt-assistant.ocr_config': 1,
   'receipt-assistant.ocr_history': 2000000,
   'receipt-assistant.ocr_usage': 4000000,
+  'price-placards.placards': 1000,
+  'price-placards.versions': 100000,
+  'price-placards.images': 5000,
+  'price-placards.services': 5000,
+  'price-placards.imageBytes': 250 * 1024 * 1024,
 }
 
 function persistenceError(message, status = 400, code = 'INVALID_BACKUP_DATA') {
@@ -85,7 +96,21 @@ function countRows(db, moduleId, table) {
   return count
 }
 
-function validateDatabase(filePath, moduleId) {
+async function validateDatabase(filePath, moduleId) {
+  if (moduleId === 'price-placards') {
+    let counts
+    try {
+      counts = await validatePricePlacardsDatabaseFile(filePath)
+    } catch (error) {
+      throw persistenceError(`价格展牌数据库无效：${error.message}`)
+    }
+    for (const [name, count] of Object.entries(counts)) {
+      if (!Number.isSafeInteger(count) || count < 0 || count > ROW_LIMITS[`${moduleId}.${name}`]) {
+        throw persistenceError(`价格展牌的 ${name} 统计超出允许范围`)
+      }
+    }
+    return counts
+  }
   const db = openCandidate(filePath)
   try {
     const integrity = db.pragma('integrity_check', { simple: true })
@@ -313,8 +338,13 @@ export function createPersistenceService({ runtimes, receiptMaintenance, ocrKeyP
     const payloads = []
     for (const definition of MODULES) {
       const snapshotPath = path.join(workingDirectory, `${definition.id}.sqlite`)
-      await runtimes.get(definition.id).getDatabase().backup(snapshotPath)
-      const counts = validateDatabase(snapshotPath, definition.id)
+      let counts
+      if (definition.id === 'price-placards') {
+        counts = await createPricePlacardsDatabaseBackup(snapshotPath)
+      } else {
+        await runtimes.get(definition.id).getDatabase().backup(snapshotPath)
+        counts = await validateDatabase(snapshotPath, definition.id)
+      }
       payloads.push({ id: definition.entryId, moduleId: definition.id, kind: 'database', path: snapshotPath, counts })
     }
 
@@ -336,13 +366,28 @@ export function createPersistenceService({ runtimes, receiptMaintenance, ocrKeyP
     return writeBackupPackage({ outputPath, backupId, createdAt, payloads, ocrEncryption })
   }
 
-  function inspect(manifest, extracted) {
-    const modules = MODULES.map(definition => {
+  async function inspect(manifest, extracted) {
+    const modules = []
+    for (const definition of MODULES) {
       const databasePath = extracted.get(definition.entryId)
-      const counts = validateDatabase(databasePath, definition.id)
+      if (!databasePath) {
+        if (manifest.formatVersion !== 1 || definition.id !== 'price-placards') {
+          throw persistenceError(`${definition.name}数据库未包含在备份中`)
+        }
+        modules.push({
+          id: definition.id,
+          name: definition.name,
+          counts: {},
+          present: false,
+          status: 'absent',
+          error: 'not-in-backup',
+        })
+        continue
+      }
+      const counts = await validateDatabase(databasePath, definition.id)
       assertManifestCounts(manifest, definition.id, counts)
-      return { id: definition.id, name: definition.name, counts, status: 'ready', error: null }
-    })
+      modules.push({ id: definition.id, name: definition.name, counts, present: true, status: 'ready', error: null })
+    }
     try {
       validateOcrPair(manifest, extracted)
     } catch (error) {
@@ -350,17 +395,28 @@ export function createPersistenceService({ runtimes, receiptMaintenance, ocrKeyP
       receiptModule.status = 'incompatible'
       receiptModule.error = error.message
     }
-    return { backupId: manifest.backupId, createdAt: manifest.createdAt, modules, ocrEncryptionMode: manifest.ocrEncryption.mode }
+    return {
+      backupId: manifest.backupId,
+      createdAt: manifest.createdAt,
+      formatVersion: manifest.formatVersion,
+      modules,
+      ocrEncryptionMode: manifest.ocrEncryption.mode,
+    }
   }
 
   async function restore(moduleId, manifest, extracted) {
     const definition = MODULES.find(module => module.id === moduleId)
     if (!definition) throw persistenceError('不支持恢复此模块', 404, 'UNKNOWN_MODULE')
+    if (moduleId === 'price-placards' && manifest.formatVersion === 1) {
+      throw persistenceError('此 v1 备份未包含价格展牌数据库', 400, 'MODULE_NOT_IN_BACKUP')
+    }
     const sourcePath = extracted.get(definition.entryId)
-    const counts = validateDatabase(sourcePath, moduleId)
+    if (!sourcePath) throw persistenceError(`${definition.name}数据库未包含在备份中`, 400, 'MODULE_NOT_IN_BACKUP')
+    const counts = await validateDatabase(sourcePath, moduleId)
     assertManifestCounts(manifest, moduleId, counts)
     if (moduleId === 'computer-labels') restoreComputer(sourcePath, runtimes.get(moduleId).getDatabase())
     else if (moduleId === 'price-labels') restorePrice(sourcePath, runtimes.get(moduleId).getDatabase())
+    else if (moduleId === 'price-placards') await restorePricePlacardsDatabase(sourcePath)
     else {
       validateOcrPair(manifest, extracted)
       await receiptMaintenance.runRestore(() => restoreReceipt(sourcePath, runtimes.get(moduleId).getDatabase(), manifest, extracted, ocrKeyPath))

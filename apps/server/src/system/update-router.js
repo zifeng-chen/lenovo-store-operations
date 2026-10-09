@@ -1,9 +1,7 @@
-import crypto from 'node:crypto'
 import express, { Router } from 'express'
+import { createMaintenanceAuthorizer, createSameOriginAuthorizer } from './maintenance-auth.js'
 
 const TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
-const AUTH_WINDOW_MS = 15 * 60 * 1000
-const MAX_AUTH_FAILURES = 5
 
 function apiSuccess(response, data, message = 'success', status = 200) {
   response.status(status).json({ code: 0, data, msg: message })
@@ -16,82 +14,12 @@ function apiError(message, status = 400, code = 'UPDATE_REQUEST_ERROR') {
   return error
 }
 
-function sameOrigin(request) {
-  const origin = request.get('Origin')
-  if (!origin) return false
-  try {
-    return new URL(origin).origin === `${request.protocol}://${request.get('host')}`
-  } catch {
-    return false
-  }
-}
-
-function requireSameOrigin(request, response, next) {
-  if (!request.get('Origin')) return response.status(403).json({ code: 1, data: null, msg: '检查系统更新必须来自同源页面' })
-  if (!sameOrigin(request)) return response.status(403).json({ code: 1, data: null, msg: '仅允许同源检查系统更新' })
-  return next()
-}
-
-function matchesToken(value, expected) {
-  const actual = Buffer.from(value || '')
-  const wanted = Buffer.from(expected || '')
-  return actual.length === wanted.length && wanted.length > 0 && crypto.timingSafeEqual(actual, wanted)
-}
-
-function createInstallAuthorizer({ maintenanceToken }) {
-  const failures = new Map()
-
-  function failureKey(request) {
-    return request.ip || request.socket.remoteAddress || 'unknown'
-  }
-
-  function recentFailures(key) {
-    const cutoff = Date.now() - AUTH_WINDOW_MS
-    const values = (failures.get(key) || []).filter(value => value >= cutoff)
-    if (values.length) failures.set(key, values)
-    else failures.delete(key)
-    return values
-  }
-
-  function recordFailure(key) {
-    const values = recentFailures(key)
-    values.push(Date.now())
-    failures.set(key, values)
-  }
-
-  return function authorizeInstall(request, response, next) {
-    if (request.get('X-Lenovo-Store-Maintenance') !== '1') {
-      return response.status(403).json({ code: 1, data: null, msg: '缺少系统维护请求标识' })
-    }
-    if (request.get('Sec-Fetch-Site') === 'cross-site') {
-      return response.status(403).json({ code: 1, data: null, msg: '禁止跨站发起在线更新' })
-    }
-    if (!request.get('Origin') || !sameOrigin(request)) {
-      return response.status(403).json({ code: 1, data: null, msg: '在线更新必须来自同源 Portal 页面' })
-    }
-    if (!maintenanceToken) return next()
-
-    const key = failureKey(request)
-    if (recentFailures(key).length >= MAX_AUTH_FAILURES) {
-      response.set('Retry-After', String(AUTH_WINDOW_MS / 1000))
-      return response.status(429).json({ code: 1, data: null, msg: '维护身份验证失败次数过多，请稍后重试' })
-    }
-    const authorization = request.get('Authorization') || ''
-    const suppliedToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
-    if (!matchesToken(suppliedToken, maintenanceToken)) {
-      recordFailure(key)
-      return response.status(401).json({ code: 1, data: null, msg: '系统维护令牌无效' })
-    }
-    failures.delete(key)
-    return next()
-  }
-}
-
 export function createSystemUpdateRouter({ releaseService, ipcService, maintenanceToken = '' } = {}) {
   if (!releaseService) throw new Error('系统更新路由缺少 Release 检查服务')
   if (!ipcService) throw new Error('系统更新路由缺少更新器 IPC 服务')
   const router = Router()
-  const authorizeInstall = createInstallAuthorizer({ maintenanceToken })
+  const authorizeInstall = createMaintenanceAuthorizer({ maintenanceToken, operation: '在线更新' })
+  const requireSameOrigin = createSameOriginAuthorizer('检查系统更新必须来自同源页面')
   const jsonParser = express.json({ limit: '2kb', strict: true })
 
   function snapshot() {

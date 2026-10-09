@@ -1,0 +1,280 @@
+/* 展牌采用 120mm 内层设计，并缩放到 110mm 最终输出。 */
+.card-outer,
+.card-outer * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.card-outer {
+    width: 110mm;
+    height: 110mm;
+    overflow: hidden;
+    flex: none;
+    background: #fff;
+}
+
+.card {
+    width: 120mm;
+    height: 120mm;
+    border: 0;
+    outline: 0.5px solid #222;
+    outline-offset: -0.5px;
+    padding: 3mm 6mm 13.09px;
+    color: #000;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    font-family: "Source Han Sans SC", "思源黑体", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    transform: scale(0.9166666667);
+    transform-origin: top left;
+}
+
+.product-header {
+    display: flex;
+    height: 15mm;
+    align-items: center;
+    flex: none;
+}
+
+.product-title {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    overflow: hidden;
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 30px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.product-image-box {
+    display: flex;
+    width: 9mm;
+    height: 9mm;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex: none;
+    margin-left: 5px;
+    border: 1px dashed #999;
+    color: #999;
+    background: #f5f5f5;
+    font-size: 6px;
+}
+
+.product-image-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.default-icon {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: #ff6a00;
+    font-size: 5px;
+    font-weight: 700;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 7mm;
+    row-gap: calc(6mm - 5px);
+    flex: none;
+}
+
+.feature {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+}
+
+.icon {
+    display: flex;
+    width: 32.73px;
+    height: 32.73px;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex: none;
+    background: #ff6a00;
+}
+
+.icon img {
+    display: block;
+    width: 70%;
+    height: 70%;
+    object-fit: contain;
+}
+
+.feature-text {
+    min-width: 0;
+    margin-left: 3mm;
+}
+
+.feature-title {
+    overflow: hidden;
+    font-size: 11.91px;
+    font-weight: 700;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.feature-desc {
+    overflow: hidden;
+    margin-top: 1mm;
+    font-size: 10.82px;
+    font-weight: 700;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.line {
+    height: 0.5px;
+    margin-top: 6mm;
+    flex: none;
+    background: #333;
+}
+
+.product-list {
+    display: flex;
+    margin-top: calc(5mm - 4.5px);
+    overflow: hidden;
+    flex: none;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+.product-row {
+    display: flex;
+    height: calc(20.18px + var(--price-row-spacing, 0px));
+    align-items: center;
+    justify-content: space-between;
+    flex: none;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.5;
+}
+
+.price {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5em;
+    font-size: 13px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.money {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5em;
+    white-space: nowrap;
+}
+
+.color-text {
+    color: #333;
+    font-size: 13px;
+    font-weight: 700;
+    flex: none;
+}
+
+.flex-spacer {
+    min-height: 0;
+    flex: 1;
+}
+
+.accessory {
+    margin-top: 0;
+    margin-bottom: 7.64px;
+    flex: none;
+}
+
+.accessory-title {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.accessory-title + .accessory-title {
+    margin-top: 3px;
+}
+
+.accessory-price {
+    display: inline-flex;
+    align-items: baseline;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.service {
+    margin-top: 0;
+    padding-top: 0;
+    flex: none;
+}
+
+.service-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4.91px;
+    font-size: 9.82px;
+    font-weight: 900;
+    line-height: 1.2;
+}
+
+.service-line {
+    height: 0.5px;
+    margin-left: 3mm;
+    flex: 1;
+    background: #aaa;
+}
+
+.service-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.service-row:last-child {
+    margin-bottom: 0;
+}
+
+.service-price {
+    display: inline-flex;
+    align-items: baseline;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.hidden-input {
+    display: none;
+}
+
+.service-title-slot {
+    display: inline-flex;
+    height: 6.5mm;
+    align-items: center;
+}
+
+.service-title-logo {
+    display: block;
+    width: auto;
+    height: 6.5mm;
+    object-fit: contain;
+}
