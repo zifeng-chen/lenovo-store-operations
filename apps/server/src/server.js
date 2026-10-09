@@ -42,7 +42,11 @@ import { createMaintenanceAuthorizer, createSameOriginAuthorizer } from './syste
 import { createPersistenceService } from './system/persistence-service.js';
 import { runtimeInfo } from './system/runtime-info.js';
 import { createSystemPersistenceRouter } from './system/router.js';
-import { createUpdateIpcService } from './system/update-ipc-service.js';
+import {
+  createUpdateIpcService,
+  detectInstalledUpdatePlatform,
+  resolveUpdateInstallationEnablement
+} from './system/update-ipc-service.js';
 import { createSystemUpdateRouter } from './system/update-router.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -53,13 +57,33 @@ const webIndex = path.join(webDist, 'index.html');
 const host = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.PORT) || 8900;
 const maintenanceToken = String(process.env.LENOVO_STORE_MAINTENANCE_TOKEN || '').trim();
-const updateInstallationEnabled = String(process.env.LENOVO_STORE_UPDATE_ENABLED || '').trim().toLowerCase() === 'true';
+const updateRequestPath = process.env.LENOVO_STORE_UPDATE_REQUEST_PATH || '/run/lenovo-store-updater/request.json';
+const updateProcessingPath = process.env.LENOVO_STORE_UPDATE_PROCESSING_PATH || '/run/lenovo-store-updater/claimed/processing.json';
+const updateStatePath = process.env.LENOVO_STORE_UPDATE_STATE_PATH || '/var/lib/lenovo-store-updater/status.json';
+const updaterConfigPath = process.env.LENOVO_STORE_UPDATER_CONFIG || '/etc/lenovo-store-updater.json';
+const updaterProgramPath = '/usr/local/lib/lenovo-store-updater/updater.mjs';
+const updaterPlatformDetected = detectInstalledUpdatePlatform({
+  configPath: updaterConfigPath,
+  programPath: updaterProgramPath,
+  requestPath: updateRequestPath,
+  processingPath: updateProcessingPath,
+  statePath: updateStatePath,
+});
+const updateEnablement = resolveUpdateInstallationEnablement(
+  process.env.LENOVO_STORE_UPDATE_ENABLED,
+  updaterPlatformDetected,
+);
+const updateInstallationEnabled = updateEnablement.enabled;
+const updateEnablementSource = updateEnablement.source;
 const githubToken = process.env.LENOVO_STORE_GITHUB_TOKEN || '';
 if (process.env.NODE_ENV === 'production' && maintenanceToken && maintenanceToken.length < 24) {
   throw new Error('生产环境的 LENOVO_STORE_MAINTENANCE_TOKEN 必须至少包含 24 个字符');
 }
 if (!maintenanceToken) {
   console.warn('警告：未配置维护令牌，可信局域网客户端可执行系统备份、恢复和已启用的在线更新');
+}
+if (updateEnablementSource === 'detected') {
+  console.info('检测到完整的 root updater 平台，已自动启用在线安装入口');
 }
 const app = express();
 const pricePlacardsRouter = createPricePlacardsRouter({
@@ -109,9 +133,10 @@ const persistenceService = createPersistenceService({
 const githubReleaseService = createGithubReleaseService({ githubToken });
 const updateIpcService = createUpdateIpcService({
   enabled: updateInstallationEnabled,
-  requestPath: process.env.LENOVO_STORE_UPDATE_REQUEST_PATH || '/run/lenovo-store-updater/request.json',
-  processingPath: process.env.LENOVO_STORE_UPDATE_PROCESSING_PATH || '/run/lenovo-store-updater/claimed/processing.json',
-  statePath: process.env.LENOVO_STORE_UPDATE_STATE_PATH || '/var/lib/lenovo-store-updater/status.json'
+  enablementSource: updateEnablementSource,
+  requestPath: updateRequestPath,
+  processingPath: updateProcessingPath,
+  statePath: updateStatePath
 });
 const systemUpdateRouter = createSystemUpdateRouter({
   releaseService: githubReleaseService,
@@ -217,6 +242,8 @@ app.get('/api/system/health', (req, res) => {
     maintenanceAuthenticationRequired: Boolean(maintenanceToken),
     maintenanceAccessMode: maintenanceToken ? 'token' : 'trusted-lan',
     updateInstallationEnabled,
+    updateInstallationDetected: updaterPlatformDetected,
+    updateEnablementSource,
     updateAuthenticationRequired: Boolean(maintenanceToken),
     portalReady: fs.existsSync(webIndex),
     modules: legacyUpdater

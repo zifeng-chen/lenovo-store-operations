@@ -471,6 +471,14 @@ const canInstallUpdate = computed(() => Boolean(
   && !updateStatus.value?.stale
   && !updateStatus.value?.lastError
 ));
+const installButtonText = computed(() => {
+  const installation = updateStatus.value?.installation;
+  if (installation?.active) return '安装进行中';
+  if (!installation?.enabled) return '在线安装未启用';
+  if (!installation?.configured) return '更新器未配置';
+  if (updateStatus.value?.stale) return '请重新检查更新';
+  return '安装最新版本';
+});
 const installationTagType = computed(() => {
   const status = installationState.value?.status;
   if (status === 'succeeded') return 'success';
@@ -561,17 +569,19 @@ onBeforeUnmount(() => {
           <el-tag type="info" effect="plain">stable</el-tag>
           <el-button type="primary" :loading="updateLoading" :disabled="updateStatus?.installation?.active" @click="checkForUpdates">检查更新</el-button>
           <el-button
-            v-if="updateStatus?.installation?.enabled"
+            v-if="updateStatus?.installation"
             type="warning"
             :loading="installSubmitting || updateStatus.installation.active"
             :disabled="!canInstallUpdate"
             @click="installLatestUpdate"
-          >{{ updateStatus.installation.active ? '安装进行中' : '安装最新版本' }}</el-button>
+          >{{ installButtonText }}</el-button>
         </div>
       </div>
 
       <el-alert v-if="updateError" :title="`${updateError}；业务服务不受影响。`" type="warning" :closable="false" show-icon />
-      <el-alert v-if="updateStatus?.installation?.enabled && !updateStatus.installation.configured" title="在线安装已启用，但 Ubuntu 更新器目录或权限尚未配置完成；安装按钮保持禁用。" type="error" :closable="false" show-icon />
+      <el-alert v-if="updateStatus?.updateAvailable && !updateStatus.installation?.enabled" title="已检测到新版本，但在线安装未启用。请安装root updater平台，或在环境文件中显式设置 LENOVO_STORE_UPDATE_ENABLED=true 后重启服务。" type="warning" :closable="false" show-icon />
+      <el-alert v-if="updateStatus?.installation?.enabled && !updateStatus.installation.configured" :title="`在线安装已启用，但更新器目录或权限尚未配置完成：${updateStatus.installation.configurationError || '请检查IPC目录'}。`" type="error" :closable="false" show-icon />
+      <el-alert v-if="updateStatus?.updateAvailable && updateStatus.stale && !updateStatus.lastError" title="当前更新结果已过期，请点击“检查更新”获取有效结果后再安装。" type="warning" :closable="false" show-icon />
       <el-alert v-if="updateStatus?.searchTruncated" title="Release 数量超过检查上限，当前结果仅基于最近 300 条记录。" type="warning" :closable="false" show-icon />
 
       <div v-loading="updateLoading" class="update-content">

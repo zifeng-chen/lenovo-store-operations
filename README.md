@@ -16,7 +16,7 @@
 
 每次功能、配置、部署方式或文档更新都必须同步维护 GitHub 仓库文档，并按 `YYYY-MM-DD` 记录更新日期和主要内容。最新更新与完整历史请查看 [CHANGELOG.md](CHANGELOG.md)。
 
-当前最新记录：`2026-09-07`，发布 `0.5.0`：新增独立价格展牌模块、110mm 成品、全局想帮帮服务库、不可变版本历史、图片和商品来源快照、JSON/DB 导入导出及 A4 打印队列；五个打印模块统一从 A4 顶边向下排列，周边货品多页打印改为隔离 iframe；统一备份升级为 `.lsbackup` v2 四库格式，读取端继续兼容历史 v1 三库包；Portal、Release 和 updater 同步为五个业务模块、四套 SQLite、Portal + 5 个 SPA。
+当前最新记录：`2026-10-09`，发布 `0.5.1`：完整安装标准 root updater 平台但遗漏启用环境变量时，服务端可安全自动识别并启用在线安装入口；系统状态页始终展示安装能力状态，明确提示未启用、未配置或检查结果过期。`0.5.0` 新增独立价格展牌模块、110mm 成品、全局想帮帮服务库、五模块顶部打印、周边货品多页 iframe 修复及 `.lsbackup` v2 四库格式。
 
 ## 板块说明
 
@@ -380,7 +380,7 @@ npm run migrate:data
 
 系统状态页 `http://localhost:8900/#/system` 检查固定仓库 `zifeng-chen/lenovo-store-operations` 的稳定 Release。完成 Ubuntu 更新平台安装后，检测到更高版本会显示“安装最新版本”按钮：
 
-- `GET /api/system/update/status`：读取当前版本、最近一次检查和安装任务状态，不主动连接 GitHub；
+- `GET /api/system/update/status`：读取当前版本、最近一次检查和安装任务状态，不主动连接 GitHub；从 `0.5.1` 起，若标准 root updater 配置、程序及 IPC 目录全部安全存在且未显式设置启用变量，服务会自动识别并启用安装入口；显式 `LENOVO_STORE_UPDATE_ENABLED=false` 始终禁用；
 - `POST /api/system/update/check`：仅接受同源页面触发，使用 8 秒超时、15 分钟成功缓存、GitHub 限流退避、`ETag` 条件请求，并在最多 300 条 Release 内比较严格 `vX.Y.Z` 稳定版本；
 - `POST /api/system/update/install`：只接受服务端刚成功检查、未过期、无错误且确认为 latest 的新版本 tag；请求必须带维护标识、非空同源 `Origin`，并拒绝 `Sec-Fetch-Site: cross-site`；
 - 未配置 `LENOVO_STORE_MAINTENANCE_TOKEN` 时，可信局域网 Portal 可免 Bearer 提交；配置后在线更新与备份恢复共同使用维护令牌。固定维护标识和同源检查不是账号认证，无令牌部署必须用 UFW、VLAN 或反向代理 ACL 限制可信网段，禁止公网暴露；
@@ -390,13 +390,13 @@ npm run migrate:data
 
 可选 `LENOVO_STORE_GITHUB_TOKEN` 只由服务端版本检查使用，不进入浏览器、API 响应、日志或 Git；root updater 当前使用 GitHub 公开 Release 下载接口，因此发布资产必须保持公开。首次启用、`0.3.0` Git checkout 迁移、故障演练和人工回退见 [Ubuntu 部署指南](docs/ubuntu-deployment.md)。
 
-根 `package.json` 的 `version` 是整套产品的唯一发布版本。准备新版本时先更新版本、README、CHANGELOG 和相关文档并提交，再创建完全一致的严格 `vX.Y.Z` tag。例如发布 `0.5.0`：
+根 `package.json` 的 `version` 是整套产品的唯一发布版本。准备新版本时先更新版本、README、CHANGELOG 和相关文档并提交，再创建完全一致的严格 `vX.Y.Z` tag。例如发布 `0.5.1`：
 
 ```bash
-npm version 0.5.0 --no-git-tag-version --workspaces=false
+npm version 0.5.1 --no-git-tag-version --workspaces=false
 # 按实际日期更新文档和 CHANGELOG，完成验证后提交并推送 main
-git tag v0.5.0
-git push origin v0.5.0
+git tag v0.5.1
+git push origin v0.5.1
 ```
 
 `.github/workflows/release.yml` 会校验 tag、根 package 与 lockfile 版本一致，并依次执行 `npm ci`、全量构建、检查和 `npm audit --audit-level=high`。全部通过后创建正式 GitHub Release，包含源码与构建产物 tar 包、`manifest.json`、Ed25519 `manifest.json.sig`、`SHA256SUMS` 和包内 `release-info.json`。manifest 固定声明 updater contract `1`、`npm-ci-on-target` 和 `/api/system/health`；缺少签名 Secret、公钥指纹 Variable 或二者不匹配时发布失败。密钥生成工具位于 `ops/release/generate-signing-keypair.js`。
