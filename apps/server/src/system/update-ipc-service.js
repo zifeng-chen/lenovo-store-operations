@@ -153,8 +153,49 @@ function writeRequestAtomic(requestPath, request) {
   }
 }
 
+function isSafeInstalledFile(filePath) {
+  try {
+    const stats = fs.lstatSync(filePath)
+    return stats.isFile() && !stats.isSymbolicLink()
+  } catch {
+    return false
+  }
+}
+
+function isSafeInstalledDirectory(directoryPath) {
+  try {
+    const stats = fs.lstatSync(directoryPath)
+    return stats.isDirectory() && !stats.isSymbolicLink() && fs.realpathSync(directoryPath) === directoryPath
+  } catch {
+    return false
+  }
+}
+
+export function detectInstalledUpdatePlatform({
+  configPath = '/etc/lenovo-store-updater.json',
+  programPath = '/usr/local/lib/lenovo-store-updater/updater.mjs',
+  requestPath = '/run/lenovo-store-updater/request.json',
+  processingPath = '/run/lenovo-store-updater/claimed/processing.json',
+  statePath = '/var/lib/lenovo-store-updater/status.json',
+} = {}) {
+  return isSafeInstalledFile(configPath)
+    && isSafeInstalledFile(programPath)
+    && isSafeInstalledDirectory(path.dirname(requestPath))
+    && isSafeInstalledDirectory(path.dirname(processingPath))
+    && isSafeInstalledDirectory(path.dirname(statePath))
+}
+
+export function resolveUpdateInstallationEnablement(value, platformDetected = false) {
+  const setting = String(value || '').trim().toLowerCase()
+  if (setting) return { enabled: setting === 'true', source: 'environment' }
+  return platformDetected
+    ? { enabled: true, source: 'detected' }
+    : { enabled: false, source: 'disabled' }
+}
+
 export function createUpdateIpcService({
   enabled = false,
+  enablementSource = 'environment',
   requestPath = '/run/lenovo-store-updater/request.json',
   processingPath = '/run/lenovo-store-updater/claimed/processing.json',
   statePath = '/var/lib/lenovo-store-updater/status.json',
@@ -197,6 +238,7 @@ export function createUpdateIpcService({
     }
     return {
       enabled,
+      enablementSource,
       configured,
       active: Boolean(currentState && ACTIVE_STATUSES.has(currentState.status)),
       state: currentState,

@@ -660,6 +660,8 @@ LENOVO_STORE_GITHUB_TOKEN=<只读 GitHub token，仅用于服务端版本检查>
 LENOVO_STORE_MAINTENANCE_TOKEN=<至少24字符的随机维护令牌>
 ```
 
+`0.5.1` 起，如果标准 root updater 配置、程序和 request/claimed/state 目录已经完整安全安装，而环境文件遗漏 `LENOVO_STORE_UPDATE_ENABLED`，服务会自动识别并启用在线安装入口。显式设置 `LENOVO_STORE_UPDATE_ENABLED=false` 始终禁用；未安装 updater 时不会自动启用。
+
 生成维护令牌的示例：
 
 ```bash

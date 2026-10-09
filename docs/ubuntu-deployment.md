@@ -402,7 +402,7 @@ Web 服务只提交 tag 和任务编号，不接收 URL、commit、Shell 参数�
 
 系统状态页和 API 采用以下边界：
 
-- `GET /api/system/update/status` 返回当前版本、最近检查和已脱敏安装状态，不主动联网；
+- `GET /api/system/update/status` 返回当前版本、最近检查和已脱敏安装状态，不主动联网；从 `0.5.1` 起，环境变量未设置时只有在标准 root updater 配置、程序、request/claimed/state 目录全部安全存在后才自动启用安装入口，显式 `LENOVO_STORE_UPDATE_ENABLED=false` 始终优先禁用；
 - `POST /api/system/update/check` 仅接受同源页面，固定访问 `zifeng-chen/lenovo-store-operations` Releases API，只比较非草稿、非预发布、严格 `vX.Y.Z` 的稳定版本；
 - `POST /api/system/update/install` 必须带 `X-Lenovo-Store-Maintenance: 1`、非空同源 `Origin`，拒绝 `Sec-Fetch-Site: cross-site`，body 只能是 `{ "tag": "vX.Y.Z" }`；缓存结果 stale、最后检查失败、无新版本或 tag 不等于刚检测到的 latest 时一律拒绝；
 - 未配置维护令牌时不要求 Bearer；配置 `LENOVO_STORE_MAINTENANCE_TOKEN` 后缺失或错误 Bearer 会拒绝，并对 15 分钟内连续失败限流；
