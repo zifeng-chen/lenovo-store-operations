@@ -59,8 +59,10 @@ export const COMPUTER_LABELS_DATA_DIR = path.join(DATA_ROOT, 'computer-labels');
 export const COMPUTER_LABELS_DATABASE_PATH = path.join(COMPUTER_LABELS_DATA_DIR, 'database.sqlite');
 export const PRICE_LABELS_DATA_DIR = path.join(DATA_ROOT, 'price-labels');
 export const PRICE_LABELS_DATABASE_PATH = path.join(PRICE_LABELS_DATA_DIR, 'database.sqlite');
-export const PRICE_PLACARDS_DATA_DIR = path.join(DATA_ROOT, 'price-placards');
-export const PRICE_PLACARDS_DATABASE_PATH = path.join(PRICE_PLACARDS_DATA_DIR, 'database.sqlite');
 export const RECEIPT_ASSISTANT_DATA_DIR = path.join(DATA_ROOT, 'receipt-assistant');
 export const RECEIPT_ASSISTANT_DATABASE_PATH = path.join(RECEIPT_ASSISTANT_DATA_DIR, 'database.sqlite');
 export const RECEIPT_OCR_KEY_PATH = path.join(DATA_ROOT, 'secrets', 'receipt-ocr.key');
+
+// 统一数据库：单文件多表，各模块的表用模块前缀隔离，互不影响。
+export const UNIFIED_DATA_DIR = path.join(DATA_ROOT, 'store');
+export const UNIFIED_DATABASE_PATH = path.join(UNIFIED_DATA_DIR, 'store.sqlite');

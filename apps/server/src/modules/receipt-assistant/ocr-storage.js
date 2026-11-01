@@ -1,6 +1,11 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { tableName } from '../../db/unified-database.js'
+
+const OCR_CONFIG = tableName('receipt-assistant', 'ocr_config')
+const OCR_HISTORY = tableName('receipt-assistant', 'ocr_history')
+const OCR_USAGE = tableName('receipt-assistant', 'ocr_usage')
 
 const ENCRYPTION_CONTEXT = Buffer.from('lenovo-pos-ocr-config:v1')
 export const OCR_MONTHLY_FREE_LIMIT = 500
@@ -105,13 +110,16 @@ function mapHistoryRow(row, includeRecognizedText = false) {
     createdAt: row.created_at,
   }
   if (includeRecognizedText) result.recognizedText = row.recognized_text || ''
+  if (includeRecognizedText && row.structured_json) {
+    try { result.structured = JSON.parse(row.structured_json) } catch { result.structured = null }
+  }
   return result
 }
 
 export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
   if (!db) throw new Error('OCR storage requires a database')
   db.exec(`
-    CREATE TABLE IF NOT EXISTS ocr_config (
+    CREATE TABLE IF NOT EXISTS ${OCR_CONFIG} (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       ciphertext TEXT NOT NULL,
       iv TEXT NOT NULL,
@@ -119,7 +127,7 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
       version INTEGER NOT NULL DEFAULT 1,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-    CREATE TABLE IF NOT EXISTS ocr_history (
+    CREATE TABLE IF NOT EXISTS ${OCR_HISTORY} (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       request_id TEXT NOT NULL UNIQUE,
       status TEXT NOT NULL CHECK (status IN ('success', 'failure', 'cancelled')),
@@ -127,6 +135,7 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
       matched_text TEXT,
       words_count INTEGER NOT NULL DEFAULT 0,
       recognized_text TEXT,
+      structured_json TEXT,
       error_code TEXT,
       http_status INTEGER,
       error_message TEXT,
@@ -134,8 +143,8 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_receipt_ocr_history_created_at
-      ON ocr_history (created_at DESC, id DESC);
-    CREATE TABLE IF NOT EXISTS ocr_usage (
+      ON ${OCR_HISTORY} (created_at DESC, id DESC);
+    CREATE TABLE IF NOT EXISTS ${OCR_USAGE} (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       request_id TEXT NOT NULL,
       attempt_no INTEGER NOT NULL CHECK (attempt_no > 0),
@@ -144,12 +153,17 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
       UNIQUE (request_id, attempt_no)
     );
     CREATE INDEX IF NOT EXISTS idx_receipt_ocr_usage_billing_month
-      ON ocr_usage (billing_month, id);
+      ON ${OCR_USAGE} (billing_month, id);
   `)
+
+  const historyColumns = new Set(db.prepare(`PRAGMA table_info(${OCR_HISTORY})`).all().map(column => column.name))
+  if (!historyColumns.has('structured_json')) {
+    db.exec(`ALTER TABLE ${OCR_HISTORY} ADD COLUMN structured_json TEXT`)
+  }
 
   let encryptionKey = decodeEnvironmentKey(environmentKey)
   const getEncryptionKey = () => encryptionKey || (encryptionKey = loadOrCreateLocalKey(keyFilePath))
-  const getCredentialRow = () => db.prepare('SELECT * FROM ocr_config WHERE id = 1').get()
+  const getCredentialRow = () => db.prepare(`SELECT * FROM ${OCR_CONFIG} WHERE id = 1`).get()
 
   function encryptCredentials(credentials) {
     const iv = crypto.randomBytes(12)
@@ -180,7 +194,7 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
   }
 
   function getCredentialMetadata() {
-    const row = db.prepare('SELECT version, updated_at FROM ocr_config WHERE id = 1').get()
+    const row = db.prepare(`SELECT version, updated_at FROM ${OCR_CONFIG} WHERE id = 1`).get()
     return row ? { version: row.version, updatedAt: row.updated_at } : { version: 0, updatedAt: null }
   }
 
@@ -192,24 +206,25 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
       throw error
     }
     const encrypted = encryptCredentials({ apiKey, secretKey })
-    if (row) db.prepare("UPDATE ocr_config SET ciphertext = ?, iv = ?, auth_tag = ?, version = version + 1, updated_at = datetime('now') WHERE id = 1").run(encrypted.ciphertext, encrypted.iv, encrypted.authTag)
-    else db.prepare('INSERT INTO ocr_config (id, ciphertext, iv, auth_tag, version) VALUES (1, ?, ?, ?, 1)').run(encrypted.ciphertext, encrypted.iv, encrypted.authTag)
+    if (row) db.prepare("UPDATE ${OCR_CONFIG} SET ciphertext = ?, iv = ?, auth_tag = ?, version = version + 1, updated_at = datetime('now') WHERE id = 1").run(encrypted.ciphertext, encrypted.iv, encrypted.authTag)
+    else db.prepare(`INSERT INTO ${OCR_CONFIG} (id, ciphertext, iv, auth_tag, version) VALUES (1, ?, ?, ?, 1)`).run(encrypted.ciphertext, encrypted.iv, encrypted.authTag)
     return loadCredentials()
   })
 
-  const insertHistoryStatement = db.prepare(`INSERT INTO ocr_history (request_id, status, amount, matched_text, words_count, recognized_text, error_code, http_status, error_message, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  const insertHistoryStatement = db.prepare(`INSERT INTO ${OCR_HISTORY} (request_id, status, amount, matched_text, words_count, recognized_text, structured_json, error_code, http_status, error_message, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
   function insertHistory(entry) {
-    const result = insertHistoryStatement.run(entry.requestId, entry.status, entry.amount ?? null, entry.matchedText || null, Number(entry.wordsCount) || 0, entry.recognizedText ? String(entry.recognizedText).slice(0, 100000) : null, entry.errorCode || null, entry.httpStatus || null, entry.errorMessage ? String(entry.errorMessage).slice(0, 1000) : null, Math.max(0, Math.round(Number(entry.durationMs) || 0)))
+    const structured = entry.structured ? JSON.stringify(entry.structured).slice(0, 200000) : null
+    const result = insertHistoryStatement.run(entry.requestId, entry.status, entry.amount ?? null, entry.matchedText || null, Number(entry.wordsCount) || 0, entry.recognizedText ? String(entry.recognizedText).slice(0, 100000) : null, structured, entry.errorCode || null, entry.httpStatus || null, entry.errorMessage ? String(entry.errorMessage).slice(0, 1000) : null, Math.max(0, Math.round(Number(entry.durationMs) || 0)))
     return Number(result.lastInsertRowid)
   }
 
   function listHistory({ page, pageSize }) {
-    const total = db.prepare('SELECT COUNT(*) AS count FROM ocr_history').get().count
-    const rows = db.prepare('SELECT id, request_id, status, amount, matched_text, words_count, error_code, http_status, error_message, duration_ms, created_at FROM ocr_history ORDER BY id DESC LIMIT ? OFFSET ?').all(pageSize, (page - 1) * pageSize)
+    const total = db.prepare(`SELECT COUNT(*) AS count FROM ${OCR_HISTORY}`).get().count
+    const rows = db.prepare(`SELECT id, request_id, status, amount, matched_text, words_count, error_code, http_status, error_message, duration_ms, created_at FROM ${OCR_HISTORY} ORDER BY id DESC LIMIT ? OFFSET ?`).all(pageSize, (page - 1) * pageSize)
     return { items: rows.map(row => mapHistoryRow(row)), total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) }
   }
 
-  const insertUsageStatement = db.prepare('INSERT INTO ocr_usage (request_id, attempt_no, billing_month) VALUES (?, ?, ?)')
+  const insertUsageStatement = db.prepare(`INSERT INTO ${OCR_USAGE} (request_id, attempt_no, billing_month) VALUES (?, ?, ?)`)
   function recordUsageAttempt({ requestId, attemptNo, date = new Date() }) {
     const normalizedRequestId = String(requestId || '').trim()
     if (!normalizedRequestId || normalizedRequestId.length > 128 || !Number.isInteger(attemptNo) || attemptNo < 1 || attemptNo > 10) {
@@ -222,8 +237,8 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
 
   function getUsage(month = getOcrBillingMonth()) {
     if (!isValidOcrBillingMonth(month)) throw createStorageError('OCR 额度月份必须符合 YYYY-MM', 'OCR_BILLING_MONTH_INVALID')
-    const used = Number(db.prepare('SELECT COUNT(*) AS count FROM ocr_usage WHERE billing_month = ?').get(month).count) || 0
-    const trackingSince = db.prepare('SELECT MIN(created_at) AS value FROM ocr_usage').get().value || null
+    const used = Number(db.prepare(`SELECT COUNT(*) AS count FROM ${OCR_USAGE} WHERE billing_month = ?`).get(month).count) || 0
+    const trackingSince = db.prepare(`SELECT MIN(created_at) AS value FROM ${OCR_USAGE}`).get().value || null
     return {
       month,
       timezone: OCR_BILLING_TIME_ZONE,
@@ -237,7 +252,7 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
   }
 
   function deleteHistory(id) {
-    return db.prepare('DELETE FROM ocr_history WHERE id = ?').run(id).changes > 0
+    return db.prepare(`DELETE FROM ${OCR_HISTORY} WHERE id = ?`).run(id).changes > 0
   }
 
   function getHistoryExportStats() {
@@ -250,14 +265,14 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
         + length(CAST(COALESCE(error_code, '') AS BLOB))
         + length(CAST(COALESCE(error_message, '') AS BLOB))
       ), 0) AS source_bytes
-      FROM ocr_history
+      FROM ${OCR_HISTORY}
     `).get()
     return { count: Number(row.count) || 0, sourceBytes: Number(row.source_bytes) || 0 }
   }
 
   function listHistoryForExport(limit) {
     if (!Number.isInteger(limit) || limit < 1) throw createStorageError('OCR 导出上限无效', 'OCR_EXPORT_LIMIT_INVALID')
-    return db.prepare('SELECT * FROM ocr_history ORDER BY id ASC LIMIT ?').all(limit).map(row => mapHistoryRow(row, true))
+    return db.prepare(`SELECT * FROM ${OCR_HISTORY} ORDER BY id ASC LIMIT ?`).all(limit).map(row => mapHistoryRow(row, true))
   }
 
   return {
@@ -269,7 +284,7 @@ export function createOcrStorage({ db, keyFilePath, environmentKey } = {}) {
     },
     insertHistory,
     listHistory,
-    getHistoryById(id) { return mapHistoryRow(db.prepare('SELECT * FROM ocr_history WHERE id = ?').get(id), true) },
+    getHistoryById(id) { return mapHistoryRow(db.prepare(`SELECT * FROM ${OCR_HISTORY} WHERE id = ?`).get(id), true) },
     recordUsageAttempt,
     getUsage,
     deleteHistory,

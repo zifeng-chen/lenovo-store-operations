@@ -26,19 +26,6 @@ export const STORE_MODULES = Object.freeze([
     stage: 'migrated'
   },
   {
-    id: 'price-placards',
-    name: '价格展牌打印',
-    shortName: '价格展牌打印',
-    iconText: '展',
-    description: '制作并打印 110mm × 110mm 价格展牌，也支持 A4 纸张输出。',
-    route: '/price-placards',
-    moduleBase: '/modules/price-placards/',
-    apiBase: '/api/price-placards',
-    persistence: 'sqlite',
-    accent: '#d2382f',
-    stage: 'migrated'
-  },
-  {
     id: 'receipt-assistant',
     name: '付款凭证打印',
     shortName: '付款凭证打印',
@@ -63,6 +50,19 @@ export const STORE_MODULES = Object.freeze([
     persistence: 'none',
     accent: '#d2382f',
     stage: 'ready'
+  },
+  {
+    id: 'sales-report',
+    name: '销售业绩报表',
+    shortName: '销售业绩报表',
+    iconText: '报',
+    description: '查看销售趋势与月度、季度、年度业绩对比，数据来自付款凭证打印的销售明细。',
+    route: '/sales-report',
+    moduleBase: '/modules/sales-report/',
+    apiBase: '/api/sales-report',
+    persistence: 'none',
+    accent: '#1a5e9c',
+    stage: 'migrated'
   }
 ]);
 

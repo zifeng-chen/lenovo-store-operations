@@ -1,6 +1,5 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
 
 const MAINTENANCE_HEADER = { 'X-Lenovo-Store-Maintenance': '1' };
 const loading = ref(true);
@@ -726,7 +725,6 @@ onBeforeUnmount(() => {
       <div class="legacy-links">
         <a href="/#/computer-labels">仓库货品标签：Excel / SQLite <span>→</span></a>
         <a href="/#/price-labels">周边货品价签：JSON <span>→</span></a>
-        <a href="/#/price-placards">价格展牌：JSON / SQLite <span>→</span></a>
         <span>付款凭证打印：当前通过本页统一入口恢复</span>
       </div>
     </section>

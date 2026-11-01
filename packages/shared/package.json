@@ -6,6 +6,9 @@
   "exports": {
     ".": "./src/index.js",
     "./theme.css": "./src/theme.css",
-    "./lenovo-logo.svg": "./src/assets/lenovo-logo.svg"
+    "./lenovo-logo.svg": "./src/assets/lenovo-logo.svg",
+    "./print": "./src/print.js",
+    "./api-client": "./src/api-client.js",
+    "./vite-element-plus": "./vite-element-plus.js"
   }
 }

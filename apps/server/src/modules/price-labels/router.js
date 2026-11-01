@@ -1,5 +1,5 @@
 import { Router, json } from 'express'
-import { getDatabase } from './database.js'
+import { getDatabase, CATEGORIES, PRICE_PRODUCTS } from './database.js'
 import { currentCalendarDate, isValidCalendarDate, normalizeAddedDate } from '../../calendar-date.js'
 
 const SCHEMA_VERSION = 2
@@ -38,7 +38,7 @@ function validateProduct(db, body = {}, fallbackAddedDate = currentCalendarDate(
   if (!category) return { error: '请选择品类' }
   if (!Number.isFinite(price) || price < 0) return { error: '请输入有效的非负价格' }
   if (!isValidCalendarDate(addedDate)) return { error: '添加日期必须是有效的 YYYY-MM-DD 日期' }
-  if (!db.prepare('SELECT 1 FROM categories WHERE name = ?').get(category)) return { error: '所选品类不存在，请刷新页面后重试' }
+  if (!db.prepare(`SELECT 1 FROM ${CATEGORIES} WHERE name = ?`).get(category)) return { error: '所选品类不存在，请刷新页面后重试' }
   return { value: { name, category, price: Math.round(price * 100) / 100, added_date: addedDate } }
 }
 
@@ -115,7 +115,7 @@ export function createPriceLabelsRouter() {
   })
 
   router.get('/categories', (_request, response) => {
-    const rows = getDatabase().prepare('SELECT id, name FROM categories ORDER BY sort_order ASC, id ASC').all()
+    const rows = getDatabase().prepare(`SELECT id, name FROM ${CATEGORIES} ORDER BY sort_order ASC, id ASC`).all()
     response.json(rows)
   })
   router.post('/categories', (request, response, next) => {
@@ -123,11 +123,11 @@ export function createPriceLabelsRouter() {
     if (validation.error) return response.status(400).json({ message: validation.error })
     const db = getDatabase()
     const name = validation.value
-    if (db.prepare('SELECT id, name FROM categories WHERE name = ?').get(name)) return response.status(409).json({ message: '该品类已存在' })
+    if (db.prepare(`SELECT id, name FROM ${CATEGORIES} WHERE name = ?`).get(name)) return response.status(409).json({ message: '该品类已存在' })
     try {
       const created = db.transaction(() => {
-        db.prepare('INSERT INTO categories (name, sort_order) SELECT ?, COALESCE(MAX(sort_order), 0) + 1 FROM categories').run(name)
-        return db.prepare('SELECT id, name FROM categories WHERE name = ?').get(name)
+        db.prepare(`INSERT INTO ${CATEGORIES} (name, sort_order) SELECT ?, COALESCE(MAX(sort_order), 0) + 1 FROM ${CATEGORIES}`).run(name)
+        return db.prepare(`SELECT id, name FROM ${CATEGORIES} WHERE name = ?`).get(name)
       })()
       return response.status(201).json(created)
     } catch (error) {
@@ -137,7 +137,7 @@ export function createPriceLabelsRouter() {
   })
 
   router.get('/products', (_request, response) => {
-    const rows = getDatabase().prepare('SELECT id, name, category, price, added_date, created_at, updated_at FROM products ORDER BY updated_at DESC, id DESC').all()
+    const rows = getDatabase().prepare(`SELECT id, name, category, price, added_date, created_at, updated_at FROM ${PRICE_PRODUCTS} ORDER BY updated_at DESC, id DESC`).all()
     response.json(rows)
   })
   router.post('/products', (request, response) => {
@@ -146,26 +146,26 @@ export function createPriceLabelsRouter() {
     if (validation.error) return response.status(400).json({ message: validation.error })
     const { name, category, price, added_date: addedDate } = validation.value
     const now = new Date().toISOString()
-    const result = db.prepare('INSERT INTO products (name, category, price, added_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(name, category, price, addedDate, now, now)
-    return response.status(201).json(db.prepare('SELECT id, name, category, price, added_date, created_at, updated_at FROM products WHERE id = ?').get(result.lastInsertRowid))
+    const result = db.prepare(`INSERT INTO ${PRICE_PRODUCTS} (name, category, price, added_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).run(name, category, price, addedDate, now, now)
+    return response.status(201).json(db.prepare(`SELECT id, name, category, price, added_date, created_at, updated_at FROM ${PRICE_PRODUCTS} WHERE id = ?`).get(result.lastInsertRowid))
   })
   router.put('/products/:id', (request, response) => {
     const id = parseId(request.params.id)
     if (!id) return response.status(400).json({ message: '无效的商品 ID' })
     const db = getDatabase()
-    const selectProduct = db.prepare('SELECT id, name, category, price, added_date, created_at, updated_at FROM products WHERE id = ?')
+    const selectProduct = db.prepare(`SELECT id, name, category, price, added_date, created_at, updated_at FROM ${PRICE_PRODUCTS} WHERE id = ?`)
     const existing = selectProduct.get(id)
     if (!existing) return response.status(404).json({ message: '商品不存在' })
     const validation = validateProduct(db, request.body, existing.added_date)
     if (validation.error) return response.status(400).json({ message: validation.error })
     const { name, category, price, added_date: addedDate } = validation.value
-    db.prepare('UPDATE products SET name = ?, category = ?, price = ?, added_date = ?, updated_at = ? WHERE id = ?').run(name, category, price, addedDate, new Date().toISOString(), id)
+    db.prepare(`UPDATE ${PRICE_PRODUCTS} SET name = ?, category = ?, price = ?, added_date = ?, updated_at = ? WHERE id = ?`).run(name, category, price, addedDate, new Date().toISOString(), id)
     return response.json(selectProduct.get(id))
   })
   router.delete('/products/:id', (request, response) => {
     const id = parseId(request.params.id)
     if (!id) return response.status(400).json({ message: '无效的商品 ID' })
-    const result = getDatabase().prepare('DELETE FROM products WHERE id = ?').run(id)
+    const result = getDatabase().prepare(`DELETE FROM ${PRICE_PRODUCTS} WHERE id = ?`).run(id)
     if (!result.changes) return response.status(404).json({ message: '商品不存在' })
     return response.status(204).end()
   })
@@ -176,8 +176,8 @@ export function createPriceLabelsRouter() {
     const payload = {
       schemaVersion: SCHEMA_VERSION,
       exportedAt,
-      categories: db.prepare('SELECT id, name, sort_order FROM categories ORDER BY sort_order ASC, id ASC').all(),
-      products: db.prepare('SELECT id, name, category, price, added_date, created_at, updated_at FROM products ORDER BY id ASC').all(),
+      categories: db.prepare(`SELECT id, name, sort_order FROM ${CATEGORIES} ORDER BY sort_order ASC, id ASC`).all(),
+      products: db.prepare(`SELECT id, name, category, price, added_date, created_at, updated_at FROM ${PRICE_PRODUCTS} ORDER BY id ASC`).all(),
     }
     const timestamp = exportedAt.replaceAll(':', '-').replace(/\.\d{3}Z$/, 'Z')
     response.set('Content-Disposition', `attachment; filename="lenovo-price-label-backup-${timestamp}.json"`)
@@ -191,11 +191,11 @@ export function createPriceLabelsRouter() {
     if (request.body.validateOnly) return response.json({ valid: true, summary })
     try {
       const db = getDatabase()
-      const insertCategory = db.prepare('INSERT INTO categories (id, name, sort_order) VALUES (@id, @name, @sort_order)')
-      const insertProduct = db.prepare('INSERT INTO products (id, name, category, price, added_date, created_at, updated_at) VALUES (@id, @name, @category, @price, @added_date, @created_at, @updated_at)')
+      const insertCategory = db.prepare(`INSERT INTO ${CATEGORIES} (id, name, sort_order) VALUES (@id, @name, @sort_order)`)
+      const insertProduct = db.prepare(`INSERT INTO ${PRICE_PRODUCTS} (id, name, category, price, added_date, created_at, updated_at) VALUES (@id, @name, @category, @price, @added_date, @created_at, @updated_at)`)
       db.transaction((payload) => {
-        db.prepare('DELETE FROM products').run()
-        db.prepare('DELETE FROM categories').run()
+        db.prepare(`DELETE FROM ${PRICE_PRODUCTS}`).run()
+        db.prepare(`DELETE FROM ${CATEGORIES}`).run()
         db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('categories', 'products')").run()
         payload.categories.forEach((category) => insertCategory.run(category))
         payload.products.forEach((product) => insertProduct.run(product))

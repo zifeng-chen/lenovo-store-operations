@@ -1,32 +1,26 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
 import { STORE_MODULES } from '@lenovo-store/shared';
 import computerLabelsRouter, {
   apiBase as computerLabelsApiBase,
-  DATABASE_PATH as computerLabelsDatabasePath,
   getDatabase as getComputerLabelsDatabase,
   initializeDatabase as initializeComputerLabelsDatabase
 } from './modules/computer-labels/index.js';
 import priceLabelsRouter, {
   apiBase as priceLabelsApiBase,
-  DATABASE_PATH as priceLabelsDatabasePath,
   getDatabase as getPriceLabelsDatabase,
   initializeDatabase as initializePriceLabelsDatabase
 } from './modules/price-labels/index.js';
 import {
-  apiBase as pricePlacardsApiBase,
-  createPricePlacardsRouter,
-  DATABASE_PATH as pricePlacardsDatabasePath,
-  getDatabase as getPricePlacardsDatabase,
-  initializeDatabase as initializePricePlacardsDatabase,
-  jsonParserLimit as pricePlacardsJsonParserLimit
-} from './modules/price-placards/index.js';
+  apiBase as salesReportApiBase,
+  createSalesReportRouter
+} from './modules/sales-report/index.js';
 import receiptAssistantRouter, {
   apiBase as receiptAssistantApiBase,
-  DATABASE_PATH as receiptAssistantDatabasePath,
   OCR_KEY_PATH as receiptOcrKeyPath,
   getDatabase as getReceiptAssistantDatabase,
   initializeDatabase as initializeReceiptAssistantDatabase,
@@ -35,7 +29,9 @@ import receiptAssistantRouter, {
 import {
   DATA_ROOT,
   DATA_ROOT_SOURCE,
-  EXTERNAL_DATA_ROOT_CONFIGURED
+  EXTERNAL_DATA_ROOT_CONFIGURED,
+  UNIFIED_DATA_DIR,
+  UNIFIED_DATABASE_PATH
 } from './config/data-paths.js';
 import { createGithubReleaseService } from './system/github-release-service.js';
 import { createMaintenanceAuthorizer, createSameOriginAuthorizer } from './system/maintenance-auth.js';
@@ -86,36 +82,22 @@ if (updateEnablementSource === 'detected') {
   console.info('检测到完整的 root updater 平台，已自动启用在线安装入口');
 }
 const app = express();
-const pricePlacardsRouter = createPricePlacardsRouter({
-  authorizeMutation: createSameOriginAuthorizer('价格展牌写操作必须来自同源页面'),
-  authorizeImport: createMaintenanceAuthorizer({ maintenanceToken, operation: '价格展牌全量导入' })
-});
 
 const moduleRuntimes = new Map([
   ['computer-labels', {
     apiBase: computerLabelsApiBase,
     router: computerLabelsRouter,
-    databasePath: computerLabelsDatabasePath,
     initializeDatabase: initializeComputerLabelsDatabase,
     jsonParser: express.json({ limit: '1mb' })
   }],
   ['price-labels', {
     apiBase: priceLabelsApiBase,
     router: priceLabelsRouter,
-    databasePath: priceLabelsDatabasePath,
     initializeDatabase: initializePriceLabelsDatabase
-  }],
-  ['price-placards', {
-    apiBase: pricePlacardsApiBase,
-    router: pricePlacardsRouter,
-    databasePath: pricePlacardsDatabasePath,
-    initializeDatabase: initializePricePlacardsDatabase,
-    jsonParser: express.json({ limit: pricePlacardsJsonParserLimit })
   }],
   ['receipt-assistant', {
     apiBase: receiptAssistantApiBase,
     router: receiptAssistantRouter,
-    databasePath: receiptAssistantDatabasePath,
     initializeDatabase: initializeReceiptAssistantDatabase
   }]
 ]);
@@ -124,7 +106,6 @@ const persistenceService = createPersistenceService({
   runtimes: new Map([
     ['computer-labels', { getDatabase: getComputerLabelsDatabase }],
     ['price-labels', { getDatabase: getPriceLabelsDatabase }],
-    ['price-placards', { getDatabase: getPricePlacardsDatabase }],
     ['receipt-assistant', { getDatabase: getReceiptAssistantDatabase }]
   ]),
   receiptMaintenance: receiptAssistantMaintenance,
@@ -154,11 +135,40 @@ const systemPersistenceRouter = createSystemPersistenceRouter({
 app.disable('x-powered-by');
 app.set('trust proxy', 'loopback');
 app.enable('strict routing');
+app.use((_request, response, next) => {
+  response.setHeader('X-Content-Type-Options', 'nosniff');
+  response.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  response.setHeader('Referrer-Policy', 'same-origin');
+  response.setHeader(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self'",
+      // Element Plus 与 echarts 会写行内样式，样式必须放行 unsafe-inline
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "frame-src 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'"
+    ].join('; ')
+  );
+  next();
+});
+app.use(compression({
+  threshold: 1024,
+  level: 6,
+  filter(request, response) {
+    if (request.headers['x-no-compression']) return false;
+    return compression.filter(request, response);
+  }
+}));
 const corsMiddleware = cors();
 app.use((request, response, next) => {
   const isRestrictedSystemRoute = request.path === '/api/system/health'
-    || request.path.startsWith('/api/system/update')
-    || request.path.startsWith('/api/price-placards');
+    || request.path.startsWith('/api/system/update');
   return isRestrictedSystemRoute ? next() : corsMiddleware(request, response, next);
 });
 
@@ -175,7 +185,7 @@ function initializeDatabases() {
 
     const runtime = moduleRuntimes.get(module.id);
     try {
-      if (!runtime?.initializeDatabase || !runtime?.databasePath) {
+      if (!runtime?.initializeDatabase) {
         throw new Error('模块缺少数据库运行时配置');
       }
       runtime.initializeDatabase();
@@ -197,9 +207,9 @@ function moduleStatus(module) {
     ...module,
     apiReady: module.apiBase ? Boolean(runtime?.router) : null,
     moduleReady: fs.existsSync(moduleDist),
-    dataDirectoryReady: usesDatabase ? fs.existsSync(dataDirectory) : null,
+    dataDirectoryReady: usesDatabase ? fs.existsSync(UNIFIED_DATA_DIR) : null,
     databaseConnected: usesDatabase
-      ? Boolean(databaseStatus?.connected && runtime?.databasePath && fs.existsSync(runtime.databasePath))
+      ? Boolean(databaseStatus?.connected && fs.existsSync(UNIFIED_DATABASE_PATH))
       : null,
     databaseError: usesDatabase ? databaseStatus?.error || null : null
   };
@@ -269,9 +279,28 @@ for (const runtime of moduleRuntimes.values()) {
   app.use(runtime.apiBase, ...middleware);
 }
 
+app.use(salesReportApiBase, createSameOriginAuthorizer('销售报表只能从本系统页面访问'), createSalesReportRouter({ getDatabase: getReceiptAssistantDatabase }));
+
 app.use('/api', (_req, res) => {
   res.status(404).json({ code: 1, data: null, msg: '接口不存在' });
 });
+
+const IMMUTABLE_ASSET_MAX_AGE = '365d';
+function staticOptions() {
+  return {
+    etag: true,
+    lastModified: true,
+    maxAge: 0,
+    setHeaders(response, filePath) {
+      const isHashedAsset = /[\\/]assets[\\/]/.test(filePath) && /-[A-Za-z0-9_-]{8,}\.(js|css|woff2?|png|jpe?g|svg|webp)$/.test(filePath);
+      if (isHashedAsset) {
+        response.setHeader('Cache-Control', `public, max-age=${IMMUTABLE_ASSET_MAX_AGE}, immutable`);
+      } else {
+        response.setHeader('Cache-Control', 'no-cache');
+      }
+    }
+  };
+}
 
 for (const module of STORE_MODULES) {
   const moduleDist = path.join(projectRoot, 'apps', module.id, 'dist');
@@ -282,7 +311,7 @@ for (const module of STORE_MODULES) {
   app.get(moduleBaseWithoutSlash, (_req, res) => res.redirect(308, moduleBase));
   if (!fs.existsSync(moduleIndex)) continue;
 
-  app.use(moduleBase, express.static(moduleDist));
+  app.use(moduleBase, express.static(moduleDist, staticOptions()));
   app.use(moduleBase, (req, res, next) => {
     if (req.method !== 'GET' || path.extname(req.path) || !req.accepts('html')) return next();
     return res.sendFile(moduleIndex);
@@ -290,7 +319,7 @@ for (const module of STORE_MODULES) {
 }
 
 if (fs.existsSync(webIndex)) {
-  app.use(express.static(webDist));
+  app.use(express.static(webDist, staticOptions()));
   const legacyPortalRoutes = ['/system', ...STORE_MODULES.map((module) => module.route)];
   for (const legacyRoute of legacyPortalRoutes) {
     app.get(legacyRoute, (req, res, next) => {

@@ -8,6 +8,7 @@ import XLSX from 'xlsx';
 import {
   createDatabaseBackup,
   getDatabase,
+  PRODUCTS,
   restoreDatabase
 } from './database.js';
 import { currentCalendarDate, isValidCalendarDate } from '../../calendar-date.js';
@@ -67,7 +68,7 @@ export function createComputerLabelsRouter() {
 
   router.get('/products/export', (_req, res) => {
     const rows = getDatabase().prepare(
-      'SELECT sku, name, config, color, added_date, remark FROM products ORDER BY id DESC'
+      `SELECT sku, name, config, color, added_date, remark FROM ${PRODUCTS} ORDER BY id DESC`
     ).all();
     const worksheet = XLSX.utils.json_to_sheet(rows, {
       header: ['sku', 'name', 'config', 'color', 'added_date', 'remark']
@@ -96,12 +97,12 @@ export function createComputerLabelsRouter() {
 
     const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
     const db = getDatabase();
-    const findBySku = db.prepare('SELECT id, added_date FROM products WHERE sku = ?');
+    const findBySku = db.prepare(`SELECT id, added_date FROM ${PRODUCTS} WHERE sku = ?`);
     const insert = db.prepare(
-      'INSERT INTO products (sku, name, config, color, added_date, remark) VALUES (?, ?, ?, ?, ?, ?)'
+      `INSERT INTO ${PRODUCTS} (sku, name, config, color, added_date, remark) VALUES (?, ?, ?, ?, ?, ?)`
     );
     const update = db.prepare(`
-      UPDATE products
+      UPDATE ${PRODUCTS}
       SET name = ?, config = ?, color = ?, added_date = COALESCE(?, added_date), remark = ?, updated_at = datetime('now')
       WHERE sku = ?
     `);
@@ -150,13 +151,13 @@ export function createComputerLabelsRouter() {
     if (!ids.length) return sendValidationError(res, '请选择要删除的商品');
 
     const placeholders = ids.map(() => '?').join(',');
-    const info = getDatabase().prepare(`DELETE FROM products WHERE id IN (${placeholders})`).run(...ids);
+    const info = getDatabase().prepare(`DELETE FROM ${PRODUCTS} WHERE id IN (${placeholders})`).run(...ids);
     sendSuccess(res, { count: info.changes }, '批量删除成功');
   });
 
   router.get('/products', (req, res) => {
     const q = String(req.query.q ?? '').trim();
-    let sql = 'SELECT * FROM products';
+    let sql = `SELECT * FROM ${PRODUCTS}`;
     let params = [];
     if (q) {
       sql += " WHERE sku LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' OR config LIKE ? ESCAPE '\\' OR added_date LIKE ? ESCAPE '\\'";
@@ -177,9 +178,9 @@ export function createComputerLabelsRouter() {
 
     const db = getDatabase();
     const info = db.prepare(
-      'INSERT INTO products (name, sku, config, color, added_date, remark) VALUES (?, ?, ?, ?, ?, ?)'
+      `INSERT INTO ${PRODUCTS} (name, sku, config, color, added_date, remark) VALUES (?, ?, ?, ?, ?, ?)`
     ).run(name, sku, clean(req.body.config), clean(req.body.color), addedDate.value, clean(req.body.remark));
-    sendSuccess(res, db.prepare('SELECT * FROM products WHERE id = ?').get(info.lastInsertRowid), '新增成功');
+    sendSuccess(res, db.prepare(`SELECT * FROM ${PRODUCTS} WHERE id = ?`).get(info.lastInsertRowid), '新增成功');
   });
 
   router.put('/products/:id', (req, res) => {
@@ -190,23 +191,23 @@ export function createComputerLabelsRouter() {
     if (!name || !sku) return sendValidationError(res, 'name和sku为必填字段');
 
     const db = getDatabase();
-    const existing = db.prepare('SELECT added_date FROM products WHERE id = ?').get(id);
+    const existing = db.prepare(`SELECT added_date FROM ${PRODUCTS} WHERE id = ?`).get(id);
     if (!existing) return res.status(404).json({ code: 1, data: null, msg: '商品不存在' });
     const addedDate = validateAddedDate(req.body.added_date, existing.added_date);
     if (addedDate.error) return sendValidationError(res, addedDate.error);
     db.prepare(`
-      UPDATE products
+      UPDATE ${PRODUCTS}
       SET name = ?, sku = ?, config = ?, color = ?, added_date = ?, remark = ?, updated_at = datetime('now')
       WHERE id = ?
     `).run(name, sku, clean(req.body.config), clean(req.body.color), addedDate.value, clean(req.body.remark), id);
-    sendSuccess(res, db.prepare('SELECT * FROM products WHERE id = ?').get(id), '更新成功');
+    sendSuccess(res, db.prepare(`SELECT * FROM ${PRODUCTS} WHERE id = ?`).get(id), '更新成功');
   });
 
   router.delete('/products/:id', (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return sendValidationError(res, '商品ID无效');
 
-    const info = getDatabase().prepare('DELETE FROM products WHERE id = ?').run(id);
+    const info = getDatabase().prepare(`DELETE FROM ${PRODUCTS} WHERE id = ?`).run(id);
     if (!info.changes) return res.status(404).json({ code: 1, data: null, msg: '商品不存在' });
     sendSuccess(res, null, '删除成功');
   });
@@ -235,7 +236,6 @@ export function createComputerLabelsRouter() {
       if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     }
   });
-
   router.use((error, _req, res, next) => {
     if (res.headersSent) return next(error);
     if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE') {

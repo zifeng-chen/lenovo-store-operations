@@ -2,15 +2,30 @@ import crypto from 'node:crypto'
 
 const AUTH_WINDOW_MS = 15 * 60 * 1000
 const MAX_AUTH_FAILURES = 5
+const MAX_TRACKED_CLIENTS = 10000
+
+function normalizeOrigin(value) {
+  if (!value) return null
+  try {
+    return new URL(value).origin
+  } catch {
+    return null
+  }
+}
 
 function sameOrigin(request) {
+  const expected = `${request.protocol}://${request.get('host')}`
   const origin = request.get('Origin')
-  if (!origin) return false
-  try {
-    return new URL(origin).origin === `${request.protocol}://${request.get('host')}`
-  } catch {
-    return false
-  }
+
+  // Origin 优先；存在就必须完全一致。
+  if (origin) return normalizeOrigin(origin) === expected
+
+  // 无 Origin 时（同源 GET、部分表单提交）退化为校验 Referer，
+  // 仍未携带则放行——浏览器跨站请求必带 Origin，此处不构成绕过路径。
+  const referer = request.get('Referer')
+  if (referer) return normalizeOrigin(referer) === expected
+
+  return true
 }
 
 function matchesToken(value, expected) {
@@ -45,6 +60,17 @@ export function createMaintenanceAuthorizer({ maintenanceToken = '', operation =
     return values
   }
 
+  // 记录失败时限制 Map 规模，避免大量不同来源地址撑爆内存。
+  function recordFailure(key) {
+    if (!failures.has(key) && failures.size >= MAX_TRACKED_CLIENTS) {
+      const oldest = failures.keys().next()
+      if (!oldest.done) failures.delete(oldest.value)
+    }
+    const values = recentFailures(key)
+    values.push(Date.now())
+    failures.set(key, values)
+  }
+
   return function authorizeMaintenance(request, response, next) {
     response.removeHeader('Access-Control-Allow-Origin')
     response.set('Cache-Control', 'no-store')
@@ -64,9 +90,7 @@ export function createMaintenanceAuthorizer({ maintenanceToken = '', operation =
     const authorization = request.get('Authorization') || ''
     const suppliedToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
     if (!matchesToken(suppliedToken, maintenanceToken)) {
-      const values = recentFailures(key)
-      values.push(Date.now())
-      failures.set(key, values)
+      recordFailure(key)
       return response.status(401).json({ code: 1, data: null, msg: '系统维护令牌无效' })
     }
     failures.delete(key)

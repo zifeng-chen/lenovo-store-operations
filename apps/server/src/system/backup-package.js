@@ -19,7 +19,13 @@ const DATABASE_ENTRIES_BY_VERSION = new Map([
     ['receipt-assistant.database', 'receipt-assistant'],
     ['price-placards.database', 'price-placards'],
   ])],
+  [3, new Map([
+    ['computer-labels.database', 'computer-labels'],
+    ['price-labels.database', 'price-labels'],
+    ['receipt-assistant.database', 'receipt-assistant'],
+  ])],
 ])
+export const CURRENT_BACKUP_FORMAT_VERSION = 3
 const OPTIONAL_ENTRY_IDS = new Set(['receipt-assistant.ocr-key'])
 const EXTRACTED_NAMES = new Map([
   ['computer-labels.database', 'computer-labels.sqlite'],
@@ -92,7 +98,7 @@ export function writeBackupPackage({ outputPath, backupId, createdAt, payloads, 
     return entry
   })
   const manifest = {
-    formatVersion: 2,
+    formatVersion: CURRENT_BACKUP_FORMAT_VERSION,
     application: 'lenovo-store-operations',
     backupId,
     createdAt,

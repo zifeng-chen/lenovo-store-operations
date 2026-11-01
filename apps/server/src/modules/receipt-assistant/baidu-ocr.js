@@ -1,4 +1,5 @@
 import https from 'node:https'
+import { parseReceipt } from './receipt-parser.js'
 
 const DEFAULT_OCR_ENDPOINT = 'https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic'
 const TOKEN_ENDPOINT = 'https://aip.baidubce.com/oauth/2.0/token'
@@ -111,9 +112,31 @@ export function createBaiduOcrService({ apiKey, secretKey, endpoint = DEFAULT_OC
     }
     const data = attempt.data
     if (data.error_code) throw createHttpError(502, data.error_msg ? `百度 OCR 识别失败：${data.error_msg}` : '百度 OCR 识别失败', `BAIDU_${data.error_code}`)
-    const words = Array.isArray(data.words_result) ? data.words_result.map(item => item.words).filter(Boolean) : []; const recognizedText = words.join('\n').slice(0, 100000); const result = extractReceiptAmount(words)
-    if (!result) { const error = createHttpError(422, '未识别到明确的票据金额，请手动输入', 'AMOUNT_NOT_FOUND'); error.ocrDetails = { wordsCount: words.length, recognizedText }; throw error }
-    return { amount: result.value, matchedText: result.matchedText, wordsCount: words.length, recognizedText }
+    const words = Array.isArray(data.words_result) ? data.words_result.map(item => item.words).filter(Boolean) : []
+    if (!words.length) {
+      const error = createHttpError(422, '未识别到任何文字，请确认图片清晰后重试', 'OCR_NO_TEXT')
+      error.ocrDetails = { wordsCount: 0, recognizedText: '' }
+      throw error
+    }
+    const parsed = parseReceipt(words)
+    if (!parsed.amount) {
+      const error = createHttpError(422, '未识别到明确的票据金额，请手动输入', 'AMOUNT_NOT_FOUND')
+      error.ocrDetails = {
+        wordsCount: parsed.wordsCount,
+        recognizedText: parsed.rawText,
+        parsed,
+        status: 'partial'
+      }
+      throw error
+    }
+    return {
+      status: 'success',
+      amount: parsed.amount,
+      matchedText: parsed.amountMatchedText,
+      wordsCount: parsed.wordsCount,
+      recognizedText: parsed.rawText,
+      parsed
+    }
   }
   return { recognizeAmount, async validateCredentials({ signal } = {}) { await getAccessToken(false, signal); return true } }
 }

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import { Router, json } from 'express'
-import { getDatabase, OCR_KEY_PATH } from './database.js'
+import { getDatabase, OCR_KEY_PATH, SALES, SALE_ITEMS } from './database.js'
 import { createBaiduOcrService } from './baidu-ocr.js'
 import { createOcrStorage, getOcrBillingMonth, isValidOcrBillingMonth } from './ocr-storage.js'
 
@@ -265,6 +265,7 @@ export function createReceiptAssistantRouter() {
             status: Number(error.status) === 499 ? 'cancelled' : 'failure',
             wordsCount: error.ocrDetails?.wordsCount,
             recognizedText: error.ocrDetails?.recognizedText,
+            structured: error.ocrDetails?.parsed,
             errorCode: error.code,
             httpStatus: Number(error.status) || 500,
             errorMessage: error.message,
@@ -275,7 +276,7 @@ export function createReceiptAssistantRouter() {
       }
       let historyId
       try {
-        historyId = state.storage.insertHistory({ requestId, status: 'success', amount: result.amount, matchedText: result.matchedText, wordsCount: result.wordsCount, recognizedText: result.recognizedText, httpStatus: 200, durationMs: Date.now() - startedAt })
+        historyId = state.storage.insertHistory({ requestId, status: 'success', amount: result.amount, matchedText: result.matchedText, wordsCount: result.wordsCount, recognizedText: result.recognizedText, structured: result.parsed, httpStatus: 200, durationMs: Date.now() - startedAt })
       } catch { return next(persistFailure()) }
       return response.json({ ...result, historyId })
     } finally {
@@ -332,26 +333,89 @@ export function createReceiptAssistantRouter() {
       : response.status(404).json({ message: 'OCR 识别记录不存在' })
   })
 
-  const getSaleById = id => getRuntime().db.prepare('SELECT * FROM sales WHERE id = ?').get(id)
+  const listSaleItems = (saleId) => getRuntime().db
+    .prepare(`SELECT id, name, qty, unit_price AS unitPrice, subtotal FROM ${SALE_ITEMS} WHERE sale_id = ? ORDER BY id`)
+    .all(saleId)
+
+  const getSaleById = id => {
+    const sale = getRuntime().db.prepare(`SELECT * FROM ${SALES} WHERE id = ?`).get(id)
+    if (!sale) return sale
+    return { ...sale, items: listSaleItems(id) }
+  }
 
   router.post('/sales', (request, response) => {
     const amount = Number(request.body?.amount)
     if (!Number.isFinite(amount) || amount <= 0) return response.status(400).json({ message: '销售金额必须是大于 0 的数字' })
     const state = getRuntime()
-    const result = state.db.prepare('INSERT INTO sales (sale_date, amount, status) VALUES (?, ?, 1)').run(toLocalISODate(), Math.round(amount * 100) / 100)
-    return response.status(201).json(getSaleById(result.lastInsertRowid))
+    const saleDate = typeof request.body?.saleDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(request.body.saleDate)
+      ? request.body.saleDate
+      : toLocalISODate()
+    const rawItems = Array.isArray(request.body?.items) ? request.body.items : []
+    const items = rawItems
+      .map(item => ({
+        name: String(item?.name || '').trim().slice(0, 200),
+        qty: Number.isFinite(Number(item?.qty)) && Number(item.qty) > 0 ? Number(item.qty) : null,
+        unitPrice: Number.isFinite(Number(item?.unitPrice)) && Number(item.unitPrice) >= 0 ? Math.round(Number(item.unitPrice) * 100) / 100 : null,
+        subtotal: Number(item?.subtotal)
+      }))
+      .filter(item => item.name && Number.isFinite(item.subtotal) && item.subtotal > 0)
+      .slice(0, 200)
+
+    const insertSale = state.db.prepare(`INSERT INTO ${SALES} (sale_date, amount, status) VALUES (?, ?, 1)`)
+    const insertItem = state.db.prepare(`INSERT INTO ${SALE_ITEMS} (sale_id, name, qty, unit_price, subtotal) VALUES (?, ?, ?, ?, ?)`)
+
+    const create = state.db.transaction(() => {
+      const result = insertSale.run(saleDate, Math.round(amount * 100) / 100)
+      const saleId = result.lastInsertRowid
+      for (const item of items) {
+        insertItem.run(saleId, item.name, item.qty, item.unitPrice, Math.round(item.subtotal * 100) / 100)
+      }
+      return saleId
+    })
+
+    const saleId = create()
+    return response.status(201).json(getSaleById(saleId))
   })
 
   router.get('/sales', (request, response) => {
-    const { status } = request.query
+    const { status, days } = request.query
     const db = getRuntime().db
-    if (status === undefined || status === '') return response.json(db.prepare('SELECT * FROM sales ORDER BY created_at DESC, id DESC').all())
-    if (status === '0' || status === '1') return response.json(db.prepare('SELECT * FROM sales WHERE status = ? ORDER BY created_at DESC, id DESC').all(Number(status)))
+    const attachItems = rows => {
+      if (!rows.length) return rows
+      const ids = rows.map(row => row.id)
+      const placeholders = ids.map(() => '?').join(', ')
+      const items = db.prepare(`SELECT id, sale_id, name, qty, unit_price AS unitPrice, subtotal FROM ${SALE_ITEMS} WHERE sale_id IN (${placeholders}) ORDER BY id`).all(...ids)
+      const grouped = new Map()
+      for (const item of items) {
+        if (!grouped.has(item.sale_id)) grouped.set(item.sale_id, [])
+        grouped.get(item.sale_id).push({ id: item.id, name: item.name, qty: item.qty, unitPrice: item.unitPrice, subtotal: item.subtotal })
+      }
+      return rows.map(row => ({ ...row, items: grouped.get(row.id) ?? [] }))
+    }
+
+    // days=2 表示只取今天和昨天；不传则返回全部历史记录。
+    const dayCount = Number(days)
+    let dateFilter = ''
+    const dateParams = []
+    if (Number.isInteger(dayCount) && dayCount > 0) {
+      const end = new Date()
+      const start = new Date()
+      start.setDate(start.getDate() - (dayCount - 1))
+      dateFilter = ' AND sale_date BETWEEN ? AND ?'
+      dateParams.push(toLocalISODate(start), toLocalISODate(end))
+    }
+
+    if (status === undefined || status === '') {
+      return response.json(attachItems(db.prepare(`SELECT * FROM ${SALES} WHERE 1=1${dateFilter} ORDER BY created_at DESC, id DESC`).all(...dateParams)))
+    }
+    if (status === '0' || status === '1') {
+      return response.json(attachItems(db.prepare(`SELECT * FROM ${SALES} WHERE status = ?${dateFilter} ORDER BY created_at DESC, id DESC`).all(Number(status), ...dateParams)))
+    }
     return response.status(400).json({ message: 'status 只能是 0 或 1' })
   })
 
   router.get('/sales/today', (_request, response) => {
-    const row = getRuntime().db.prepare('SELECT COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total FROM sales WHERE sale_date = ? AND status = 1').get(toLocalISODate())
+    const row = getRuntime().db.prepare(`SELECT COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total FROM ${SALES} WHERE sale_date = ? AND status = 1`).get(toLocalISODate())
     return response.json({ count: row.count, total: row.total })
   })
 
@@ -362,7 +426,7 @@ export function createReceiptAssistantRouter() {
     startDate.setDate(startDate.getDate() - 29)
     const rows = getRuntime().db.prepare(`
       SELECT sale_date AS date, COUNT(*) AS count, ROUND(SUM(amount), 2) AS total
-      FROM sales
+      FROM ${SALES}
       WHERE status = 1 AND sale_date BETWEEN ? AND ?
       GROUP BY sale_date
       ORDER BY sale_date ASC
@@ -385,7 +449,7 @@ export function createReceiptAssistantRouter() {
     if (!Number.isInteger(id) || id <= 0) return response.status(400).json({ message: '无效的销售记录 ID' })
     const sale = getSaleById(id)
     if (!sale) return response.status(404).json({ message: '销售记录不存在' })
-    getRuntime().db.prepare('UPDATE sales SET status = ? WHERE id = ?').run(sale.status === 1 ? 0 : 1, id)
+    getRuntime().db.prepare(`UPDATE ${SALES} SET status = ? WHERE id = ?`).run(sale.status === 1 ? 0 : 1, id)
     return response.json(getSaleById(id))
   })
 

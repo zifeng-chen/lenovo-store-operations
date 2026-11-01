@@ -1,0 +1,287 @@
+.report-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100vh;
+  padding: 18px 22px 28px;
+  background: #f4f6fa;
+  color: #1f2a37;
+}
+
+.report-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.report-header h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #12233b;
+}
+
+.report-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #6b7a90;
+}
+
+.report-range {
+  font-size: 12px;
+  color: #56657a;
+  background: #fff;
+  border: 1px solid #e2e8f2;
+  border-radius: 999px;
+  padding: 6px 14px;
+  white-space: nowrap;
+}
+
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+}
+
+.range-sep {
+  font-size: 12px;
+  color: #8895a8;
+}
+
+.report-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.report-body.is-loading {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.report-loading-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #46536a;
+  background: rgba(244, 246, 250, 0.35);
+  pointer-events: none;
+}
+
+.range-summary {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: linear-gradient(90deg, #eef4fc 0%, #ffffff 60%);
+  border: 1px solid #d8e4f5;
+  border-radius: 10px;
+}
+
+.range-summary-period {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 24px;
+  border-right: 1px solid #dde7f5;
+}
+
+.range-summary-period span {
+  font-size: 12px;
+  color: #6b7a90;
+}
+
+.range-summary-period strong {
+  font-size: 15px;
+  font-weight: 700;
+  color: #12233b;
+}
+
+.range-summary-metrics {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.range-summary-metrics div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.range-summary-metrics span {
+  font-size: 12px;
+  color: #6b7a90;
+}
+
+.range-summary-metrics strong {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a5e9c;
+}
+
+.chart-grid {
+  grid-template-columns: 2fr 1fr;
+}
+
+.chart-box {
+  width: 100%;
+  height: 280px;
+}
+
+.chart-box--tall {
+  height: 320px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 15px 17px;
+  background: #fff;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+}
+
+.metric-card span {
+  font-size: 12px;
+  color: #6b7a90;
+}
+
+.metric-card strong {
+  font-size: 21px;
+  font-weight: 700;
+  color: #12233b;
+  line-height: 1.2;
+}
+
+.metric-card em {
+  font-size: 12px;
+  font-style: normal;
+}
+
+.metric-card em.up,
+.change.up {
+  color: #1f9d55;
+}
+
+.metric-card em.down,
+.change.down {
+  color: #d2382f;
+}
+
+.metric-card em.neutral,
+.change.neutral {
+  color: #8895a8;
+}
+
+.panel {
+  padding: 15px 17px 17px;
+  background: #fff;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #12233b;
+}
+
+.panel-note {
+  font-size: 12px;
+  color: #8895a8;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.trend-chart {
+  width: 100%;
+  height: 300px;
+}
+
+.year-table {
+  margin-top: 12px;
+}
+
+.change {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.record-items-panel {
+  padding: 8px 14px 12px 48px;
+  background: #fafbfd;
+}
+
+.record-items-head {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  color: #46536a;
+}
+
+.record-items-empty {
+  padding: 6px 0;
+  font-size: 12px;
+  color: #8c96a8;
+}
+
+.record-items-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #1a5e9c;
+  background: #eaf2fb;
+  border-radius: 999px;
+}
+
+.record-pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+@media (max-width: 1280px) {
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

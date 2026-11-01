@@ -1,6 +1,5 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
 import AppHeader from './components/AppHeader.vue';
 import LeftPanel from './components/LeftPanel.vue';
 import PreviewPanel from './components/PreviewPanel.vue';

@@ -19,9 +19,12 @@ const REQUEST_KEYS = ['action', 'jobId', 'requestedAt', 'schemaVersion', 'tag']
 const REQUIRED_ASSETS = ['manifest.json', 'manifest.json.sig', 'SHA256SUMS']
 const LEGACY_MODULE_IDS = ['computer-labels', 'price-labels', 'receipt-assistant', 'employee-badges']
 const LEGACY_SQLITE_MODULE_IDS = new Set(['computer-labels', 'price-labels', 'receipt-assistant'])
-const CURRENT_MODULE_IDS = ['computer-labels', 'price-labels', 'receipt-assistant', 'price-placards', 'employee-badges']
-const CURRENT_SQLITE_MODULE_IDS = new Set(['computer-labels', 'price-labels', 'receipt-assistant', 'price-placards'])
+const CURRENT_MODULE_IDS = ['computer-labels', 'price-labels', 'receipt-assistant', 'employee-badges', 'sales-report']
+const CURRENT_SQLITE_MODULE_IDS = new Set(['computer-labels', 'price-labels', 'receipt-assistant'])
+const V2_MODULE_IDS = ['computer-labels', 'price-labels', 'receipt-assistant', 'price-placards', 'employee-badges']
+const V2_SQLITE_MODULE_IDS = new Set(['computer-labels', 'price-labels', 'receipt-assistant', 'price-placards'])
 const HEALTH_CONTRACT_V2_TAG = 'v0.5.0'
+const HEALTH_CONTRACT_V3_TAG = 'v0.6.0'
 const DEFAULT_CONFIG_PATH = '/etc/lenovo-store-updater.json'
 const MAX_REQUEST_BYTES = 4096
 const MAX_MANIFEST_BYTES = 1024 * 1024
@@ -450,8 +453,8 @@ function validateExtractedTree(root) {
     'apps/computer-labels/dist/index.html',
     'apps/price-labels/dist/index.html',
     'apps/receipt-assistant/dist/index.html',
-    'apps/price-placards/dist/index.html',
     'apps/employee-badges/dist/index.html',
+    'apps/sales-report/dist/index.html',
   ]
   for (const relative of required) {
     const stats = fs.lstatSync(path.join(root, relative))
@@ -622,9 +625,15 @@ async function restartService(config) {
 }
 
 async function waitForHealth(config, expected) {
-  const usesCurrentContract = compareVersions(expected.tag, HEALTH_CONTRACT_V2_TAG) >= 0
-  const expectedModuleIds = usesCurrentContract ? CURRENT_MODULE_IDS : LEGACY_MODULE_IDS
-  const sqliteModuleIds = usesCurrentContract ? CURRENT_SQLITE_MODULE_IDS : LEGACY_SQLITE_MODULE_IDS
+  const usesV3Contract = compareVersions(expected.tag, HEALTH_CONTRACT_V3_TAG) >= 0
+  const usesV2Contract = !usesV3Contract && compareVersions(expected.tag, HEALTH_CONTRACT_V2_TAG) >= 0
+  const healthContractVersion = usesV3Contract ? '3' : usesV2Contract ? '2' : '1'
+  const expectedModuleIds = usesV3Contract
+    ? CURRENT_MODULE_IDS
+    : usesV2Contract ? V2_MODULE_IDS : LEGACY_MODULE_IDS
+  const sqliteModuleIds = usesV3Contract
+    ? CURRENT_SQLITE_MODULE_IDS
+    : usesV2Contract ? V2_SQLITE_MODULE_IDS : LEGACY_SQLITE_MODULE_IDS
   const deadline = Date.now() + config.healthTimeoutMs
   let consecutive = 0
   let lastMessage = '服务尚未响应'
@@ -636,7 +645,7 @@ async function waitForHealth(config, expected) {
         signal: AbortSignal.timeout(5000),
         headers: {
           'User-Agent': 'lenovo-store-operations-updater/2',
-          'X-Lenovo-Store-Health-Contract': usesCurrentContract ? '2' : '1',
+          'X-Lenovo-Store-Health-Contract': healthContractVersion,
         },
       })
       const body = await response.json()

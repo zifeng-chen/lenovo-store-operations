@@ -20,8 +20,8 @@ const requiredDistDirectories = [
   'apps/computer-labels/dist',
   'apps/price-labels/dist',
   'apps/receipt-assistant/dist',
-  'apps/price-placards/dist',
   'apps/employee-badges/dist',
+  'apps/sales-report/dist',
 ]
 
 function fail(message) {

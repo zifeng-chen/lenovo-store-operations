@@ -3,15 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import {
-  createDatabaseBackup as createPricePlacardsDatabaseBackup,
-  validateDatabaseFile as validatePricePlacardsDatabaseFile
-} from '../apps/server/src/modules/price-placards/database.js';
-import {
   COMPUTER_LABELS_DATABASE_PATH,
   DATA_ROOT,
   isSameOrWithin,
   PRICE_LABELS_DATABASE_PATH,
-  PRICE_PLACARDS_DATABASE_PATH,
   PROJECT_ROOT,
   RECEIPT_ASSISTANT_DATABASE_PATH,
   RECEIPT_OCR_KEY_PATH,
@@ -42,13 +37,7 @@ const stagingDirectory = path.join(backupRoot, `.${timestamp}.${process.pid}.sta
 const databases = [
   { id: 'computer-labels', source: COMPUTER_LABELS_DATABASE_PATH },
   { id: 'price-labels', source: PRICE_LABELS_DATABASE_PATH },
-  { id: 'receipt-assistant', source: RECEIPT_ASSISTANT_DATABASE_PATH },
-  {
-    id: 'price-placards',
-    source: PRICE_PLACARDS_DATABASE_PATH,
-    backup: createPricePlacardsDatabaseBackup,
-    validate: validatePricePlacardsDatabaseFile
-  }
+  { id: 'receipt-assistant', source: RECEIPT_ASSISTANT_DATABASE_PATH }
 ];
 
 function sha256(filePath) {
