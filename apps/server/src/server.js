@@ -203,9 +203,11 @@ function moduleStatus(module) {
   const dataDirectory = path.join(dataRoot, module.id);
   const moduleDist = path.join(projectRoot, 'apps', module.id, 'dist', 'index.html');
   const databaseStatus = databaseStatuses.get(module.id);
+  // 报表模块的 router 直接挂载在 server.js，不走 moduleRuntimes。
+  const hasRouter = module.id === 'sales-report' ? true : Boolean(runtime?.router);
   return {
     ...module,
-    apiReady: module.apiBase ? Boolean(runtime?.router) : null,
+    apiReady: module.apiBase ? hasRouter : null,
     moduleReady: fs.existsSync(moduleDist),
     dataDirectoryReady: usesDatabase ? fs.existsSync(UNIFIED_DATA_DIR) : null,
     databaseConnected: usesDatabase
