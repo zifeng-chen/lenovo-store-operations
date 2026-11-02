@@ -4,6 +4,13 @@
 
 ## 2026-11-02
 
+- 发布补丁版本 `0.6.1`：轮换 Release 签名密钥并重新签发正式 Release。Ed25519 新公钥指纹为 `6e3108efbd2b4951083bfbbc768e628917ef0d289a169a6f26956935ffeff7f6`，部署侧 `/etc/lenovo-store-release-signing.pub` 与 GitHub Actions 变量 `RELEASE_SIGNING_PUBLIC_KEY_SHA256` 必须与该指纹一致，否则在线安装的签名校验失败。
+- 修正 `lenovo-store-backup.service` 的 `WorkingDirectory`：原先指向不存在的 `current` 路径，导致定时备份长期以 `status=200/CHDIR` 失败且从未生成备份。改为项目根目录，并将 `ExecStart` 的 npm 切换为部署 Node.js 绝对路径，同时补充 `Environment=PATH`；修正后手动运行可正常生成三模块一致性快照与 `manifest.json`。
+- 文档同步：README 与 `docs/ubuntu-deployment.md`、`docs/ubuntu-arm64-deployment.md` 对齐 `0.6.0` 的统一数据库、销售业绩报表、备份 `formatVersion: 3` 和 updater 分级 health 契约，移除价格展牌模块正文与验收项，仅保留历史备份兼容说明。
+- 发布流程说明：`v0.6.1` 之后新增的版本均使用轮换后的新密钥签名；`v0.5.0`、`v0.5.1`、`v0.6.0` 三个历史 Release 由旧密钥签名，在轮换后的部署上签名校验不通过，不能再作为在线升级来源。
+
+## 2026-11-02（0.6.0）
+
 - 发布版本提升至 `0.6.0`：三个持久化业务由各自独立的 SQLite 数据库合并为一个统一数据库 `$LENOVO_STORE_DATA_DIR/store/store.sqlite`。各模块表统一使用模块前缀隔离（仓库货品标签 `computer_`、周边货品价签 `price_`、付款凭证 `receipt_`），表结构、索引和读写互不影响，等价于原来的每模块一库。统一库启用 WAL 模式、`busy_timeout = 5000` 和外键约束。
 - 新增第五个业务板块“销售业绩报表”，Portal 路由 `/#/sales-report`、SPA `/modules/sales-report/`、API `/api/sales-report`。报表为只读统计，不创建独立存储，数据来源是付款凭证已记录的销售流水。
 - 销售业绩报表提供五个接口：`/overview` 返回区间销售额合计、笔数、有效销售天数、笔均、日均、中位数、最高单日及上一等长周期环比；`/trend` 支持按日、月、季、年四种粒度聚合；`/comparison` 返回月、季、年三个维度的周期对比及变化百分比；`/items` 按商品名称聚合出现次数、数量和金额小计（上限 100 条）；`/records` 提供销售流水分页查询（每页上限 200 条）并附带逐笔商品明细。
