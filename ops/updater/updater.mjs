@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const REPOSITORY = 'zifeng-chen/lenovo-store-operations'
+const GITHUB_TOKEN = String(process.env.LENOVO_STORE_UPDATER_GITHUB_TOKEN || '').trim()
 const TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -288,6 +289,7 @@ async function fetchWithRedirects(url, options, timeoutMs) {
         Accept: 'application/vnd.github+json',
         'User-Agent': 'lenovo-store-operations-updater',
         'X-GitHub-Api-Version': '2022-11-28',
+        ...(GITHUB_TOKEN && current.hostname === 'api.github.com' ? { Authorization: `Bearer ${GITHUB_TOKEN}` } : {}),
         ...(options.headers || {}),
       },
     })

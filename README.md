@@ -392,7 +392,11 @@ npm run migrate:data
 - health 契约按目标版本分级校验：`v0.6.0` 起要求五个业务模块加统一库，`v0.5.0`–`v0.5.x` 要求五模块加四套独立库，更早版本使用四模块兼容视图，避免跨版本升级时因模块集合不一致误判失败；
 - fsync 事务 journal 记录领取、准备、切换、恢复与提交阶段，进程终止或断电后由 systemd 启动门保守恢复。
 
-可选 `LENOVO_STORE_GITHUB_TOKEN` 只由服务端版本检查使用，不进入浏览器、API 响应、日志或 Git；root updater 当前使用 GitHub 公开 Release 下载接口，因此发布资产必须保持公开。首次启用、`0.3.0` Git checkout 迁移、故障演练和人工回退见 [Ubuntu 部署指南](docs/ubuntu-deployment.md)。
+可选 `LENOVO_STORE_GITHUB_TOKEN` 只由服务端版本检查使用，不进入浏览器、API 响应、日志或 Git；root updater 当前使用 GitHub 公开 Release 下载接口，因此发布资产必须保持公开。
+
+root updater 自身支持通过 `LENOVO_STORE_UPDATER_GITHUB_TOKEN` 环境变量携带 GitHub 只读令牌。该令牌仅在请求 `api.github.com` 时作为 `Authorization` 头发送，不会附加到 `github.com` 等资产下载域名，也不写入日志或状态文件。用于出口 IP 共享、匿名 API 配额容易耗尽的部署；未设置时保持匿名访问。运行更新器的 systemd 单元存在 `RestrictSUIDSGID=true` 时，部分内核（如 CIX 定制内核）会让 `tar` 解压返回 `Function not implemented`（ENOSYS），因此模板固定为 `RestrictSUIDSGID=false`。
+
+首次启用、`0.3.0` Git checkout 迁移、故障演练和人工回退见 [Ubuntu 部署指南](docs/ubuntu-deployment.md)。
 
 根 `package.json` 的 `version` 是整套产品的唯一发布版本。准备新版本时先更新版本、README、CHANGELOG 和相关文档并提交，再创建完全一致的严格 `vX.Y.Z` tag。例如发布 `0.6.0`：
 
