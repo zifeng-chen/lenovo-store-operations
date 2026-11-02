@@ -12,19 +12,20 @@
 
 ## 1. 持久化范围
 
-系统中有四个板块使用服务器端 SQLite：
+系统中三个板块使用服务器端数据，从 `0.6.0` 起统一存放在同一个 SQLite 文件中，各模块表以模块前缀隔离：
 
-| 板块 | 数据文件 |
+| 板块 | 数据位置 |
 | --- | --- |
-| 仓库货品标签 | `$LENOVO_STORE_DATA_DIR/computer-labels/database.sqlite` |
-| 周边货品价签 | `$LENOVO_STORE_DATA_DIR/price-labels/database.sqlite` |
-| 价格展牌打印 | `$LENOVO_STORE_DATA_DIR/price-placards/database.sqlite` |
-| 付款凭证打印 | `$LENOVO_STORE_DATA_DIR/receipt-assistant/database.sqlite` |
+| 仓库货品标签 | `$LENOVO_STORE_DATA_DIR/store/store.sqlite` 中的 `computer_*` 表 |
+| 周边货品价签 | `$LENOVO_STORE_DATA_DIR/store/store.sqlite` 中的 `price_*` 表 |
+| 付款凭证打印 | `$LENOVO_STORE_DATA_DIR/store/store.sqlite` 中的 `receipt_*` 表 |
 | 付款凭证 OCR 密钥 | `$LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key` |
 
-员工工牌制作模块不会将姓名、岗位或二维码发送到服务器，也没有 SQLite 数据库。刷新或关闭员工工牌制作页面后，当前录入内容会清空。
+员工工牌制作模块不会将姓名、岗位或二维码发送到服务器，也没有 SQLite 数据库。刷新或关闭员工工牌制作页面后，当前录入内容会清空。销售业绩报表为只读统计模块，读取付款凭证已记录的销售流水，不拥有独立存储，也不提供备份或恢复入口。
 
-SQLite 使用 WAL 模式时，运行目录中可能同时出现 `database.sqlite-wal` 和 `database.sqlite-shm`。在线备份应使用项目提供的 `npm run backup:data`；手工复制必须先停服并复制整个数据目录，不能只复制主数据库文件。
+统一数据库启用 WAL 模式，运行目录中会同时出现 `store.sqlite-wal` 和 `store.sqlite-shm`。在线备份应使用项目提供的 `npm run backup:data`；手工复制必须先停服并复制整个数据目录，不能只复制主数据库文件。
+
+从 `0.5.x` 或更早版本升级时，旧的 `computer-labels/`、`price-labels/`、`receipt-assistant/` 目录会保留在磁盘上，但 `0.6.0` 服务不再读写它们。确认统一库数据核对无误并完成独立备份前，不要删除这些旧目录。
 
 ## 2. 推荐目录布局
 
@@ -265,6 +266,8 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 
 health 必须返回 `persistentDataConfigured: true`、`updateInstallationEnabled: true`，且 `build.version`、40 位 `build.commit` 与 `current/release-info.json` 完全一致。无维护令牌时还应显示 `maintenanceAccessMode: trusted-lan` 和 `updateAuthenticationRequired: false`；配置维护令牌时后者必须为 `true`。
 
+从 `0.6.0` 起，updater 按目标版本分级校验 health 契约：`v0.6.0` 及以上要求五个业务模块（含销售业绩报表）加统一数据库 `store/store.sqlite`；`v0.5.0`–`v0.5.x` 仍按五模块加四套独立库校验；更早版本使用四模块兼容视图。跨版本升级时不会因模块集合或数据库布局变化被判为失败，也不会误回滚。
+
 ## 5. 现有服务器无损迁移
 
 本节适用于数据库仍位于旧代码仓库 `data/` 目录的服务器。迁移期间不要执行 `git pull`、重新 clone、删除旧 release 或创建新的空数据库。
@@ -278,7 +281,7 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 sudo journalctl -u lenovo-store-operations -n 100 --no-pager
 ```
 
-记录四个持久化板块的业务记录数量和最新一条记录。若旧数据来自 `0.4.x` 或更早版本，价格展牌库可能尚不存在；这表示新模块没有旧数据来源，不应伪造第四份旧库。不要仅凭目录名称判断哪套数据库正在使用。
+记录各业务板块的记录数量和最新一条记录。从 `0.6.0` 起数据位于统一库 `store/store.sqlite`，按模块前缀分表；从旧版本迁移时旧目录仍会保留，供核对与回滚。不要仅凭目录名称判断哪套数据库正在使用。
 
 ### 5.2 停服并制作冷备份
 
@@ -295,13 +298,13 @@ OLD_REPO=/absolute/path/to/lenovo-store-operations
 COLD_BACKUP="/var/backups/lenovo-store-operations/pre-migration-$(date +%Y%m%d-%H%M%S)"
 
 sudo cp -a "$OLD_REPO/data" "$COLD_BACKUP"
-sudo test -f "$COLD_BACKUP/computer-labels/database.sqlite"
-sudo test -f "$COLD_BACKUP/price-labels/database.sqlite"
-sudo test -f "$COLD_BACKUP/receipt-assistant/database.sqlite"
-if sudo test -f "$COLD_BACKUP/price-placards/database.sqlite"; then
-  echo '已包含 0.5.0 价格展牌库。'
+if sudo test -f "$COLD_BACKUP/store/store.sqlite"; then
+  echo '已包含统一数据库 store/store.sqlite。'
 else
-  echo '旧于 0.5.0 的数据可不含价格展牌库；首次 0.5.0 启动将创建空库。'
+  echo '旧于 0.6.0 的数据没有统一库，首次 0.6.0 启动会从旧目录导入。'
+  sudo test -d "$COLD_BACKUP/computer-labels"
+  sudo test -d "$COLD_BACKUP/price-labels"
+  sudo test -d "$COLD_BACKUP/receipt-assistant"
 fi
 ```
 
@@ -337,13 +340,13 @@ sudo test ! -e "$STAGING" || {
 }
 
 sudo cp -a "$OLD_REPO/data" "$STAGING"
-sudo test -f "$STAGING/computer-labels/database.sqlite"
-sudo test -f "$STAGING/price-labels/database.sqlite"
-sudo test -f "$STAGING/receipt-assistant/database.sqlite"
-if sudo test -f "$STAGING/price-placards/database.sqlite"; then
-  echo '迁移现有价格展牌库。'
+if sudo test -f "$STAGING/store/store.sqlite"; then
+  echo '迁移现有统一数据库。'
 else
-  echo '来源早于 0.5.0：允许缺少价格展牌库，首次启动将创建空库。'
+  echo '来源旧于 0.6.0：保留旧目录，首次 0.6.0 启动会导入到统一库。'
+  sudo test -d "$STAGING/computer-labels"
+  sudo test -d "$STAGING/price-labels"
+  sudo test -d "$STAGING/receipt-assistant"
 fi
 sudo chown -R <service-user>:<service-group> "$STAGING"
 sudo chmod 0750 "$STAGING"
@@ -366,10 +369,10 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 必须确认：
 
 - `persistentDataConfigured` 为 `true`；
-- 四个 SQLite 板块的 `databaseConnected` 均为 `true`；
+- 三个 SQLite 板块的 `databaseConnected` 均为 `true`，且都指向统一库 `store/store.sqlite`；
 - 启动日志中的数据根路径正确；
-- 三个旧业务的记录数量和最新记录与迁移前一致；
-- 若来源已有 0.5.0 数据，价格展牌记录、版本和图片引用与迁移前一致；若来源早于 0.5.0，则新建的价格展牌库应为空；
+- 各业务板块的记录数量和最新记录与迁移前一致；
+- 销售业绩报表能正常加载总览与趋势数据；
 - 付款凭证 OCR 配置可正常使用。
 
 完成独立备份和业务验收前，不要删除旧仓库中的 `data/`。
@@ -394,7 +397,7 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 3. 无维护令牌的可信局域网可直接继续；配置维护令牌时按页面提示输入，令牌只保存在当前页面内存；
 4. 在二次确认框完整输入“安装”；
 5. 保持页面打开，观察排队、备份、下载、验签、构建、切换、重启、连续健康检查和完成/回滚阶段；
-6. 完成后核对 health 的版本和完整 commit，并检查五个业务模块、四套数据库及关键业务记录。
+6. 完成后核对 health 的版本和完整 commit，并检查五个业务模块、统一数据库及关键业务记录。
 
 Web 服务只提交 tag 和任务编号，不接收 URL、commit、Shell 参数或任意历史版本。root updater 会重新从固定 GitHub Release 获取 `manifest.json`、Ed25519 签名、`SHA256SUMS` 和发布包；只有四项身份与摘要绑定、候选构建检查和升级前备份全部成功后才切换 `current`。健康检查失败会自动把 `current`、`previous` 恢复到旧 release 并重新验证；数据目录不会随代码切换。
 
@@ -482,9 +485,9 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 4. 浏览器下载一个 `lenovo-store-backup-<timestamp>.lsbackup` 文件；
 5. 将文件移动到权限受控、具备独立备份策略的目录，并记录来源服务器和创建时间。
 
-`.lsbackup` 当前 writer 固定生成 `formatVersion: 2`，一次包含仓库货品、周边价签、付款凭证和价格展牌四套 SQLite 在线一致性快照。本机 OCR 密钥模式下还包含配套密钥，因此该文件可以用于离线解密已保存的 OCR 凭据，必须按敏感密钥材料保护；环境密钥模式不会导出 `OCR_CONFIG_ENCRYPTION_KEY`，恢复付款凭证时目标服务必须配置相同环境密钥。付款凭证快照同时校验 OCR 调用次数账本；恢复时识别历史按备份替换，但用量账本只按请求与尝试编号合并、不清空目标已有记录，避免通过恢复旧备份增加免费剩余次数。文件最大 1GB，不压缩。清单和 SHA-256 能发现截断、重叠、尾随内容及传输损坏，但不能证明文件来源，只能使用从受信任服务器直接下载的文件。
+`.lsbackup` 当前 writer 固定生成 `formatVersion: 3`，一次包含仓库货品、周边价签和付款凭证三个模块的在线一致性快照。本机 OCR 密钥模式下还包含配套密钥，因此该文件可以用于离线解密已保存的 OCR 凭据，必须按敏感密钥材料保护；环境密钥模式不会导出 `OCR_CONFIG_ENCRYPTION_KEY`，恢复付款凭证时目标服务必须配置相同环境密钥。付款凭证快照同时包含 OCR 识别历史、结构化解析结果、销售流水、商品明细和调用次数账本；恢复时识别历史和销售流水按备份替换，但用量账本只按请求与尝试编号合并、不清空目标已有记录，避免通过恢复旧备份增加免费剩余次数。文件最大 1GB，不压缩。清单和 SHA-256 能发现截断、重叠、尾随内容及传输损坏，但不能证明文件来源，只能使用从受信任服务器直接下载的文件。
 
-reader 继续接受历史 `formatVersion: 1` 三库包和当前 v2 四库包。检查 v1 时，价格展牌明确显示“未包含（not-in-backup）”，不能从 v1 恢复，也不会把当前价格展牌库清空；原三模块仍可分别恢复。旧 `0.4.x` 服务不能读取 v2，这是向前版本边界：需要导入 v2 时，必须先更新代码并重启到支持 v2 的服务，再上传检查，不能先用旧服务恢复。
+reader 继续接受历史 `formatVersion: 1` 三库包、`formatVersion: 2` 四库包和当前 v3 三库包。检查 v1/v2 时，其中的价格展牌条目显示“未包含（not-in-backup）”，`0.6.0` 及以后不再恢复该模块，也不会清空任何现有数据；同包内其他三个模块仍可分别恢复。旧 `0.5.x` 及更早服务不能读取 v3，这是向前版本边界：需要导入 v3 时，必须先更新代码并重启到支持 v3 的服务，再上传检查，不能先用旧服务恢复。
 
 浏览器统一备份不能替代无人值守的服务器定时备份。页面下载依赖浏览器会话和本机磁盘；定时、升级前和灾难恢复仍使用下一节的 `npm run backup:data` 目录快照。
 
@@ -515,7 +518,6 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 /var/backups/lenovo-store-operations/<timestamp>/
 ├── computer-labels/database.sqlite
 ├── price-labels/database.sqlite
-├── price-placards/database.sqlite
 ├── receipt-assistant/database.sqlite
 ├── secrets/receipt-ocr.key
 └── manifest.json
@@ -585,15 +587,15 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 
 在线恢复有以下边界：
 
-- 四个持久化模块没有跨库事务，因此不提供“一键恢复全部”；某模块失败不会回滚之前已明确成功的其他模块；
-- 仓库货品、周边价签和付款凭证在各自 SQLite 事务中替换已知表；价格展牌先严格校验完整数据集，再通过 staged/rollback 整库替换，失败保留恢复前数据库；
+- 三个持久化模块没有跨模块事务，因此不提供“一键恢复全部”；某模块失败不会回滚之前已明确成功的其他模块；
+- 仓库货品、周边价签和付款凭证在统一库的各自事务中替换已知表；每个模块恢复前先严格校验完整数据集，失败保留恢复前数据；
 - 付款凭证存在进行中的 OCR 识别或配置保存时会拒绝恢复；成功后会重建 OCR runtime；
 - 本机密钥备份会先用包内密钥解密，再用目标服务器当前有效密钥重新加密，不直接覆盖目标密钥；
-- 环境密钥指纹不匹配时，付款凭证显示“不兼容”且按钮禁用，另外三个模块仍可恢复；
-- 当前 v2 包可恢复四个模块；历史 v1 只含原三库，inspect 会把价格展牌显示为“未包含”，价格展牌恢复按钮禁用且不会清空现有数据；
-- 旧 `0.4.x` 服务不能读取 v2；恢复 v2 前必须先更新代码并重启服务，再上传检查；
+- 环境密钥指纹不匹配时，付款凭证显示“不兼容”且按钮禁用，另外两个模块仍可恢复；
+- 当前 v3 包可恢复三个模块；历史 v1/v2 包中的价格展牌条目显示“未包含”，恢复按钮禁用且不会清空任何现有数据；
+- 旧 `0.5.x` 及更早服务不能读取 v3；恢复 v3 前必须先更新代码并重启服务，再上传检查；
 - 上传检查验证格式、摘要、SQLite 完整性、表结构、业务字段与计数，但不证明备份来源；
-- 仓库货品标签原 Excel/SQLite、周边货品价签原 JSON，以及价格展牌 JSON/SQLite DB 入口继续保留。
+- 仓库货品标签原 Excel/SQLite、周边货品价签原 JSON 入口继续保留；销售业绩报表只读且无独立导入导出。
 
 生产环境维护接口始终要求同源请求和 `X-Lenovo-Store-Maintenance: 1`。令牌模式还要求正确的 Bearer 维护令牌；不要通过命令行历史直接拼接真实令牌，自动化应从 root-only 环境文件或密钥管理系统读取。可信局域网免令牌模式只取消 Bearer 要求，不取消同源和维护标识检查；任何能访问服务端口并构造请求的客户端仍可能执行备份或覆盖业务数据，因此必须通过防火墙限制可信网段，禁止在公网启用。人工操作优先使用系统状态页。
 
@@ -616,7 +618,6 @@ SNAPSHOT=/var/backups/lenovo-store-operations/<timestamp>
 sudo test -f "$SNAPSHOT/manifest.json"
 sudo test -f "$SNAPSHOT/computer-labels/database.sqlite"
 sudo test -f "$SNAPSHOT/price-labels/database.sqlite"
-sudo test -f "$SNAPSHOT/price-placards/database.sqlite"
 sudo test -f "$SNAPSHOT/receipt-assistant/database.sqlite"
 sudo cat "$SNAPSHOT/manifest.json"
 
@@ -686,21 +687,18 @@ sudo test ! -e "$FAILED" || {
 sudo install -d -m 0750 -o <service-user> -g <service-group> "$STAGING"
 sudo cp -a "$SNAPSHOT/computer-labels" "$STAGING/"
 sudo cp -a "$SNAPSHOT/price-labels" "$STAGING/"
-sudo cp -a "$SNAPSHOT/price-placards" "$STAGING/"
 sudo cp -a "$SNAPSHOT/receipt-assistant" "$STAGING/"
 if sudo test -d "$SNAPSHOT/secrets"; then
   sudo cp -a "$SNAPSHOT/secrets" "$STAGING/"
 fi
 sudo test -f "$STAGING/computer-labels/database.sqlite"
 sudo test -f "$STAGING/price-labels/database.sqlite"
-sudo test -f "$STAGING/price-placards/database.sqlite"
 sudo test -f "$STAGING/receipt-assistant/database.sqlite"
 sudo chown -R <service-user>:<service-group> "$STAGING"
 
 for database in \
   "$STAGING/computer-labels/database.sqlite" \
   "$STAGING/price-labels/database.sqlite" \
-  "$STAGING/price-placards/database.sqlite" \
   "$STAGING/receipt-assistant/database.sqlite"
 do
   result=$(sudo sqlite3 "$database" 'PRAGMA integrity_check;')
@@ -746,7 +744,7 @@ fi
 
 ### 8.4 业务验收和人工回滚
 
-健康接口只能证明数据库可打开，不能证明恢复了正确的业务版本。切换成功后必须核对四个持久化板块的记录数量和最新记录、价格展牌版本/图片引用，以及付款凭证 OCR 解密；确认无误前保留 `$ROLLBACK`。
+健康接口只能证明数据库可打开，不能证明恢复了正确的业务版本。切换成功后必须核对各业务板块的记录数量和最新记录、销售业绩报表的统计结果，以及付款凭证 OCR 解密；确认无误前保留 `$ROLLBACK`。
 
 ```bash
 curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
@@ -810,7 +808,7 @@ sudo systemctl start lenovo-store-operations.service
 curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 ```
 
-保持 updater path 停止，核对 health 的版本/完整 commit 与回退目标 `release-info.json`，并检查六套前端构建产物（Portal + 5 个业务 SPA）、四套 SQLite 和业务数据。验收失败时不要连续交换链接。
+保持 updater path 停止，核对 health 的版本/完整 commit 与回退目标 `release-info.json`，并检查六套前端构建产物（Portal + 5 个业务 SPA）、统一数据库和业务数据。验收失败时不要连续交换链接。
 
 验收成功后，再次停止主服务并检查三个状态文件；确认验收期间没有新请求后，先恢复 path，再启动主服务：
 
@@ -915,8 +913,8 @@ volumes:
 - [ ] 启动日志中的数据根为 `/var/lib/lenovo-store-operations`；
 - [ ] 健康接口 `persistentDataConfigured` 和 `updateInstallationEnabled` 均为 `true`；
 - [ ] 四个 SQLite 板块 `databaseConnected` 为 `true`；
-- [ ] 三个旧业务的记录数量和最新记录正确；来源已运行 0.5.0 时还已核对价格展牌历史/图片，旧来源则确认新价格展牌库为空；
-- [ ] health/updater 已识别五个业务模块、四套 SQLite 和六套前端构建产物（Portal + 5 个业务 SPA）；
+- [ ] 各业务板块的记录数量和最新记录正确，销售业绩报表统计结果与源数据一致；
+- [ ] health/updater 已识别五个业务模块、统一数据库和六套前端构建产物（Portal + 5 个业务 SPA）；
 - [ ] 付款凭证 OCR 配置可用；
 - [ ] 员工工牌页面可访问，并理解其数据不会持久化；
 - [ ] 手动备份成功生成时间戳目录和 `manifest.json`；

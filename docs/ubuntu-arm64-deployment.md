@@ -17,7 +17,7 @@
 ├── current -> releases/<...>         # 当前代码
 └── previous -> releases/<...>        # 最近回退代码
 /var/lib/lenovo-store-service/         # 服务账号 HOME，不保存 release
-/var/lib/lenovo-store-operations/      # 四套 SQLite 与 OCR 密钥
+/var/lib/lenovo-store-operations/      # 统一 SQLite 数据库与 OCR 密钥
 /var/backups/lenovo-store-operations/  # 一致性备份
 /var/lib/lenovo-store-updater/         # root-owned 状态和事务 journal
 /run/lenovo-store-updater/             # 受限 Web → systemd 单任务 IPC
@@ -491,7 +491,7 @@ sudo test ! -L /var/lib/lenovo-store-operations
 sudo test ! -L /var/backups/lenovo-store-operations
 ```
 
-首次启动会创建四套数据库。员工工牌模块无服务端数据库；全新部署的价格展牌库初始为空。
+首次启动会创建统一数据库 `store/store.sqlite`。员工工牌模块无服务端数据库；销售业绩报表为只读统计，不拥有独立存储。
 
 ### 10.B 迁移现有 checkout 内的完整 `data/`
 
@@ -538,13 +538,13 @@ STAGING_SPECIAL=$(sudo find "$STAGING" ! -type d ! -type f -print -quit)
   exit 1
 }
 
-sudo test -f "$STAGING/computer-labels/database.sqlite"
-sudo test -f "$STAGING/price-labels/database.sqlite"
-sudo test -f "$STAGING/receipt-assistant/database.sqlite"
-if sudo test -f "$STAGING/price-placards/database.sqlite"; then
-  echo '来源包含 0.5.0 价格展牌库，将完整迁移。'
+if sudo test -f "$STAGING/store/store.sqlite"; then
+  echo '来源包含统一数据库，将完整迁移。'
 else
-  echo '旧 checkout 不含价格展牌库；0.5.0 首次启动将创建空库。'
+  echo '旧 checkout 不含统一库；0.6.0 首次启动会从旧目录导入。'
+  sudo test -d "$STAGING/computer-labels"
+  sudo test -d "$STAGING/price-labels"
+  sudo test -d "$STAGING/receipt-assistant"
 fi
 sudo test -f "$STAGING/secrets/receipt-ocr.key"
 
@@ -552,13 +552,14 @@ sudo chown -R lenovo-store:lenovo-store "$STAGING"
 sudo find "$STAGING" -type d -exec chmod 0700 {} +
 sudo find "$STAGING" -type f -exec chmod 0600 {} +
 
-DATABASES=(
-  "$STAGING/computer-labels/database.sqlite"
-  "$STAGING/price-labels/database.sqlite"
-  "$STAGING/receipt-assistant/database.sqlite"
-)
-if sudo test -f "$STAGING/price-placards/database.sqlite"; then
-  DATABASES+=("$STAGING/price-placards/database.sqlite")
+if sudo test -f "$STAGING/store/store.sqlite"; then
+  DATABASES=("$STAGING/store/store.sqlite")
+else
+  DATABASES=(
+    "$STAGING/computer-labels/database.sqlite"
+    "$STAGING/price-labels/database.sqlite"
+    "$STAGING/receipt-assistant/database.sqlite"
+  )
 fi
 for db in "${DATABASES[@]}"
 do
@@ -632,7 +633,7 @@ do
 done
 ```
 
-旧项目源文件和迁移后数据都要先备份；业务验收完成前不要删除源文件。这里的“三个旧项目”与脚本契约保持不变：历史来源只有仓库货品、周边价签和付款凭证，不存在 price-placards 第四旧源。完成本节时价格展牌库尚不存在；第一次启动 `0.5.0` 服务会创建空的 `$LENOVO_STORE_DATA_DIR/price-placards/database.sqlite`。这不是数据丢失，也不能凭空迁移不存在的旧展牌数据。首次启动后应对第四库执行完整性检查，并确认价格展牌记录、版本和图片数量均为 0。
+旧项目源文件和迁移后数据都要先备份；业务验收完成前不要删除源文件。这里的“三个旧项目”与脚本契约保持不变：历史来源只有仓库货品、周边价签和付款凭证。执行本节时统一库尚不存在；第一次启动 `0.6.0` 服务会创建 `$LENOVO_STORE_DATA_DIR/store/store.sqlite` 并从旧目录导入已有数据。这不是数据丢失，也不能凭空迁移不存在的旧数据。首次启动后应对统一库执行完整性检查，并确认三个业务板块的记录数量与旧系统一致。
 
 ## 11. 创建精确生产环境文件
 
@@ -763,8 +764,8 @@ sudo journalctl -u lenovo-store-operations.service -n 100 --no-pager
 3. commit 是完整 40 位提交；
 4. 数据目录是 `/var/lib/lenovo-store-operations`，不是 checkout 内 `data/`；
 5. Portal 和五套业务 SPA 都可打开，共六套前端构建产物；
-6. 四套 SQLite 均健康；
-7. 迁移场景下，三个旧业务板块的记录总数、最新记录和抽样内容与旧系统一致；完整迁移已运行 0.5.0 的 checkout 时还要核对价格展牌、版本和图片，三旧项目迁移时则应确认新建价格展牌库为空；
+6. 统一数据库健康；
+7. 迁移场景下，三个业务板块的记录总数、最新记录和抽样内容与旧系统一致；
 8. 付款凭证页面可读取现有 OCR 配置，密钥没有丢失；
 9. 员工工牌是纯浏览器模块，没有服务端数据库；
 10. 从门店客户端访问正常，从不可信网段访问被阻止。
@@ -966,7 +967,7 @@ getent passwd lenovo-store-builder
 getent group lenovo-store-builder
 ```
 
-确认主服务仍使用 `/var/lib/lenovo-store-operations`，四个持久化板块记录没有变化。迁移只切换代码布局，不应迁移或覆盖业务数据库。
+确认主服务仍使用 `/var/lib/lenovo-store-operations`，各业务板块记录没有变化。迁移只切换代码布局，不应迁移或覆盖业务数据库。
 
 ## 16. 定时备份、手动备份和异地副本
 
@@ -1010,7 +1011,7 @@ sudo find /var/backups/lenovo-store-operations \
   | sort | tail -50
 ```
 
-备份脚本通过 SQLite backup API 生成四套一致性快照，执行 `PRAGMA integrity_check`，记录大小、表数量和 SHA-256，并保护 OCR 密钥。不要把“service 退出 0”当作唯一验收；还要检查最新目录和 manifest，确认其中包含 `price-placards/database.sqlite`。
+备份脚本通过 SQLite backup API 生成三个模块的一致性快照，执行 `PRAGMA integrity_check`，记录大小、表数量和 SHA-256，并保护 OCR 密钥。不要把“service 退出 0”当作唯一验收；还要检查最新目录和 manifest，确认其中包含 `store/store.sqlite` 对应的三个模块快照。
 
 ### 16.3 保留与异地备份
 
@@ -1086,7 +1087,7 @@ sudo journalctl -u lenovo-store-updater.service -n 300 --no-pager
 sudo journalctl -u lenovo-store-operations.service -n 200 --no-pager
 ```
 
-必须核对目标 version、完整 commit、外部数据目录、六套前端构建产物（Portal + 5 个业务 SPA）、四套 SQLite，以及四个持久化业务板块的记录数量和最新记录。更新只切换代码；业务数据继续使用同一外部目录。
+必须核对目标 version、完整 commit、外部数据目录、六套前端构建产物（Portal + 5 个业务 SPA）、统一数据库，以及各业务板块的记录数量和最新记录。更新只切换代码；业务数据继续使用同一外部目录。
 
 ## 18. updater 安全与恢复机制
 
@@ -1271,7 +1272,7 @@ curl -fsS http://127.0.0.1:8900/api/system/health \
   | python3 -m json.tool
 ```
 
-保持 `lenovo-store-updater.path` 停止，人工核对 health 的 version/完整 commit 与回退目标 `release-info.json` 一致，并检查六套前端构建产物（Portal + 5 个业务 SPA）、四套 SQLite、四个持久化业务板块记录和 OCR。若验收失败，不要连续交换链接，应使用控制台、可信 release 和第 21 节恢复。
+保持 `lenovo-store-updater.path` 停止，人工核对 health 的 version/完整 commit 与回退目标 `release-info.json` 一致，并检查六套前端构建产物（Portal + 5 个业务 SPA）、统一数据库、各业务板块记录和 OCR。若验收失败，不要连续交换链接，应使用控制台、可信 release 和第 21 节恢复。
 
 业务验收成功后，先再次停止主服务并检查三类状态文件；确认没有人在验收期间提交更新请求后，先启动 path，再启动主服务。这一顺序消除“检查后、恢复 path 前”由 Web 服务创建请求的竞态：
 
@@ -1427,14 +1428,14 @@ curl -I --connect-timeout 10 https://nodejs.org/
 2. 停止主服务；
 3. 保留当前数据目录为 rollback，不覆盖；
 4. 把选定备份复制到新的 staging；
-5. 对四套 SQLite（包括 `price-placards/database.sqlite`）执行完整性检查，核对 OCR 密钥；
+5. 对统一数据库 `store/store.sqlite` 执行完整性检查，核对 OCR 密钥；
 6. 原子移动 staging 为正式数据目录；
 7. 启动服务并检查 health；
-8. 核对四个持久化业务板块记录，并抽查价格展牌版本和图片；
+8. 核对各业务板块记录，并确认销售业绩报表统计结果与源数据一致；
 9. 失败时把新目录移到 failed，再恢复 rollback；
 10. 验收后才恢复 updater path。
 
-`.lsbackup` 页面恢复适合按单个模块恢复已检查的统一备份；当前 writer 固定写 v2 四库，reader 兼容 v1/v2。历史 v1 只含三库，inspect 会把价格展牌显示为“未包含”，不能恢复 price-placards，也不会清空现有价格展牌库。旧 `0.4.x` 服务不能读取 v2；需要导入 v2 时，必须先更新代码/服务，再上传检查。目录冷恢复适合整机灾难，已运行 0.5.0 后生成的备份和冷恢复必须包含第四库。两者不能用“直接覆盖运行中数据库”的方式替代。
+`.lsbackup` 页面恢复适合按单个模块恢复已检查的统一备份；当前 writer 固定写 v3 三库包，reader 兼容 v1/v2/v3。历史 v1/v2 包中的价格展牌条目显示“未包含”，`0.6.0` 起不再恢复，也不会清空任何现有数据。旧 `0.5.x` 及更早服务不能读取 v3；需要导入 v3 时，必须先更新代码/服务，再上传检查。目录冷恢复适合整机灾难，`0.6.0` 后生成的备份和冷恢复以统一库 `store/store.sqlite` 为准。两者不能用“直接覆盖运行中数据库”的方式替代。
 
 ## 23. 最终上线验收清单
 
@@ -1465,10 +1466,10 @@ curl -I --connect-timeout 10 https://nodejs.org/
 - [ ] 数据位于 `/var/lib/lenovo-store-operations`；
 - [ ] 备份位于 `/var/backups/lenovo-store-operations`；
 - [ ] 两个目录都不是符号链接且不与代码重叠；
-- [ ] 四套 SQLite 完整性检查通过；
+- [ ] 统一数据库完整性检查通过；
 - [ ] OCR 密钥与付款凭证数据库成对保留；
-- [ ] health、六套前端构建产物（Portal + 5 个业务 SPA）、五个业务模块和四套数据库均正常；
-- [ ] 三个旧业务板块记录数量和最新记录已人工核对；若迁移的是已运行 0.5.0 的完整 data，还已核对价格展牌历史/图片；若执行三旧项目迁移，则已确认价格展牌新库为空；
+- [ ] health、六套前端构建产物（Portal + 5 个业务 SPA）、五个业务模块和统一数据库均正常；
+- [ ] 各业务板块记录数量和最新记录已人工核对，销售业绩报表统计结果正确；
 - [ ] backup service 手动运行成功且已检查 manifest；
 - [ ] daily timer 已启用；
 - [ ] 已生成受控异地备份并做过恢复演练。
