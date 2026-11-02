@@ -113,11 +113,88 @@ export function findDiscount(lines) {
 }
 
 /**
+ * 列式布局商品识别。
+ * 部分收银系统（如银联商务小票）把商品列拆成多行：名称行若干，随后依次是单价、数量、小计三行纯数字。
+ * 该函数在表头「商品…条码…数量」之后定位「单价 / 数量 / 小计」三元组，并回溯收集商品名称续行。
+ */
+export function findColumnItems(lines) {
+  // 表头有两种版式：单行「商品条码单价数量」，或拆成两行「商品」+「条码单价数量」
+  let headerIndex = lines.findIndex(line => /商品/.test(line) && /(条码|单价|数量)/.test(line))
+  if (headerIndex < 0) {
+    const soloHeader = lines.findIndex(line => /^条码.*(单价|数量)/.test(line.trim()))
+    if (soloHeader >= 0) headerIndex = soloHeader
+  }
+  if (headerIndex < 0) return []
+
+  const isPureAmount = line => /^-?\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?$|^-?\d+\.?\d*$/.test(line.trim())
+  const skipNamePattern = /^(交易来源|参考号|渠道商|银商订单|外部订单|单号|终端|门店|操作员|收银员|商户|时间|日期|折扣|金额)/
+
+  const items = []
+  let index = headerIndex + 1
+  let pendingNames = []
+
+  while (index < lines.length) {
+    const line = lines[index].trim()
+
+    // 连续三个纯数字行 = 单价 / 数量 / 小计
+    if (index + 2 < lines.length
+      && isPureAmount(line)
+      && isPureAmount(lines[index + 1].trim())
+      && isPureAmount(lines[index + 2].trim())) {
+      const first = Number(line.replace(/,/g, ''))
+      const middle = Number(lines[index + 1].trim().replace(/,/g, ''))
+      const last = Number(lines[index + 2].trim().replace(/,/g, ''))
+
+      // 银联小票该三元组为「单价 / 折扣或数量 / 小计」，单价通常等于小计（件数为 1）。
+      // 条码、订单号同样是数字行，因此要求首尾金额接近、且都在合理范围内。
+      const plausible = v => Number.isFinite(v) && v > 0 && v < 1e7
+      const priceMatchesSubtotal = plausible(first) && plausible(last)
+        && Math.abs(first - last) < Math.max(0.05, last * 0.02)
+
+      if (priceMatchesSubtotal && pendingNames.length) {
+        let qty = 1
+        let unitPrice = first
+        // middle 与单价接近时视为件数 1 的小计重复行；否则按 小计/单价 推算件数
+        if (middle > 0 && middle <= 1e5 && Math.abs(first * middle - last) < Math.max(0.05, last * 0.01)) {
+          qty = Number.isInteger(middle) ? middle : Math.round(middle * 100) / 100
+        } else if (middle > 0 && middle < 1e4) {
+          const derived = Math.round((last / first) * 10000) / 10000
+          qty = Number.isInteger(derived) && derived > 0 && derived <= 10000 ? derived : 1
+        }
+        if (qty > 1) unitPrice = Math.round((last / qty) * 100) / 100
+
+        items.push({
+          name: pendingNames.join(' ').slice(0, 200),
+          qty,
+          unitPrice: Math.round(unitPrice * 100) / 100,
+          subtotal: Math.round(last * 100) / 100,
+          matchedText: [...pendingNames, line, lines[index + 1].trim(), lines[index + 2].trim()].join(' | ')
+        })
+        pendingNames = []
+        index += 3
+        continue
+      }
+    }
+
+    // 跳过单号、条码等纯数字/长串，避免误当作商品名
+    if (isPureAmount(line) || /^\d{10,}$/.test(line)) { index += 1; continue }
+
+    if (!skipNamePattern.test(line) && line.length >= 2) pendingNames.push(line)
+    index += 1
+  }
+
+  return items
+}
+
+/**
  * 商品明细行识别。
  * 小票常见布局：名称 [数量] 单价 小计，或 名称 x数量 金额。
  * 只在命中明确的价格行时才产出条目，避免把普通文字误判为商品。
  */
 export function findItems(lines) {
+  const columnItems = findColumnItems(lines)
+  if (columnItems.length) return columnItems
+
   const items = []
   const skipPattern = /(合计|总计|应付|实付|实收|支付|找零|优惠|折扣|税额|税率|小计合计|订单|单号|时间|日期|商户|收银|会员)/
   const trailingAmounts = /(-?\d{1,3}(?:,\d{3})*\.\d{2}|-?\d+\.\d{2})\s*$/

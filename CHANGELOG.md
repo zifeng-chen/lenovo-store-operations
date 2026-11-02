@@ -4,6 +4,8 @@
 
 ## 2026-11-02
 
+- 修复付款凭证 OCR 商品明细长期为空的问题：`receipt_parser.js` 新增 `findColumnItems`，识别银联商务小票常见的列式分行版式——表头之后商品名称可能跨多行，随后依次为单价、折扣/数量、小计三行纯数字。此前解析器只支持「名称与金额同行」，导致该版式下 `items` 恒为空数组，`receipt_sale_items` 表始终无数据、销售业绩报表的商品明细页无内容。
+- 列式识别用「单价与小计接近」「数量与单价乘积关系」排除条码、订单号等长数字串的误判，并兼容表头单行「商品条码单价数量」与拆成两行「商品」+「条码单价数量」两种版本；原有同行版式解析保持不变，仅在列式版式命中时优先使用。
 - 发布补丁版本 `0.6.1`：轮换 Release 签名密钥并重新签发正式 Release。Ed25519 新公钥指纹为 `6e3108efbd2b4951083bfbbc768e628917ef0d289a169a6f26956935ffeff7f6`，部署侧 `/etc/lenovo-store-release-signing.pub` 与 GitHub Actions 变量 `RELEASE_SIGNING_PUBLIC_KEY_SHA256` 必须与该指纹一致，否则在线安装的签名校验失败。
 - 修正 `lenovo-store-backup.service` 的 `WorkingDirectory`：原先指向不存在的 `current` 路径，导致定时备份长期以 `status=200/CHDIR` 失败且从未生成备份。改为项目根目录，并将 `ExecStart` 的 npm 切换为部署 Node.js 绝对路径，同时补充 `Environment=PATH`；修正后手动运行可正常生成三模块一致性快照与 `manifest.json`。
 - 文档同步：README 与 `docs/ubuntu-deployment.md`、`docs/ubuntu-arm64-deployment.md` 对齐 `0.6.0` 的统一数据库、销售业绩报表、备份 `formatVersion: 3` 和 updater 分级 health 契约，移除价格展牌模块正文与验收项，仅保留历史备份兼容说明。
