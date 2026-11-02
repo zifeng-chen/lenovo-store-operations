@@ -16,7 +16,7 @@
 
 每次功能、配置、部署方式或文档更新都必须同步维护 GitHub 仓库文档，并按 `YYYY-MM-DD` 记录更新日期和主要内容。最新更新与完整历史请查看 [CHANGELOG.md](CHANGELOG.md)。
 
-当前最新记录：`2026-11-02`，发布 `0.6.1`：轮换 Release 签名密钥并重新签发正式 Release，新公钥指纹为 `6e3108efbd2b4951083bfbbc768e628917ef0d289a169a6f26956935ffeff7f6`；修正 `lenovo-store-backup.service` 中指向不存在 `current` 路径的 `WorkingDirectory`，恢复长期失败的定时备份。`0.6.0` 将三个持久化业务合并为统一 SQLite 数据库 `store/store.sqlite`，各模块表以模块前缀隔离；新增第五个业务板块“销售业绩报表”，提供区间汇总、按日/月/季/年趋势、周期对比、商品明细和销售流水分页查询；付款凭证 OCR 识别结果新增结构化解析（商户、日期、金额、订单号、支付方式和商品明细）并落库；移除价格展牌模块及其数据表，`.lsbackup` 升级为 `formatVersion: 3` 三库格式。
+当前最新记录：`2026-11-02`，发布 `0.6.2`：修复付款凭证 OCR 商品明细长期为空的问题，新增列式分行小票解析，支持银联商务小票「商品名多行 + 单价/折扣/小计三行」版式，使 `receipt_sale_items` 正常写入并让销售业绩报表的商品明细页有数据。`0.6.1` 轮换 Release 签名密钥并重新签发正式 Release，新公钥指纹为 `6e3108efbd2b4951083bfbbc768e628917ef0d289a169a6f26956935ffeff7f6`，同时修正 `lenovo-store-backup.service` 中指向不存在 `current` 路径的 `WorkingDirectory`，恢复长期失败的定时备份。
 
 ## 板块说明
 
