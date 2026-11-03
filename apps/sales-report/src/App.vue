@@ -5,6 +5,7 @@ import { BarChart, LineChart } from 'echarts/charts';
 import { AriaComponent, GridComponent, TooltipComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { getComparison, getItems, getOverview, getRecords, getTrend } from './api.js';
+import { splitProductName, toFullName, toShortLabel } from './product-name.js';
 
 use([LineChart, BarChart, AriaComponent, GridComponent, TooltipComponent, CanvasRenderer]);
 
@@ -25,9 +26,11 @@ const quickRange = ref('all');
 const trendChartEl = ref(null);
 const countChartEl = ref(null);
 const compareChartEl = ref(null);
+const itemChartEl = ref(null);
 let trendChart = null;
 let countChart = null;
 let compareChart = null;
+let itemChart = null;
 
 const money = (value) => `¥${Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const compact = (value) => {
@@ -44,6 +47,19 @@ const trendPoints = computed(() => trend.value?.points ?? []);
 const monthRows = computed(() => comparison.value?.months ?? []);
 const quarterRows = computed(() => comparison.value?.quarters ?? []);
 const yearRows = computed(() => comparison.value?.years ?? []);
+
+// 表格行：把 OCR 原始名称拆成型号与配置，型号完整保留不截断
+const itemRows = computed(() => items.value.map((item) => {
+  const { model, config } = splitProductName(item.name);
+  return { ...item, model, config, fullName: toFullName(item.name) };
+}));
+
+// 图表取销售额前五，Y 轴使用中等截取的短标签
+const ITEM_TOP_COUNT = 5;
+const itemTopRows = computed(() => [...itemRows.value]
+  .sort((left, right) => right.total - left.total)
+  .slice(0, ITEM_TOP_COUNT));
+
 
 const granularityOptions = [
   { label: '按日', value: 'day' },
@@ -123,6 +139,7 @@ async function load() {
     try { renderTrend() } catch (error) { console.error('[趋势图渲染失败]', error) }
     try { renderCountChart() } catch (error) { console.error('[构成图渲染失败]', error) }
     try { renderCompareChart() } catch (error) { console.error('[对比图渲染失败]', error) }
+    try { renderItemChart() } catch (error) { console.error('[商品排行图渲染失败]', error) }
   } catch (error) {
     errorMessage.value = error.message || '报表数据加载失败';
   } finally {
@@ -260,10 +277,72 @@ function renderCompareChart() {
   compareChart.resize();
 }
 
+function renderItemChart() {
+  if (!itemChartEl.value) return;
+  if (!itemChart) itemChart = init(itemChartEl.value);
+  const rows = itemTopRows.value;
+  // 横向条形图按销售额升序绘制，使最高的商品显示在顶部
+  const sorted = [...rows].sort((left, right) => left.total - right.total);
+  const labels = sorted.map((row) => toShortLabel(row.fullName));
+  const maxTotal = Math.max(...sorted.map((row) => row.total), 1);
+  itemChart.setOption({
+    grid: { left: 130, right: 110, top: 12, bottom: 24 },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        const row = sorted[params[0].dataIndex];
+        if (!row) return '';
+        return `<b>${row.fullName}</b><br/>销售额：${money(row.total)}<br/>数量：${row.qty ?? '—'}<br/>出现次数：${row.occurrences}`;
+      }
+    },
+    xAxis: {
+      type: 'value',
+      max: maxTotal,
+      axisLabel: { formatter: compact, fontSize: 11 },
+      splitLine: { lineStyle: { type: 'dashed', color: '#eef1f6' } }
+    },
+    yAxis: {
+      type: 'category',
+      data: labels,
+      axisLabel: { fontSize: 12, color: '#46536a', width: 120, overflow: 'truncate' },
+      axisLine: { show: false },
+      axisTick: { show: false }
+    },
+    series: [{
+      type: 'bar',
+      data: sorted.map((row) => ({
+        value: row.total,
+        itemStyle: {
+          borderRadius: [0, 6, 6, 0],
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+            colorStops: [
+              { offset: 0, color: '#7fb2e5' },
+              { offset: 1, color: '#1a5e9c' }
+            ]
+          }
+        }
+      })),
+      barMaxWidth: 26,
+      label: {
+        show: true,
+        position: 'right',
+        distance: 8,
+        fontSize: 11,
+        color: '#46536a',
+        formatter: (params) => money(sorted[params.dataIndex].total)
+      }
+    }]
+  }, true);
+  itemChart.resize();
+}
+
 const handleResize = () => {
   trendChart?.resize();
   countChart?.resize();
   compareChart?.resize();
+  itemChart?.resize();
 };
 
 onMounted(() => {
@@ -276,9 +355,11 @@ onBeforeUnmount(() => {
   trendChart?.dispose();
   countChart?.dispose();
   compareChart?.dispose();
+  itemChart?.dispose();
   trendChart = null;
   countChart = null;
   compareChart = null;
+  itemChart = null;
 });
 </script>
 
@@ -484,11 +565,21 @@ onBeforeUnmount(() => {
       <section class="panel">
         <div class="panel-head">
           <h2>商品销售额排行</h2>
-          <span class="panel-note">来自付款凭证 OCR 识别的商品明细</span>
+          <span class="panel-note">来自付款凭证 OCR 识别的商品明细，图表展示销售额前 {{ ITEM_TOP_COUNT }} 名</span>
         </div>
-        <el-table :data="items" size="small" empty-text="暂无商品明细数据（识别销售票据后自动累积）">
+        <div ref="itemChartEl" class="chart-box chart-box--items"></div>
+        <el-table :data="itemRows" size="small" empty-text="暂无商品明细数据（识别销售票据后自动累积）">
           <el-table-column type="index" label="#" width="56" />
-          <el-table-column prop="name" label="商品名称" min-width="180" show-overflow-tooltip />
+          <el-table-column label="商品名称" min-width="160">
+            <template #default="{ row }">
+              <span class="item-model" :title="row.fullName">{{ row.model }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="配置" min-width="200">
+            <template #default="{ row }">
+              <span class="item-config" :title="row.fullName">{{ row.config || '—' }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="qty" label="数量" width="80" />
           <el-table-column prop="occurrences" label="出现次数" width="90" />
           <el-table-column label="销售额" width="130">

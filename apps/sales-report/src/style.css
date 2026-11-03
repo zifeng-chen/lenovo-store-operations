@@ -144,6 +144,29 @@
   height: 320px;
 }
 
+.chart-box--items {
+  height: 240px;
+  margin-bottom: 12px;
+}
+
+.item-model {
+  display: block;
+  overflow: hidden;
+  color: #26394e;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-config {
+  display: block;
+  overflow: hidden;
+  color: #7c8ba0;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
