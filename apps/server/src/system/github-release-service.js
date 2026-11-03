@@ -1,4 +1,5 @@
 import semver from 'semver'
+import { describeError } from '@lenovo-store/shared/error-catalog'
 import { runtimeInfo } from './runtime-info.js'
 
 export const GITHUB_REPOSITORY = 'zifeng-chen/lenovo-store-operations'
@@ -158,6 +159,7 @@ export function createGithubReleaseService({
   let expiresAt = 0
   let nextRetryAt = 0
   let lastError = null
+  let lastErrorDetail = null
   let searchTruncated = false
   let inFlight = null
 
@@ -175,6 +177,7 @@ export function createGithubReleaseService({
       nextRetryAt: nextRetryAt > now() ? new Date(nextRetryAt).toISOString() : null,
       searchTruncated,
       lastError,
+      lastErrorDetail: lastErrorDetail ? describeError(lastErrorDetail) : null,
       ...extra,
     }
   }
@@ -263,6 +266,7 @@ export function createGithubReleaseService({
 
     inFlight = requestGithub().catch(error => {
       lastError = error.message
+      lastErrorDetail = { code: typeof error.code === 'string' && error.code ? error.code : 'UPDATE_CHECK_FAILED', message: error.message }
       expiresAt = 0
       const retryDelay = Math.min(Math.max(error.retryAfterMs || DEFAULT_RETRY_DELAY_MS, 1000), MAX_RETRY_DELAY_MS)
       nextRetryAt = now() + retryDelay

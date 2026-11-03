@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import ErrorDoc from '../components/ErrorDoc.vue';
 
 const MAINTENANCE_HEADER = { 'X-Lenovo-Store-Maintenance': '1' };
 const loading = ref(true);
@@ -10,6 +11,7 @@ const uptimeSnapshotAt = ref(0);
 const uptimeNow = ref(0);
 const updateLoading = ref(false);
 const updateError = ref('');
+const updateErrorDetail = ref(null);
 const updateStatus = ref(null);
 const installSubmitting = ref(false);
 const lastInstallationResult = ref('');
@@ -131,7 +133,10 @@ function startInstallElapsedTimer(startedAtMs) {
 
 async function applyUpdateSnapshot(snapshot, { notify = false } = {}) {
   updateStatus.value = snapshot;
-  if (snapshot.lastError) updateError.value = snapshot.lastError;
+  if (snapshot.lastError) {
+    updateError.value = snapshot.lastError;
+    updateErrorDetail.value = snapshot.lastErrorDetail || { code: snapshot.lastErrorCode || '', title: '检查更新失败', explanation: snapshot.lastError, solutions: [], rawMessage: snapshot.lastError };
+  }
   const state = snapshot.installation?.state;
   const installationActive = Boolean(snapshot.installation?.active);
   if (installationActive) {
@@ -168,7 +173,7 @@ async function applyUpdateSnapshot(snapshot, { notify = false } = {}) {
 
 async function loadUpdateStatus({ silent = false } = {}) {
   if (!silent) updateLoading.value = true;
-  if (!silent) updateError.value = '';
+  if (!silent) { updateError.value = ''; updateErrorDetail.value = null; }
   try {
     const response = await fetch('/api/system/update/status');
     const body = await readApiResponse(response);
@@ -182,10 +187,12 @@ async function loadUpdateStatus({ silent = false } = {}) {
       scheduleUpdatePolling();
     } else if (!updateStatus.value && updateUnknownRetryCount < MAX_UPDATE_UNKNOWN_RETRIES) {
       updateError.value = requestError.message;
+      updateErrorDetail.value = { code: requestError.code || '', title: '读取更新状态失败', explanation: '暂时无法从业务服务读取升级状态，系统会自动重试。若持续失败，说明业务服务尚未就绪。', solutions: ['稍等片刻，页面会自动重试。', '若长时间无进展，请刷新页面。', '仍然失败时联系维护人员检查业务服务状态。'], severity: 'warning', rawMessage: requestError.message };
       updateUnknownRetryCount += 1;
       scheduleUpdatePolling({ retryUnknown: true });
     } else {
       updateError.value = requestError.message;
+      updateErrorDetail.value = { code: requestError.code || '', title: '读取更新状态失败', explanation: '无法从业务服务读取升级状态。', solutions: ['刷新页面后重试。', '若持续失败，联系维护人员检查业务服务日志。'], severity: 'warning', rawMessage: requestError.message };
     }
   } finally {
     if (!silent) updateLoading.value = false;
@@ -195,12 +202,14 @@ async function loadUpdateStatus({ silent = false } = {}) {
 async function checkForUpdates() {
   updateLoading.value = true;
   updateError.value = '';
+  updateErrorDetail.value = null;
   try {
     const response = await fetch('/api/system/update/check', { method: 'POST' });
     const body = await readApiResponse(response);
     await applyUpdateSnapshot(body.data);
     if (body.data.lastError) {
       updateError.value = body.data.lastError;
+      updateErrorDetail.value = body.data.lastErrorDetail || { code: body.data.lastErrorCode || '', title: '检查更新失败', explanation: body.data.lastError, solutions: [], rawMessage: body.data.lastError };
       ElMessage.warning('GitHub 暂时不可用，已保留上次成功的检查结果');
     } else if (body.data.updateAvailable) {
       ElMessage.success(`发现新版本 ${body.data.latestRelease.version}`);
@@ -211,6 +220,7 @@ async function checkForUpdates() {
     }
   } catch (requestError) {
     updateError.value = requestError.message;
+    updateErrorDetail.value = { code: requestError.code || '', title: '检查更新失败', explanation: '向业务服务发起更新检查时出错。', solutions: ['稍后重试一次。', '若持续失败，联系维护人员检查业务服务与网络。'], severity: 'warning', rawMessage: requestError.message };
     ElMessage.error(requestError.message);
   } finally {
     updateLoading.value = false;
@@ -699,9 +709,13 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <el-alert v-if="updateError" :title="`${updateError}；业务服务不受影响。`" type="warning" :closable="false" show-icon />
+      <ErrorDoc v-if="updateError" :error="updateErrorDetail" title="检查更新失败" type="warning" />
       <el-alert v-if="updateStatus?.updateAvailable && !updateStatus.installation?.enabled" title="已检测到新版本，但在线安装未启用。请安装root updater平台，或在环境文件中显式设置 LENOVO_STORE_UPDATE_ENABLED=true 后重启服务。" type="warning" :closable="false" show-icon />
-      <el-alert v-if="updateStatus?.installation?.enabled && !updateStatus.installation.configured" :title="`在线安装已启用，但更新器目录或权限尚未配置完成：${updateStatus.installation.configurationError || '请检查IPC目录'}。`" type="error" :closable="false" show-icon />
+      <ErrorDoc
+        v-if="updateStatus?.installation?.enabled && !updateStatus.installation.configured"
+        :error="updateStatus.installation.configurationErrorDetail || updateStatus.installation.configurationError"
+        title="更新器尚未配置完整"
+      />
       <el-alert v-if="updateStatus?.updateAvailable && updateStatus.stale && !updateStatus.lastError" title="当前更新结果已过期，请点击“检查更新”获取有效结果后再安装。" type="warning" :closable="false" show-icon />
       <el-alert v-if="updateStatus?.searchTruncated" title="Release 数量超过检查上限，当前结果仅基于最近 300 条记录。" type="warning" :closable="false" show-icon />
 
@@ -806,13 +820,7 @@ onBeforeUnmount(() => {
               升级期间服务会在“重启服务”步骤短暂离线，页面会自动重连并继续显示进度，请勿关闭本页。
             </p>
 
-            <el-alert
-              v-if="installationState.error"
-              :title="installationState.error.message"
-              :type="installationState.rolledBack ? 'warning' : 'error'"
-              :closable="false"
-              show-icon
-            />
+            <ErrorDoc v-if="installationState.error" :error="installationState.error" :type="installationState.rolledBack ? 'warning' : 'error'" />
             <p v-if="installationState.rolledBack" class="installation-note">候选版本未通过验证，current 已切回原版本并重新通过健康检查，业务数据未自动覆盖。</p>
           </template>
           <p v-else class="installation-note">{{ updateStatus.installation.enabled ? '尚无安装任务。安装只接受刚检查到的最新签名稳定版本；可信局域网无维护令牌时可直接确认安装，令牌模式仍需维护令牌。' : '此环境只提供版本检查；需先按 Ubuntu 部署文档配置签名公钥和 systemd 更新平台。' }}</p>

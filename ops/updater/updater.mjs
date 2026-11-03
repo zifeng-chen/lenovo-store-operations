@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
+import { logUpdaterError } from './error-hints.mjs'
 
 const execFileAsync = promisify(execFile)
 const REPOSITORY = 'zifeng-chen/lenovo-store-operations'
@@ -811,7 +812,7 @@ async function recoverInterruptedTransaction(config) {
       phase: 'failed-before-switch',
       current: currentIdentity,
       target: transaction.targetIdentity || null,
-      error: { code: 'INTERRUPTED_BEFORE_SWITCH', message: '更新在候选版本切换前被中断，已清理本事务候选并确认原服务健康，请重新检查后提交' },
+      error: { code: 'INTERRUPTED_BEFORE_SWITCH', message: '上次升级在切换新版本之前被中断，已清理本次候选文件，当前运行版本未改变且服务健康。请重新点击“检查更新”后再提交安装' },
     })
     removeFileDurably(config.processingPath)
     removeFileDurably(config.transactionPath)
@@ -839,7 +840,7 @@ async function recoverInterruptedTransaction(config) {
       current: transaction.oldIdentity,
       target: transaction.targetIdentity,
       rolledBack: true,
-      error: { code: 'INTERRUPTED_UPDATE_RECOVERED', message: '更新事务曾被关机或进程终止中断，已保守回滚到原版本' },
+      error: { code: 'INTERRUPTED_UPDATE_RECOVERED', message: '上次升级在切换过程中被关机或进程终止中断，已按保守策略回滚到原版本并重新通过健康检查' },
     })
     removeFileDurably(config.processingPath)
     removeFileDurably(config.transactionPath)
@@ -870,7 +871,7 @@ function recoverStaleRunningStatus(config) {
   status.finish('failed', {
     phase: 'failed-before-switch',
     current: currentIdentity,
-    error: { code: 'ORPHANED_UPDATE_STATE', message: '检测到没有事务 journal 的遗留任务，已确认 current 未由该任务切换；请重新检查后提交' },
+    error: { code: 'ORPHANED_UPDATE_STATE', message: '发现一个缺少过程记录的遗留升级任务，已核对当前版本并未被它切换，残留任务已清理。请重新点击“检查更新”后再提交安装' },
   })
 }
 
@@ -880,7 +881,7 @@ function recoverOrphanedProcessing(config) {
   const status = createStatusWriter(config, request)
   status.finish('failed', {
     phase: 'failed-before-switch',
-    error: { code: 'INTERRUPTED_BEFORE_SWITCH', message: '更新器在建立切换事务前中断，当前运行版本未改变，请重新检查后提交' },
+    error: { code: 'INTERRUPTED_BEFORE_SWITCH', message: '上次升级在建立切换记录之前就被中断，当前运行版本未改变。请重新点击“检查更新”后再提交安装' },
   })
   removeFileDurably(config.processingPath)
 }
@@ -1060,7 +1061,7 @@ async function main() {
   try {
     await install(request, config, status)
   } catch (error) {
-    console.error(`[${error.code || 'UPDATER_FAILED'}] ${error.message}`)
+    logUpdaterError(error.code || 'UPDATER_FAILED', error.message)
     process.exitCode = 1
   } finally {
     removeFileDurably(config.processingPath)
@@ -1068,6 +1069,6 @@ async function main() {
 }
 
 main().catch(error => {
-  console.error(`[${error.code || 'UPDATER_FATAL'}] ${error.message}`)
+  logUpdaterError(error.code || 'UPDATER_FATAL', error.message)
   process.exitCode = 1
 })

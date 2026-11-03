@@ -10,6 +10,7 @@
     "./print": "./src/print.js",
     "./api-client": "./src/api-client.js",
     "./product-name": "./src/product-name.js",
+    "./error-catalog": "./src/error-catalog.js",
     "./vite-element-plus": "./vite-element-plus.js"
   }
 }

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { describeError } from '@lenovo-store/shared/error-catalog'
 
 const TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -74,10 +75,10 @@ function sanitizeState(raw) {
     throw ipcError('更新任务状态字段无效', 503, 'UPDATE_STATE_INVALID')
   }
   const error = isPlainObject(raw.error) && typeof raw.error.message === 'string'
-    ? {
+    ? describeError({
         code: typeof raw.error.code === 'string' ? raw.error.code.slice(0, 80) : 'UPDATE_FAILED',
         message: raw.error.message.slice(0, 500),
-      }
+      })
     : null
   return {
     jobId,
@@ -226,6 +227,7 @@ export function createUpdateIpcService({
     let currentState = null
     let configured = false
     let configurationError = null
+    let configurationErrorDetail = null
     if (enabled) {
       try {
         validateParentDirectory(requestPath)
@@ -234,6 +236,10 @@ export function createUpdateIpcService({
         configured = true
       } catch (error) {
         configurationError = error.message
+        configurationErrorDetail = describeError({
+          code: typeof error.code === 'string' ? error.code : 'UPDATE_NOT_CONFIGURED',
+          message: error.message,
+        })
       }
     }
     return {
@@ -243,6 +249,7 @@ export function createUpdateIpcService({
       active: Boolean(currentState && ACTIVE_STATUSES.has(currentState.status)),
       state: currentState,
       configurationError,
+      configurationErrorDetail,
     }
   }
 

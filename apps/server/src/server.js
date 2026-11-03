@@ -5,6 +5,7 @@ import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
 import { STORE_MODULES } from '@lenovo-store/shared';
+import { describeError } from '@lenovo-store/shared/error-catalog';
 import computerLabelsRouter, {
   apiBase as computerLabelsApiBase,
   getDatabase as getComputerLabelsDatabase,
@@ -346,7 +347,19 @@ app.use((error, _req, res, _next) => {
   const status = Number.isInteger(error.status)
     ? error.status
     : Number.isInteger(error.statusCode) ? error.statusCode : 500;
-  return res.status(status).json({ code: 1, data: null, msg: error.message || '服务器内部错误' });
+  const detail = describeError(error, status >= 500 ? 'UPDATE_FAILED' : 'UPDATE_REQUEST_ERROR');
+  return res.status(status).json({
+    code: 1,
+    data: null,
+    msg: error.message || '服务器内部错误',
+    detail: {
+      code: detail.code,
+      title: detail.title,
+      explanation: detail.explanation,
+      solutions: detail.solutions,
+      severity: detail.severity
+    }
+  });
 });
 
 app.listen(port, host, () => {
