@@ -21,9 +21,9 @@ function stripNoise(value) {
 const SERIES_RULES = [
   /^(legion\s+[a-z]\d{3,4}[a-z]*)/i,
   /^(loq\s+\d+[a-z]*)/i,
-  /^(yoga\s+(?:air|pro|slim|book)?\s*\d+(?:\s+(?:ultra|pro|air))?)/i,
-  /^(小新\s*(?:pro|air|plus)?\s*\d+)/i,
-  /^(拯救者\s*[a-z]?\d*)/i,
+  /^(yoga\s+(?:air|pro|slim|book)?\s*\d+(?:\s*s)?(?:\s+(?:ultra|pro|air))?)/i,
+  /^(小新\s*(?:pro|air|plus)?\s*\d+[a-z]*)/i,
+  /^(拯救者\s*[a-z]?\d*[a-z]*)/i,
   /^(斗战者\s*[a-z]{0,2}\d{2,4}[a-z0-9]{0,4})/i,
   /^(lec[o0]{1,2}\s*[a-z]?\d{2,4}[a-z]*)/i,
   /^(thinkpad\s+[a-z]+\d*)/i,
@@ -32,8 +32,16 @@ const SERIES_RULES = [
   /^(tb\d{3}\s*[a-z0-9]*)/i,
 ];
 
+// OCR 常把中文系列名后的英文子系列写成大写（小新PrO16），这里统一回正常写法
+function normalizeCnSuffix(series) {
+  return series.replace(/(pro|air|plus)/gi, (matched) => {
+    const lower = matched.toLowerCase();
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  });
+}
+
 function normalizeBrand(series) {
-  return series
+  const stripped = series
     .replace(/^lec[o0]{1,2}\s*/i, 'Lecoo ')
     .replace(/^legion\s*/i, 'Legion ')
     .replace(/^loq\s*/i, 'LOQ ')
@@ -44,6 +52,8 @@ function normalizeBrand(series) {
     .replace(/^tb\s*/i, 'TB')
     .replace(/\s+/g, ' ')
     .trim();
+  // 仅对中文系列名（小新/拯救者/斗战者）做英文子系列的大小写归一
+  return /^(小新|拯救者|斗战者)/.test(stripped) ? normalizeCnSuffix(stripped) : stripped;
 }
 
 export function extractSeries(value) {

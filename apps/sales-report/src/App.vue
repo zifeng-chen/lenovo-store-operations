@@ -41,6 +41,16 @@ const compact = (value) => {
 const percentText = (value) => (value === null || value === undefined ? '暂无对比' : `${value > 0 ? '+' : ''}${value.toFixed(1)}%`);
 const percentClass = (value) => (value === null || value === undefined ? 'neutral' : value > 0 ? 'up' : value < 0 ? 'down' : 'neutral');
 
+/**
+ * 横轴上限：先把最大值向上取整到整数，再补 5 万，避免最长柱条顶到绘图区右边界。
+ * 例如最大值 128,760 → 129,000 → 179,000。
+ */
+const AXIS_PADDING = 50000;
+const axisMax = (values) => {
+  const max = Math.max(...values.map((value) => Number(value) || 0), 0);
+  return Math.round(Math.ceil(max) + AXIS_PADDING);
+};
+
 const summary = computed(() => overview.value?.summary ?? null);
 const totalSummary = computed(() => allStats.value?.summary ?? null);
 const trendPoints = computed(() => trend.value?.points ?? []);
@@ -48,17 +58,23 @@ const monthRows = computed(() => comparison.value?.months ?? []);
 const quarterRows = computed(() => comparison.value?.quarters ?? []);
 const yearRows = computed(() => comparison.value?.years ?? []);
 
+// 图表展示条数：月度排行与商品排行统一取前六
+const TOP_COUNT = 6;
+
 // 表格行：把 OCR 原始名称拆成型号与配置，型号完整保留不截断
 const itemRows = computed(() => items.value.map((item) => {
   const { model, config } = splitProductName(item.name);
   return { ...item, model, config, fullName: toFullName(item.name) };
 }));
 
-// 图表取销售额前五，Y 轴使用中等截取的短标签
-const ITEM_TOP_COUNT = 5;
+// 图表取销售额前六，Y 轴使用中等截取的短标签
 const itemTopRows = computed(() => [...itemRows.value]
   .sort((left, right) => right.total - left.total)
-  .slice(0, ITEM_TOP_COUNT));
+  .slice(0, TOP_COUNT));
+
+const monthTopRows = computed(() => [...monthRows.value]
+  .sort((left, right) => right.total - left.total)
+  .slice(0, TOP_COUNT));
 
 
 const granularityOptions = [
@@ -214,12 +230,12 @@ function renderCountChart() {
 function renderCompareChart() {
   if (!compareChartEl.value) return;
   if (!compareChart) compareChart = init(compareChartEl.value);
-  const months = monthRows.value;
+  const months = monthTopRows.value;
   // 横向条形图：更适合维度对比，数据标签直接标在条上，避免双轴混淆。
   const sorted = [...months].sort((a, b) => a.total - b.total);
-  const maxTotal = Math.max(...sorted.map(m => m.total), 1);
+  const maxTotal = axisMax(sorted.map((m) => m.total));
   compareChart.setOption({
-    grid: { left: 84, right: 96, top: 16, bottom: 24 },
+    grid: { left: 74, right: 92, top: 10, bottom: 22 },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
@@ -260,16 +276,16 @@ function renderCompareChart() {
           }
         }
       })),
-      barMaxWidth: 26,
+      barMaxWidth: 22,
       label: {
         show: true,
         position: 'right',
-        distance: 8,
+        distance: 6,
         fontSize: 11,
         color: '#46536a',
         formatter: (p) => {
           const item = sorted[p.dataIndex];
-          return `${money(item.total)}  ·  ${item.count} 笔`;
+          return `${money(item.total)} · ${item.count}笔`;
         }
       }
     }]
@@ -283,10 +299,10 @@ function renderItemChart() {
   const rows = itemTopRows.value;
   // 横向条形图按销售额升序绘制，使最高的商品显示在顶部
   const sorted = [...rows].sort((left, right) => left.total - right.total);
-  const labels = sorted.map((row) => toShortLabel(row.fullName));
-  const maxTotal = Math.max(...sorted.map((row) => row.total), 1);
+  const labels = sorted.map((row) => toShortLabel(row.fullName, 12));
+  const maxTotal = axisMax(sorted.map((row) => row.total));
   itemChart.setOption({
-    grid: { left: 130, right: 110, top: 12, bottom: 24 },
+    grid: { left: 108, right: 84, top: 10, bottom: 22 },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
@@ -305,7 +321,7 @@ function renderItemChart() {
     yAxis: {
       type: 'category',
       data: labels,
-      axisLabel: { fontSize: 12, color: '#46536a', width: 120, overflow: 'truncate' },
+      axisLabel: { fontSize: 12, color: '#46536a', width: 100, overflow: 'truncate' },
       axisLine: { show: false },
       axisTick: { show: false }
     },
@@ -324,11 +340,11 @@ function renderItemChart() {
           }
         }
       })),
-      barMaxWidth: 26,
+      barMaxWidth: 22,
       label: {
         show: true,
         position: 'right',
-        distance: 8,
+        distance: 6,
         fontSize: 11,
         color: '#46536a',
         formatter: (params) => money(sorted[params.dataIndex].total)
@@ -455,12 +471,22 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <section class="panel">
-        <div class="panel-head">
-          <h2>月度销售额排行</h2>
-          <span class="panel-note">按销售额从低到高排列</span>
+      <section class="panel-grid chart-pair">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>月度销售额排行</h2>
+            <span class="panel-note">销售额前 {{ TOP_COUNT }}</span>
+          </div>
+          <div ref="compareChartEl" class="chart-box chart-box--rank"></div>
         </div>
-        <div ref="compareChartEl" class="chart-box chart-box--tall"></div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>商品销售额排行</h2>
+            <span class="panel-note">销售额前 {{ TOP_COUNT }}</span>
+          </div>
+          <div ref="itemChartEl" class="chart-box chart-box--rank"></div>
+        </div>
       </section>
 
       <section class="panel-grid">
@@ -564,10 +590,9 @@ onBeforeUnmount(() => {
 
       <section class="panel">
         <div class="panel-head">
-          <h2>商品销售额排行</h2>
-          <span class="panel-note">来自付款凭证 OCR 识别的商品明细，图表展示销售额前 {{ ITEM_TOP_COUNT }} 名</span>
+          <h2>商品销售明细</h2>
+          <span class="panel-note">来自付款凭证 OCR 识别的商品明细</span>
         </div>
-        <div ref="itemChartEl" class="chart-box chart-box--items"></div>
         <el-table :data="itemRows" size="small" empty-text="暂无商品明细数据（识别销售票据后自动累积）">
           <el-table-column type="index" label="#" width="56" />
           <el-table-column label="商品名称" min-width="160">

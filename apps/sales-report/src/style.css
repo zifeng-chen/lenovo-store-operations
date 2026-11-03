@@ -140,13 +140,13 @@
   height: 280px;
 }
 
-.chart-box--tall {
-  height: 320px;
+/* 月度排行与商品排行左右各占一半，条形高度随六条数据放大 */
+.chart-pair {
+  align-items: stretch;
 }
 
-.chart-box--items {
-  height: 240px;
-  margin-bottom: 12px;
+.chart-box--rank {
+  height: 300px;
 }
 
 .item-model {
@@ -308,3 +308,4 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
