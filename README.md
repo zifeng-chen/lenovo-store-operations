@@ -16,7 +16,7 @@
 
 每次功能、配置、部署方式或文档更新都必须同步维护 GitHub 仓库文档，并按 `YYYY-MM-DD` 记录更新日期和主要内容。最新更新与完整历史请查看 [CHANGELOG.md](CHANGELOG.md)。
 
-当前最新记录：`2026-11-03`，发布 `0.6.3`：代码清理版本，不影响业务功能、接口与数据，无数据迁移。删除备份快照中的恒真死代码块，合并 `persistence-service.js` 中与 `calendar-date.js` 重复的日期校验实现，清理统一数据库改造后遗留的三个废弃路径常量，销售报表改用统一 API 客户端以获得请求超时与统一错误封装。本次发布同时包含此前已合入但未发布到 Release 的更新器修复：systemd 模板 `RestrictSUIDSGID` 调整为 `false`，解决 CIX 等定制 ARM64 内核上 `tar` 解压返回 ENOSYS 导致在线安装中断的问题。`0.6.2` 修复付款凭证 OCR 商品明细长期为空的问题，新增列式分行小票解析，支持银联商务小票「商品名多行 + 单价/折扣/小计三行」版式，使 `receipt_sale_items` 正常写入并让销售业绩报表的商品明细页有数据。`0.6.1` 轮换 Release 签名密钥并重新签发正式 Release，新公钥指纹为 `6e3108efbd2b4951083bfbbc768e628917ef0d289a169a6f26956935ffeff7f6`，同时修正 `lenovo-store-backup.service` 中指向不存在 `current` 路径的 `WorkingDirectory`，恢复长期失败的定时备份。
+当前最新记录：`2026-11-03`，发布 `0.6.4`：修复定时备份任务长期备份过期数据的问题。`scripts/backup-data.js` 自统一数据库改造后仍指向已停止写入的三个旧版分库路径，导致 `lenovo-store-backup.service` 每次备份的都是历史遗留数据，真正在用的 `store/store.sqlite` 从未被备份；现改为直接备份统一库，并同步把凭据检测表名修正为带模块前缀的 `receipt_ocr_config`。`0.6.3`：代码清理版本，不影响业务功能、接口与数据，无数据迁移。删除备份快照中的恒真死代码块，合并 `persistence-service.js` 中与 `calendar-date.js` 重复的日期校验实现，清理统一数据库改造后遗留的三个废弃路径常量，销售报表改用统一 API 客户端以获得请求超时与统一错误封装。本次发布同时包含此前已合入但未发布到 Release 的更新器修复：systemd 模板 `RestrictSUIDSGID` 调整为 `false`，解决 CIX 等定制 ARM64 内核上 `tar` 解压返回 ENOSYS 导致在线安装中断的问题。`0.6.2` 修复付款凭证 OCR 商品明细长期为空的问题，新增列式分行小票解析，支持银联商务小票「商品名多行 + 单价/折扣/小计三行」版式，使 `receipt_sale_items` 正常写入并让销售业绩报表的商品明细页有数据。`0.6.1` 轮换 Release 签名密钥并重新签发正式 Release，新公钥指纹为 `6e3108efbd2b4951083bfbbc768e628917ef0d289a169a6f26956935ffeff7f6`，同时修正 `lenovo-store-backup.service` 中指向不存在 `current` 路径的 `WorkingDirectory`，恢复长期失败的定时备份。
 
 ## 板块说明
 

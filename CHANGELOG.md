@@ -4,6 +4,15 @@
 
 ## 2026-11-03
 
+- 发布补丁版本 `0.6.4`：修复定时备份任务长期备份过期数据的问题，无数据迁移。
+- 修正 `scripts/backup-data.js` 的备份目标：该脚本自统一数据库改造后仍指向 `computer-labels`、`price-labels`、`receipt-assistant` 三个旧版分库路径，而那三个库在统一库接管后已停止写入，导致 `lenovo-store-backup.service` 每次执行备份的都是历史遗留的过期数据，真正在用的 `store/store.sqlite` 从未被备份。现改为直接备份统一库。
+- 同步修正备份内的 OCR 凭据检测：统一库中该表带模块前缀，表名由 `ocr_config` 改为 `receipt_ocr_config`；此前该检测在旧路径下读不到记录，会让“数据库含凭据但缺少密钥”的校验失效。
+- 备份产物只保留自包含的主文件：`better-sqlite3` 快照会把全部内容写入主文件，遗留的空 `-wal`/`-shm` 在备份完成后清理，避免恢复时产生歧义。备份目录结构保持不变（`manifest.json` + `<模块>/store.sqlite` + `secrets/receipt-ocr.key`）。
+- 清理备份脚本中两条永不触发的分支（`item.backup`、`item.validate`），它们对应的调用方已不存在。
+- `migrate-legacy-data.js` 与 `data-paths.js` 中供其使用的三个 `*_DATABASE_PATH` 常量暂时保留：该脚本用于从更早的独立系统导入数据，其目标同样是旧版分库，功能已随统一库改造失效，后续可评估移除。
+
+## 2026-11-03（0.6.3 代码清理）
+
 - 发布补丁版本 `0.6.3`：代码清理，不影响任何业务功能、接口与数据，无数据迁移。
 - 删除备份快照中的恒真死代码：`persistence-service.js` 的 `extractModuleSnapshot` 内，索引处理循环曾用 `physicalIndex.includes(...) || ... || true` 计算一个 `mapped` 变量，`|| true` 使判断恒成立且该变量从未被使用。删除后实际生效的索引 SQL 表名替换逻辑（紧随其后的 `for` 循环）行为不变。
 - 合并重复的日期校验实现：`persistence-service.js` 内的 `isValidCalendarDate` 与 `calendar-date.js` 中的同名函数逐字相同，改为从后者导入，消除一份重复实现。

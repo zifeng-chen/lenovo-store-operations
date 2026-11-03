@@ -3,14 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import {
-  COMPUTER_LABELS_DATABASE_PATH,
   DATA_ROOT,
   isSameOrWithin,
-  PRICE_LABELS_DATABASE_PATH,
   PROJECT_ROOT,
-  RECEIPT_ASSISTANT_DATABASE_PATH,
   RECEIPT_OCR_KEY_PATH,
-  resolveCanonicalPath
+  resolveCanonicalPath,
+  UNIFIED_DATABASE_PATH
 } from '../apps/server/src/config/data-paths.js';
 
 const ENCRYPTION_CONTEXT = Buffer.from('lenovo-pos-ocr-config:v1');
@@ -35,9 +33,7 @@ const timestamp = new Date().toISOString().replaceAll(':', '-');
 const finalDirectory = path.join(backupRoot, timestamp);
 const stagingDirectory = path.join(backupRoot, `.${timestamp}.${process.pid}.staging`);
 const databases = [
-  { id: 'computer-labels', source: COMPUTER_LABELS_DATABASE_PATH },
-  { id: 'price-labels', source: PRICE_LABELS_DATABASE_PATH },
-  { id: 'receipt-assistant', source: RECEIPT_ASSISTANT_DATABASE_PATH }
+  { id: 'store', source: UNIFIED_DATABASE_PATH }
 ];
 
 function sha256(filePath) {
@@ -65,22 +61,18 @@ function inspectDatabase(filePath) {
 async function backupDatabase(item) {
   if (!fs.existsSync(item.source)) throw new Error(`数据库不存在：${item.source}`);
   const targetDirectory = path.join(stagingDirectory, item.id);
-  const target = path.join(targetDirectory, 'database.sqlite');
+  const target = path.join(targetDirectory, 'store.sqlite');
   fs.mkdirSync(targetDirectory, { recursive: true, mode: 0o700 });
 
-  if (item.backup) await item.backup(target);
-  else {
-    const sourceDatabase = new Database(item.source, { readonly: true, fileMustExist: true });
-    try {
-      await sourceDatabase.backup(target);
-    } finally {
-      sourceDatabase.close();
-    }
+  // better-sqlite3 的 backup 会生成包含未检查点事务的一致性快照，内容全部写入主文件。
+  const sourceDatabase = new Database(item.source, { readonly: true, fileMustExist: true });
+  try {
+    await sourceDatabase.backup(target);
+  } finally {
+    sourceDatabase.close();
   }
 
-  const inspection = item.validate
-    ? { integrity: 'ok', counts: await item.validate(target) }
-    : inspectDatabase(target);
+  const inspection = inspectDatabase(target);
   return {
     id: item.id,
     source: item.source,
@@ -114,9 +106,9 @@ function getOcrConfigRow(databasePath) {
   const database = new Database(databasePath, { readonly: true, fileMustExist: true });
   try {
     const table = database.prepare(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ocr_config'"
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'receipt_ocr_config'"
     ).get();
-    return table ? database.prepare('SELECT * FROM ocr_config WHERE id = 1').get() || null : null;
+    return table ? database.prepare('SELECT * FROM receipt_ocr_config WHERE id = 1').get() || null : null;
   } finally {
     database.close();
   }
@@ -140,8 +132,8 @@ function assertOcrKeyDecrypts(row, key) {
 }
 
 function backupOcrKey() {
-  const receiptBackup = path.join(stagingDirectory, 'receipt-assistant', 'database.sqlite');
-  const configRow = getOcrConfigRow(receiptBackup);
+  const unifiedBackup = path.join(stagingDirectory, 'store', 'store.sqlite');
+  const configRow = getOcrConfigRow(unifiedBackup);
   const environmentKey = decodeEnvironmentKey(process.env.OCR_CONFIG_ENCRYPTION_KEY);
   const localKey = environmentKey ? null : readLocalOcrKey();
   const key = environmentKey || localKey;
@@ -180,6 +172,16 @@ try {
   const databaseBackups = [];
   for (const item of databases) databaseBackups.push(await backupDatabase(item));
   const ocrKey = backupOcrKey();
+
+  // backupOcrKey 会重新打开备份库读取凭据，最后一次产生 -wal/-shm；
+  // 在此统一清理，确保最终备份目录只保留自包含的主文件。
+  for (const item of databases) {
+    const target = path.join(stagingDirectory, item.id, 'store.sqlite');
+    for (const suffix of ['-wal', '-shm']) {
+      const sidecar = `${target}${suffix}`;
+      if (fs.existsSync(sidecar)) fs.rmSync(sidecar);
+    }
+  }
 
   const manifest = {
     createdAt: new Date().toISOString(),
