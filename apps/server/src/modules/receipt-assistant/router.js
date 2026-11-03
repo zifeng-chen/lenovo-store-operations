@@ -3,6 +3,7 @@ import { Router, json } from 'express'
 import { getDatabase, OCR_KEY_PATH, SALES, SALE_ITEMS } from './database.js'
 import { createBaiduOcrService } from './baidu-ocr.js'
 import { createOcrStorage, getOcrBillingMonth, isValidOcrBillingMonth } from './ocr-storage.js'
+import { normalizeProductName } from '@lenovo-store/shared/product-name'
 
 const OCR_DEADLINE_MS = 35000
 const OCR_MAX_IMAGE_BYTES = 6 * 1024 * 1024
@@ -353,7 +354,7 @@ export function createReceiptAssistantRouter() {
     const rawItems = Array.isArray(request.body?.items) ? request.body.items : []
     const items = rawItems
       .map(item => ({
-        name: String(item?.name || '').trim().slice(0, 200),
+        name: normalizeProductName(item?.name).slice(0, 200),
         qty: Number.isFinite(Number(item?.qty)) && Number(item.qty) > 0 ? Number(item.qty) : null,
         unitPrice: Number.isFinite(Number(item?.unitPrice)) && Number(item.unitPrice) >= 0 ? Math.round(Number(item.unitPrice) * 100) / 100 : null,
         subtotal: Number(item?.subtotal)

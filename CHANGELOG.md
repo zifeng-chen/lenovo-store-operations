@@ -4,6 +4,16 @@
 
 ## 2026-11-03
 
+- 发布小版本 `0.7.0`：商品名称归一化下沉到写入链路，从根源上消除 OCR 脏名称，此前 0.6.9 只在前端展示层修正。
+- 新增 `packages/shared/src/product-name.js`，提供 `normalizeProductName()`，在**解析后、写库前**统一修正 OCR 形近字与大小写：`小新PrO16` → `小新Pro16`、`小新PR016` → `小新Pro16`、`小新 pro 16` → `小新Pro16`、`小新P1us16` → `小新Plus16`、`小新alR14` → `小新Air14`、`Lec00N140A` → `Lecoo N140A`、`ThinkB00k 14` → `ThinkBook 14`、`YOGA PrO14s` → `YOGA Pro14s`。
+- 归一化接入三处：小票解析的单行布局、列式布局，以及销售明细写库接口 `POST /sales`。即使换用其它解析路径，写库前仍会再过一遍，库里不再产生新的脏名称。
+- 严格保留真实数字：仅修复「字母后紧跟 0 再跟数字」（`Pr016` → `Pro16`）和「两字母之间夹 0」（`B00k` → `Book`），数字 1 一律不动，避免 `G1TB`、`16G1TB`、`拯救者Y9000P` 等容量与型号被误改。
+- 白名单约束子系列词：只有 `Pro` / `Air` / `Plus` / `Ultra` / `Slim` 会被改写，`斗战者JX600`、`TB370FU`、`Legion Y7000` 等型号不受影响；外部品牌（华为、Apple、小米、罗技）同样原样保留。
+- 品牌名与型号被 OCR 挤成一段时补回空格：`小新14IMH10GRXU516G51211C` → `小新 14IMH10GRXU516G51211C`，`Leco0N155DL...` → `Lecoo N155DL...`。
+- 新增 `npm run test:product-name`（45 条用例，含 16 条「不得误伤」断言），并接入 `npm run check`，后续改动若破坏规则会在构建阶段直接失败。
+- 新增 `npm run backfill:product-names`：对历史销售明细做名称回填，默认 dry-run，加 `--apply` 才写入。当前生产库 45 行明细全部可归一，其中 `小新PrO16cAHP10...` 4 行、`Lec00/Leco0` 前缀 6 行将被修正。
+- 发布产物校验新增 `packages/shared/src/product-name.js` 与 `scripts/verify-product-name.js` 必检项，缺失则打包失败。
+
 - 发布补丁版本 `0.6.9`：销售业绩报表排行图布局与商品名修正，只改前端展示，数据库仍保留 OCR 原始名称。
 - 修正 OCR 大小写误识别：中文系列名后的英文子系列统一回归正常写法，`小新PrO16` 现显示为 `小新Pro16`，`小新PRO14` / `小新air15` / `小新plus16` 同理归一为 `小新Pro14` / `小新Air15` / `小新Plus16`。
 - 一并修复两处型号被截断的既有问题：`YOGA Pro14s` 的 `s`、`拯救者Y9000P` 的 `P` 此前会被误判为配置码剥离，现完整保留在型号列。

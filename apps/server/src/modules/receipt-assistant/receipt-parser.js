@@ -5,6 +5,7 @@
  */
 
 import { extractReceiptAmount } from './baidu-ocr.js'
+import { normalizeProductName } from '@lenovo-store/shared/product-name'
 
 function normalizeLine(text) {
   return String(text || '')
@@ -164,7 +165,7 @@ export function findColumnItems(lines) {
         if (qty > 1) unitPrice = Math.round((last / qty) * 100) / 100
 
         items.push({
-          name: pendingNames.join(' ').slice(0, 200),
+          name: normalizeProductName(pendingNames.join(' ')).slice(0, 200),
           qty,
           unitPrice: Math.round(unitPrice * 100) / 100,
           subtotal: Math.round(last * 100) / 100,
@@ -255,7 +256,7 @@ export function findItems(lines) {
     }
 
     items.push({
-      name,
+      name: normalizeProductName(name),
       qty: qty ?? (unitPrice ? 1 : null),
       unitPrice: unitPrice ?? (qty ? Math.round((subtotal / qty) * 100) / 100 : subtotal),
       subtotal: Math.round(subtotal * 100) / 100,

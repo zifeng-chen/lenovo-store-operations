@@ -9,6 +9,7 @@
     "./lenovo-logo.svg": "./src/assets/lenovo-logo.svg",
     "./print": "./src/print.js",
     "./api-client": "./src/api-client.js",
+    "./product-name": "./src/product-name.js",
     "./vite-element-plus": "./vite-element-plus.js"
   }
 }
