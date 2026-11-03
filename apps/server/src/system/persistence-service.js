@@ -11,7 +11,7 @@ import {
   loadOrCreateLocalKey,
 } from '../modules/receipt-assistant/ocr-storage.js'
 import { writeBackupPackage } from './backup-package.js'
-import { normalizeAddedDate } from '../calendar-date.js'
+import { isValidCalendarDate, normalizeAddedDate } from '../calendar-date.js'
 import { tableName } from '../db/unified-database.js'
 
 // 统一库里各模块的表带前缀，但备份快照保持历史格式（裸表名），
@@ -66,9 +66,6 @@ function extractModuleSnapshot(sharedSnapshotPath, targetPath, moduleId) {
       }
     }
     for (const index of indexSql) {
-      const physicalIndex = index.name
-      const mapped = [...physicalToLogical].find(([physical, logical]) =>
-        physicalIndex.includes(physical) || physicalIndex === `idx_${physical}_sku` || true)
       let sql = index.sql
       let relevant = false
       for (const [physical, logical] of physicalToLogical) {
@@ -132,12 +129,6 @@ function requireColumns(db, table, required, optional = []) {
     throw persistenceError(`${table} 表结构与当前版本不兼容`)
   }
   return new Set(columns)
-}
-
-function isValidCalendarDate(value) {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
-  const date = new Date(`${value}T00:00:00Z`)
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
 function isValidTimestamp(value) {

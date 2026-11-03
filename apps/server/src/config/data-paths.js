@@ -55,12 +55,10 @@ export const DATA_ROOT = canonicalDataRoot;
 export const DATA_ROOT_SOURCE = configuredDataRoot ? 'environment' : 'project-default';
 export const EXTERNAL_DATA_ROOT_CONFIGURED = Boolean(configuredDataRoot);
 
-export const COMPUTER_LABELS_DATA_DIR = path.join(DATA_ROOT, 'computer-labels');
-export const COMPUTER_LABELS_DATABASE_PATH = path.join(COMPUTER_LABELS_DATA_DIR, 'database.sqlite');
-export const PRICE_LABELS_DATA_DIR = path.join(DATA_ROOT, 'price-labels');
-export const PRICE_LABELS_DATABASE_PATH = path.join(PRICE_LABELS_DATA_DIR, 'database.sqlite');
-export const RECEIPT_ASSISTANT_DATA_DIR = path.join(DATA_ROOT, 'receipt-assistant');
-export const RECEIPT_ASSISTANT_DATABASE_PATH = path.join(RECEIPT_ASSISTANT_DATA_DIR, 'database.sqlite');
+// 旧版按模块分库的路径，仅供 scripts/backup-data.js 与 scripts/migrate-legacy-data.js 使用。
+export const COMPUTER_LABELS_DATABASE_PATH = path.join(DATA_ROOT, 'computer-labels', 'database.sqlite');
+export const PRICE_LABELS_DATABASE_PATH = path.join(DATA_ROOT, 'price-labels', 'database.sqlite');
+export const RECEIPT_ASSISTANT_DATABASE_PATH = path.join(DATA_ROOT, 'receipt-assistant', 'database.sqlite');
 export const RECEIPT_OCR_KEY_PATH = path.join(DATA_ROOT, 'secrets', 'receipt-ocr.key');
 
 // 统一数据库：单文件多表，各模块的表用模块前缀隔离，互不影响。

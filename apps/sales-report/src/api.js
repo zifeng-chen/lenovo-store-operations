@@ -1,4 +1,7 @@
-const API_BASE = '/api/sales-report'
+import { createApiClient } from '@lenovo-store/shared/api-client'
+
+// 销售报表接口直接返回裸对象，不走 {code,data,msg} 信封。
+const client = createApiClient('/api/sales-report', { unwrapEnvelope: false })
 
 function buildQuery(params = {}) {
   const search = new URLSearchParams()
@@ -9,12 +12,7 @@ function buildQuery(params = {}) {
   return query ? `?${query}` : ''
 }
 
-async function get(path, params) {
-  const response = await fetch(`${API_BASE}${path}${buildQuery(params)}`)
-  const data = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(data?.msg || data?.message || `请求失败（${response.status}）`)
-  return data
-}
+const get = (path, params) => client.get(`${path}${buildQuery(params)}`)
 
 export const getOverview = (params) => get('/overview', params)
 export const getTrend = (params) => get('/trend', params)

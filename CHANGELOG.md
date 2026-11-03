@@ -2,6 +2,15 @@
 
 本文件记录联想门店运营系统每次更新的日期和主要内容，最新记录排列在最前。功能、配置、部署方式或文档发生变化时，应同步更新相关说明，并在此补充一条记录。
 
+## 2026-11-03
+
+- 发布补丁版本 `0.6.3`：代码清理，不影响任何业务功能、接口与数据，无数据迁移。
+- 删除备份快照中的恒真死代码：`persistence-service.js` 的 `extractModuleSnapshot` 内，索引处理循环曾用 `physicalIndex.includes(...) || ... || true` 计算一个 `mapped` 变量，`|| true` 使判断恒成立且该变量从未被使用。删除后实际生效的索引 SQL 表名替换逻辑（紧随其后的 `for` 循环）行为不变。
+- 合并重复的日期校验实现：`persistence-service.js` 内的 `isValidCalendarDate` 与 `calendar-date.js` 中的同名函数逐字相同，改为从后者导入，消除一份重复实现。
+- 清理废弃路径常量：`data-paths.js` 移除统一数据库改造后遗留的 `COMPUTER_LABELS_DATA_DIR`、`PRICE_LABELS_DATA_DIR`、`RECEIPT_ASSISTANT_DATA_DIR` 三个零引用常量；`backup-data.js` 与 `migrate-legacy-data.js` 仍使用的三个 `*_DATABASE_PATH` 保持不变。
+- 销售报表改用统一 API 客户端：`apps/sales-report/src/api.js` 原先自行实现 `fetch`，现改为复用 `@lenovo-store/shared/api-client`，获得请求超时、`AbortController` 取消与统一的 `ApiError` 错误封装；因该模块接口直接返回裸对象，配置 `unwrapEnvelope: false` 保持原有响应解析行为。
+- 本次发布同时包含此前已合入主分支但未发布到 Release 的更新器修复：systemd 模板 `RestrictSUIDSGID` 调整为 `false`，解决 CIX 等定制 ARM64 内核上 `tar` 解压返回 ENOSYS 导致在线安装中断的问题；`updater.mjs` 支持可选 `LENOVO_STORE_UPDATER_GITHUB_TOKEN`。
+
 ## 2026-11-02
 
 - 更新器支持 GitHub 令牌：`updater.mjs` 新增可选环境变量 `LENOVO_STORE_UPDATER_GITHUB_TOKEN`，仅在请求 `api.github.com` 时追加 `Authorization: Bearer` 头，不附加到 `github.com` 资产下载域名，也不写入日志或状态文件。用于出口 IP 共享、匿名 API 配额频繁耗尽的部署环境；未设置时行为与之前一致。
