@@ -74,7 +74,7 @@ async function refreshProducts({ selectAll = false } = {}) {
 async function initialize() {
   loading.value = true;
   try {
-    await refreshProducts({ selectAll: true });
+    await refreshProducts();
   } catch (error) {
     showError(error);
   } finally {
@@ -229,7 +229,7 @@ async function handleImport(file) {
   try {
     const response = await importProducts(file);
     const { total, success, failed, errors } = response.data.data;
-    await refreshProducts({ selectAll: true });
+    await refreshProducts();
     const detail = failed ? `；失败 ${failed} 行：${errors.slice(0, 3).map((item) => `第${item.row}行 ${item.reason}`).join('、')}` : '';
     ElMessage({ message: `导入完成：共 ${total} 行，成功 ${success} 行${detail}`, type: failed ? 'warning' : 'success', duration: 6000 });
   } catch (error) {
@@ -267,7 +267,7 @@ async function handleRestore(file) {
     loading.value = true;
     await restoreDatabase(file);
     activeQuery.value = '';
-    await refreshProducts({ selectAll: true });
+    await refreshProducts();
     ElMessage.success('数据库恢复成功');
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') showError(error);

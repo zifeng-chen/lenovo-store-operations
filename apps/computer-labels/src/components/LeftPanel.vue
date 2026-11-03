@@ -114,7 +114,6 @@ function fileSelected(event, type) {
         <el-table-column label="颜色" prop="color" width="90" align="center">
           <template #default="{ row }"><span :class="['color-pill', { empty: !row.color }]">{{ row.color || '—' }}</span></template>
         </el-table-column>
-        <el-table-column label="添加日期" prop="added_date" width="112" align="center" />
         <el-table-column label="数量" width="112" align="center">
           <template #default="{ row }">
             <el-input-number
@@ -128,6 +127,7 @@ function fileSelected(event, type) {
             />
           </template>
         </el-table-column>
+        <el-table-column label="添加日期" prop="added_date" width="112" align="center" />
         <el-table-column label="操作" width="148" fixed="right" align="center">
           <template #default="{ row }">
             <el-button link type="primary" @click="emit('copy', row)">复制</el-button>

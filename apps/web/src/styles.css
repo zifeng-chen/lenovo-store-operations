@@ -17,19 +17,45 @@ body { background: #eef2f7; }
 a { color: inherit; text-decoration: none; }
 button, input { font: inherit; }
 
-.suite-shell { min-height: 100vh; display: grid; grid-template-columns: 232px minmax(0, 1fr); }
+.suite-shell { min-height: 100vh; display: grid; grid-template-columns: var(--sidebar-width, 232px) minmax(0, 1fr); transition: grid-template-columns .18s ease; }
+.suite-shell--collapsed { --sidebar-width: 76px; }
 .suite-sidebar {
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 10;
-  width: 232px;
+  width: var(--sidebar-width, 232px);
   display: flex;
   flex-direction: column;
   padding: 20px 14px 16px;
   background: var(--navy);
   color: #fff;
+  transition: width .18s ease, padding .18s ease;
 }
-.suite-brand { display: flex; align-items: center; gap: 11px; padding: 3px 8px 22px; border-bottom: 1px solid rgba(255,255,255,.09); }
+.suite-shell--collapsed .suite-sidebar { padding-left: 10px; padding-right: 10px; }
+.sidebar-top { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(255,255,255,.09); padding-bottom: 18px; }
+.suite-brand { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 11px; padding: 3px 0; }
+.sidebar-toggle {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 7px;
+  background: rgba(255,255,255,.06);
+  color: #b8c4d4;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: .18s ease;
+}
+.sidebar-toggle:hover { background: rgba(255,255,255,.14); color: #fff; border-color: rgba(255,255,255,.28); }
+.sidebar-toggle:focus-visible { outline: 2px solid #7fb2e5; outline-offset: 2px; }
+.suite-shell--collapsed .sidebar-top { flex-direction: column; gap: 10px; }
+.suite-shell--collapsed .suite-brand { justify-content: center; }
+.suite-shell--collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
+.suite-shell--collapsed .sidebar-footer { justify-content: center; padding-left: 0; padding-right: 0; }
+.nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brand-mark { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; background: #fff; color: #d71920; font-size: 21px; font-weight: 900; }
 .suite-brand strong { display: block; font-size: 14px; line-height: 1.35; }
 .suite-brand small { display: block; margin-top: 3px; color: #8495ad; font-size: 8px; letter-spacing: 1.3px; }
