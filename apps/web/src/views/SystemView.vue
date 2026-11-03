@@ -23,6 +23,27 @@ const fileInput = ref(null);
 const selectedFile = ref(null);
 const restoreSession = ref(null);
 const maintenanceToken = ref('');
+const installStartedAt = ref(0);
+const installElapsedSeconds = ref(0);
+let installElapsedTimer = null;
+
+// 安装阶段按顺序展示；weight 为该阶段在总进度中的权重（合计 100）。
+// 更新器只上报阶段、不上报字节进度，因此百分比按阶段权重估算。
+const INSTALL_STEPS = [
+  { phase: 'queued', label: '等待更新器领取任务', weight: 2 },
+  { phase: 'claimed', label: '更新器已领取任务', weight: 3 },
+  { phase: 'backing-up', label: '创建数据库备份', weight: 8 },
+  { phase: 'downloading', label: '下载签名发布包', weight: 25 },
+  { phase: 'verifying', label: '验证 Ed25519 签名与校验和', weight: 7 },
+  { phase: 'installing', label: '安装依赖并检查候选版本', weight: 30 },
+  { phase: 'switching', label: '原子切换运行版本', weight: 5 },
+  { phase: 'restarting', label: '重启服务', weight: 5 },
+  { phase: 'health-check', label: '验证版本、数据库与模块', weight: 10 },
+  { phase: 'finalizing', label: '更新签名更新器程序', weight: 5 },
+];
+const INSTALL_PHASE_INDEX = new Map(INSTALL_STEPS.map((step, index) => [step.phase, index]));
+const TERMINAL_SUCCESS_PHASES = new Set(['completed']);
+const TERMINAL_FAILURE_PHASES = new Set(['rolled-back', 'failed-before-switch', 'rollback-failed']);
 
 function maintenanceHeaders() {
   return maintenanceToken.value
@@ -88,14 +109,45 @@ function scheduleUpdatePolling({ retryUnknown = false } = {}) {
   clearUpdatePolling();
   const active = Boolean(updateStatus.value?.installation?.active);
   if (!active && !retryUnknown) return;
-  const delay = document.visibilityState === 'hidden' ? 8000 : (active ? 2000 : 4000);
+  // 服务重启期间页面会暂时拿不到状态，此处固定 2 秒重试，直到恢复或任务结束。
+  const delay = document.visibilityState === 'hidden' ? 5000 : 2000;
   updatePollTimer = window.setTimeout(() => loadUpdateStatus({ silent: true }), delay);
+}
+
+function stopInstallElapsedTimer() {
+  if (installElapsedTimer) window.clearInterval(installElapsedTimer);
+  installElapsedTimer = null;
+}
+
+function startInstallElapsedTimer(startedAtMs) {
+  installStartedAt.value = Number(startedAtMs) || Date.now();
+  stopInstallElapsedTimer();
+  const tick = () => {
+    installElapsedSeconds.value = Math.max(0, Math.floor((Date.now() - installStartedAt.value) / 1000));
+  };
+  tick();
+  installElapsedTimer = window.setInterval(tick, 1000);
 }
 
 async function applyUpdateSnapshot(snapshot, { notify = false } = {}) {
   updateStatus.value = snapshot;
   if (snapshot.lastError) updateError.value = snapshot.lastError;
   const state = snapshot.installation?.state;
+  const installationActive = Boolean(snapshot.installation?.active);
+  if (installationActive) {
+    // 任务进行中持续计时；任务跨页面刷新后也能从 startedAt 续算。
+    const startedAtMs = state?.startedAt ? Date.parse(state.startedAt) : Date.now();
+    if (!installElapsedTimer) startInstallElapsedTimer(startedAtMs);
+  } else if (state?.finishedAt) {
+    stopInstallElapsedTimer();
+    const startedAtMs = state.startedAt ? Date.parse(state.startedAt) : installStartedAt.value;
+    const finishedAtMs = Date.parse(state.finishedAt);
+    if (Number.isFinite(startedAtMs) && Number.isFinite(finishedAtMs) && finishedAtMs >= startedAtMs) {
+      installElapsedSeconds.value = Math.max(0, Math.floor((finishedAtMs - startedAtMs) / 1000));
+    }
+  } else {
+    stopInstallElapsedTimer();
+  }
   if (state && !['queued', 'running'].includes(state.status)) {
     const marker = `${state.jobId}:${state.status}:${state.phase}`;
     if (marker !== lastInstallationResult.value) {
@@ -124,12 +176,16 @@ async function loadUpdateStatus({ silent = false } = {}) {
     await applyUpdateSnapshot(body.data);
   } catch (requestError) {
     const active = Boolean(updateStatus.value?.installation?.active);
-    if (!active) updateError.value = requestError.message;
     if (active) {
+      // 安装期间服务会短暂重启，此处的失败通常是预期内的，界面保留上次进度并继续轮询。
+      updateUnknownRetryCount = 0;
       scheduleUpdatePolling();
     } else if (!updateStatus.value && updateUnknownRetryCount < MAX_UPDATE_UNKNOWN_RETRIES) {
+      updateError.value = requestError.message;
       updateUnknownRetryCount += 1;
       scheduleUpdatePolling({ retryUnknown: true });
+    } else {
+      updateError.value = requestError.message;
     }
   } finally {
     if (!silent) updateLoading.value = false;
@@ -460,6 +516,71 @@ const currentBuild = computed(() => updateStatus.value?.current || health.value?
 });
 
 const installationState = computed(() => updateStatus.value?.installation?.state || null);
+
+// 当前阶段索引；终态或未知阶段返回 -1，避免把回滚阶段误算成进度。
+const installStepIndex = computed(() => {
+  const phase = installationState.value?.phase;
+  if (!phase || TERMINAL_FAILURE_PHASES.has(phase)) return -1;
+  if (TERMINAL_SUCCESS_PHASES.has(phase)) return INSTALL_STEPS.length;
+  const index = INSTALL_PHASE_INDEX.get(phase);
+  return index === undefined ? -1 : index;
+});
+
+const installProgress = computed(() => {
+  const state = installationState.value;
+  if (!state) return 0;
+  if (state.status === 'succeeded' || TERMINAL_SUCCESS_PHASES.has(state.phase)) return 100;
+  // 失败与回滚阶段不在安装步骤序列中，进度条改为异常样式，不再推测百分比。
+  if (TERMINAL_FAILURE_PHASES.has(state.phase) || state.status === 'failed' || state.status === 'rollback-failed') {
+    return 100;
+  }
+  const index = installStepIndex.value;
+  if (index < 0) return 0;
+  if (index >= INSTALL_STEPS.length) return 100;
+  // 停留在当前阶段的起点，避免出现"已完成"的错觉。
+  return progressBeforeStep(index);
+});
+
+function progressBeforeStep(index) {
+  let done = 0;
+  for (let i = 0; i < index && i < INSTALL_STEPS.length; i += 1) done += INSTALL_STEPS[i].weight;
+  return Math.min(99, done);
+}
+
+const installStepsView = computed(() => {
+  const state = installationState.value;
+  const currentIndex = installStepIndex.value;
+  const phase = state?.phase;
+  // 后端在失败时只保留最终 phase，不记录失败前到达的阶段，
+  // 因此失败时统一按"未完成"呈现，由错误提示说明原因，不臆测具体卡点。
+  const failed = Boolean(
+    state && (TERMINAL_FAILURE_PHASES.has(phase) || state.status === 'failed' || state.status === 'rollback-failed')
+  );
+  return INSTALL_STEPS.map((step, index) => {
+    let status = 'pending';
+    if (failed) {
+      status = 'pending';
+    } else if (state?.status === 'succeeded') {
+      status = 'done';
+    } else if (currentIndex >= INSTALL_STEPS.length) {
+      status = 'done';
+    } else if (index < currentIndex) {
+      status = 'done';
+    } else if (index === currentIndex) {
+      status = 'current';
+    }
+    return { ...step, status };
+  });
+});
+
+const installElapsedText = computed(() => {
+  const seconds = installElapsedSeconds.value;
+  if (!seconds) return '';
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return minutes ? `${minutes} 分 ${String(rest).padStart(2, '0')} 秒` : `${rest} 秒`;
+});
+
 const canInstallUpdate = computed(() => Boolean(
   updateStatus.value?.installation?.enabled
   && updateStatus.value?.installation?.configured
@@ -532,6 +653,7 @@ onBeforeUnmount(() => {
   if (uptimeTimer) window.clearInterval(uptimeTimer);
   uptimeTimer = null;
   clearUpdatePolling();
+  stopInstallElapsedTimer();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   discardSession();
 });
@@ -629,13 +751,61 @@ onBeforeUnmount(() => {
             <el-tag :type="installationTagType" effect="light">{{ installationState?.targetTag || (updateStatus.installation.enabled ? '已启用' : '未启用') }}</el-tag>
           </div>
           <template v-if="installationState">
-            <div class="installation-progress" :class="{ active: updateStatus.installation.active }">
-              <i aria-hidden="true"></i>
-              <div>
-                <b>{{ installationPhaseText(installationState.phase) }}</b>
-                <span>任务 {{ installationState.jobId }} · 更新于 {{ formatUpdateTime(installationState.updatedAt) }}</span>
+            <div
+              v-if="installationState.status === 'succeeded'"
+              class="install-banner install-banner--success"
+              role="status"
+              aria-live="polite"
+            >
+              <div class="install-banner__icon" aria-hidden="true">✓</div>
+              <div class="install-banner__body">
+                <strong>升级完成，系统已更新到 {{ installationState.target?.version || installationState.targetTag }}</strong>
+                <span>
+                  总耗时 {{ installElapsedText || '—' }} · 全部 {{ INSTALL_STEPS.length }} 个步骤已完成并通过健康检查
+                </span>
               </div>
             </div>
+
+            <div
+              v-else-if="updateStatus.installation.active || installationState.status === 'running' || installationState.status === 'queued'"
+              class="install-progress-head"
+            >
+              <div class="install-progress-head__text">
+                <b>{{ installationPhaseText(installationState.phase) }}</b>
+                <span v-if="installElapsedText">已用时 {{ installElapsedText }}</span>
+              </div>
+              <strong class="install-progress-head__percent">{{ installProgress }}%</strong>
+            </div>
+
+            <el-progress
+              v-if="installationState.status !== 'succeeded'"
+              class="install-progress-bar"
+              :percentage="installProgress"
+              :stroke-width="10"
+              :status="installationTagType === 'danger' ? 'exception' : (installationState.status === 'succeeded' ? 'success' : undefined)"
+              :show-text="false"
+            />
+
+            <ol class="install-steps" aria-label="升级步骤">
+              <li
+                v-for="step in installStepsView"
+                :key="step.phase"
+                :class="['install-step', `install-step--${step.status}`, { 'install-step--active': updateStatus.installation.active }]"
+              >
+                <span class="install-step__marker" aria-hidden="true">
+                  <template v-if="step.status === 'done'">✓</template>
+                  <template v-else-if="step.status === 'failed'">!</template>
+                  <template v-else-if="step.status === 'current'">•</template>
+                </span>
+                <span class="install-step__label">{{ step.label }}</span>
+                <span class="install-step__weight">{{ step.weight }}%</span>
+              </li>
+            </ol>
+
+            <p v-if="updateStatus.installation.active" class="installation-note installation-note--live">
+              升级期间服务会在“重启服务”步骤短暂离线，页面会自动重连并继续显示进度，请勿关闭本页。
+            </p>
+
             <el-alert
               v-if="installationState.error"
               :title="installationState.error.message"
