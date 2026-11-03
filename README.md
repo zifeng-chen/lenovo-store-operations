@@ -16,7 +16,7 @@
 
 每次功能、配置、部署方式或文档更新都必须同步维护 GitHub 仓库文档，并按 `YYYY-MM-DD` 记录更新日期和主要内容。最新更新与完整历史请查看 [CHANGELOG.md](CHANGELOG.md)。
 
-当前最新记录：`2026-11-03`，发布 `0.6.4`：修复定时备份任务长期备份过期数据的问题。`scripts/backup-data.js` 自统一数据库改造后仍指向已停止写入的三个旧版分库路径，导致 `lenovo-store-backup.service` 每次备份的都是历史遗留数据，真正在用的 `store/store.sqlite` 从未被备份；现改为直接备份统一库，并同步把凭据检测表名修正为带模块前缀的 `receipt_ocr_config`。`0.6.3`：代码清理版本，不影响业务功能、接口与数据，无数据迁移。删除备份快照中的恒真死代码块，合并 `persistence-service.js` 中与 `calendar-date.js` 重复的日期校验实现，清理统一数据库改造后遗留的三个废弃路径常量，销售报表改用统一 API 客户端以获得请求超时与统一错误封装。本次发布同时包含此前已合入但未发布到 Release 的更新器修复：systemd 模板 `RestrictSUIDSGID` 调整为 `false`，解决 CIX 等定制 ARM64 内核上 `tar` 解压返回 ENOSYS 导致在线安装中断的问题。`0.6.2` 修复付款凭证 OCR 商品明细长期为空的问题，新增列式分行小票解析，支持银联商务小票「商品名多行 + 单价/折扣/小计三行」版式，使 `receipt_sale_items` 正常写入并让销售业绩报表的商品明细页有数据。`0.6.1` 轮换 Release 签名密钥并重新签发正式 Release，新公钥指纹为 `6e3108efbd2b4951083bfbbc768e628917ef0d289a169a6f26956935ffeff7f6`，同时修正 `lenovo-store-backup.service` 中指向不存在 `current` 路径的 `WorkingDirectory`，恢复长期失败的定时备份。
+当前最新记录：`2026-11-03`，发布 `0.6.5`：移除已失效的旧项目迁移脚本，无功能与数据变更。`scripts/migrate-legacy-data.js` 迁移的目标是被统一库取代的三个旧分库，新布局下已无法工作，故连同 `package.json` 的 `migrate:data` 入口、`check` 检查项与 `data-paths.js` 中仅供其使用的三个 `*_DATABASE_PATH` 常量一并移除，旧版分库路径至此从代码中完全清除；文档同步给出替代做法。`0.6.4`：修复定时备份任务长期备份过期数据的问题。`scripts/backup-data.js` 自统一数据库改造后仍指向已停止写入的三个旧版分库路径，导致 `lenovo-store-backup.service` 每次备份的都是历史遗留数据，真正在用的 `store/store.sqlite` 从未被备份；现改为直接备份统一库，并同步把凭据检测表名修正为带模块前缀的 `receipt_ocr_config`。`0.6.3`：代码清理版本，不影响业务功能、接口与数据，无数据迁移。删除备份快照中的恒真死代码块，合并 `persistence-service.js` 中与 `calendar-date.js` 重复的日期校验实现，清理统一数据库改造后遗留的三个废弃路径常量，销售报表改用统一 API 客户端以获得请求超时与统一错误封装。本次发布同时包含此前已合入但未发布到 Release 的更新器修复：systemd 模板 `RestrictSUIDSGID` 调整为 `false`，解决 CIX 等定制 ARM64 内核上 `tar` 解压返回 ENOSYS 导致在线安装中断的问题。`0.6.2` 修复付款凭证 OCR 商品明细长期为空的问题，新增列式分行小票解析，支持银联商务小票「商品名多行 + 单价/折扣/小计三行」版式，使 `receipt_sale_items` 正常写入并让销售业绩报表的商品明细页有数据。`0.6.1` 轮换 Release 签名密钥并重新签发正式 Release，新公钥指纹为 `6e3108efbd2b4951083bfbbc768e628917ef0d289a169a6f26956935ffeff7f6`，同时修正 `lenovo-store-backup.service` 中指向不存在 `current` 路径的 `WorkingDirectory`，恢复长期失败的定时备份。
 
 ## 板块说明
 
@@ -202,12 +202,9 @@ lenovo-store-operations/
 │   └── release/                # Release 签名密钥生成工具
 ├── data/
 │   ├── store/                  # 统一 SQLite 数据库（开发和测试回退位置）
-│   ├── computer-labels/        # 旧版独立库，仅供历史备份兼容
-│   ├── price-labels/           # 旧版独立库，仅供历史备份兼容
-│   ├── receipt-assistant/      # 旧版独立库，仅供历史备份兼容
 │   └── secrets/                # OCR 加密密钥
 ├── scripts/
-│   └── migrate-legacy-data.js  # 三个旧项目数据一次性迁移脚本
+│   └── backup-data.js          # 统一库一致性备份
 ├── package.json
 └── package-lock.json
 ```
@@ -336,48 +333,9 @@ npm run dev
 
 ## 旧项目数据迁移
 
-迁移脚本使用 SQLite backup API 创建包含 WAL 中已提交数据的一致性快照，不会直接复制正在使用的数据库主文件。
+旧版按模块分库的迁移脚本（`migrate:data`）已随统一数据库改造完成而移除：它迁移的目标是 `computer-labels`、`price-labels`、`receipt-assistant` 三个独立库，而这三个库已被 `store/store.sqlite` 取代，脚本在新布局下无法正确工作。
 
-### 默认源路径
-
-| 数据 | 默认源文件 |
-| --- | --- |
-| 电脑商品标签 | 上级旧项目的 `backend/db/database.sqlite` |
-| 商品价格标签 | `~/lenovo-price-label/data/database.db` |
-| 付款凭证 | `~/Lenovo POS System/backend/db/database.sqlite` |
-| OCR 密钥 | `~/Lenovo POS System/backend/.local/ocr-config.key` |
-
-首次迁移前先安装依赖，但不要先启动新服务。生产目标应通过外部数据根目录指定：
-
-```bash
-npm ci
-LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations npm run migrate:data
-npm run build
-LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations npm start
-```
-
-迁移脚本会：
-
-1. 确认三个源数据库和 OCR 密钥存在；
-2. 拒绝覆盖任何已存在的目标数据库或密钥；
-3. 使用 SQLite backup API 复制一致性快照；
-4. 对源库和目标库执行记录数比对；
-5. 对目标库执行 `PRAGMA integrity_check`；
-6. 将 OCR 密钥权限设置为 `0600`；
-7. 任一步骤失败时清理本轮创建的目标文件。
-
-如果旧项目不在默认位置，可通过环境变量指定：
-
-```bash
-LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations \
-LEGACY_COMPUTER_DB="/absolute/path/computer.sqlite" \
-LEGACY_PRICE_DB="/absolute/path/price.db" \
-LEGACY_RECEIPT_DB="/absolute/path/receipt.sqlite" \
-LEGACY_RECEIPT_OCR_KEY="/absolute/path/ocr-config.key" \
-npm run migrate:data
-```
-
-迁移是一次性操作。目标文件已经存在时脚本会主动停止，这是防止覆盖现有业务数据的保护机制。
+如需从更早的独立系统导入数据，请在迁移到当前版本**之前**的旧版本上完成，或直接使用系统状态页的统一备份恢复功能导入已有的 `.lsbackup` 文件。
 
 ## GitHub 更新检测、签名 Release 与在线安装
 
@@ -473,7 +431,6 @@ npm run backup:data
 | `npm run build` | 构建 Portal 和五个业务 SPA |
 | `npm start` | 启动 8900 统一生产服务 |
 | `npm run check` | 构建检查五个业务 SPA，并检查后端、数据脚本和 Release 脚本语法 |
-| `npm run migrate:data` | 一次性迁移三个旧项目数据库和 OCR 密钥到统一库 `store/store.sqlite` |
 | `npm run backup:data` | 在线一致性备份统一库各模块逻辑快照、OCR 密钥和校验清单 |
 | `npm run release:verify -- vX.Y.Z` | 校验稳定版 tag 与根 package、lockfile 版本一致 |
 | `npm run release:pack -- vX.Y.Z` | 在全量构建后生成签名 Release 的源码与构建产物包、manifest 和 SHA-256 校验文件 |

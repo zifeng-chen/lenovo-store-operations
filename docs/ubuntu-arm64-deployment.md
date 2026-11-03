@@ -572,68 +572,16 @@ sudo test ! -L "$TARGET"
 
 不要删除旧 `data/` 和迁移前独立副本，直到新服务业务验收和一次恢复演练都完成。
 
-### 10.C 从三个旧项目执行一次性迁移
+### 10.C 旧项目数据迁移（已移除）
 
-先把三个源数据库和 OCR 密钥复制到部署机受控只读目录，例如 `/srv/lenovo-legacy/`，确保 `lenovo-store` 可读取。目标 `/var/lib/lenovo-store-operations` 必须不存在。
+旧版按模块分库的迁移脚本 `migrate:data` 已随统一数据库改造完成而移除。它迁移的目标是 `computer-labels`、`price-labels`、`receipt-assistant` 三个独立库，而这三个库已被 `$LENOVO_STORE_DATA_DIR/store/store.sqlite` 取代，脚本在新布局下无法正确工作。
 
-```bash
-sudo test ! -e /var/lib/lenovo-store-operations
-sudo install -d -m 0700 -o lenovo-store -g lenovo-store \
-  /var/backups/lenovo-store-operations
-sudo ls -l \
-  /srv/lenovo-legacy/computer.sqlite \
-  /srv/lenovo-legacy/price.db \
-  /srv/lenovo-legacy/receipt.sqlite \
-  /srv/lenovo-legacy/ocr-config.key
+当前的部署方式有两种：
 
-sudo -u lenovo-store env \
-  HOME=/var/lib/lenovo-store-service \
-  PATH=/usr/local/bin:/usr/bin:/bin \
-  LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations \
-  LEGACY_COMPUTER_DB=/srv/lenovo-legacy/computer.sqlite \
-  LEGACY_PRICE_DB=/srv/lenovo-legacy/price.db \
-  LEGACY_RECEIPT_DB=/srv/lenovo-legacy/receipt.sqlite \
-  LEGACY_RECEIPT_OCR_KEY=/srv/lenovo-legacy/ocr-config.key \
-  bash -c '
-    set -Eeuo pipefail
-    umask 0077
-    exec /usr/local/bin/npm \
-      --prefix /opt/lenovo-store-operations \
-      run migrate:data
-  '
-```
+- **全新部署**：跳过本节，直接进入第 11 节创建生产环境文件。首次启动服务会自动创建空的统一库 `store/store.sqlite`。
+- **从旧部署恢复数据**：使用系统状态页「系统状态 → 统一数据保护」上传已有的 `.lsbackup` 统一备份包，按模块逐个恢复；或使用 `scripts/backup-data.js` 生成的备份目录，直接复制 `store/store.sqlite` 与 `secrets/receipt-ocr.key` 到新的数据根目录。
 
-脚本会拒绝覆盖已有目标，使用 SQLite backup API、比对记录数并执行完整性检查。成功后必须拒绝意外链接/特殊文件并统一收紧 owner/mode：
-
-```bash
-set -Eeuo pipefail
-TARGET=/var/lib/lenovo-store-operations
-TARGET_LINK=$(sudo find "$TARGET" -type l -print -quit)
-[ -z "$TARGET_LINK" ] || {
-  echo "停止：迁移目标含符号链接：$TARGET_LINK" >&2
-  exit 1
-}
-TARGET_SPECIAL=$(sudo find "$TARGET" ! -type d ! -type f -print -quit)
-[ -z "$TARGET_SPECIAL" ] || {
-  echo "停止：迁移目标含非普通文件：$TARGET_SPECIAL" >&2
-  exit 1
-}
-
-sudo chown -R lenovo-store:lenovo-store "$TARGET"
-sudo find "$TARGET" -type d -exec chmod 0700 {} +
-sudo find "$TARGET" -type f -exec chmod 0600 {} +
-sudo find "$TARGET" -maxdepth 3 \
-  -printf '%M %u:%g %p\n'
-for db in \
-  "$TARGET/computer-labels/database.sqlite" \
-  "$TARGET/price-labels/database.sqlite" \
-  "$TARGET/receipt-assistant/database.sqlite"
-do
-  sudo -u lenovo-store sqlite3 "$db" 'PRAGMA integrity_check;' | grep -qx 'ok'
-done
-```
-
-旧项目源文件和迁移后数据都要先备份；业务验收完成前不要删除源文件。这里的“三个旧项目”与脚本契约保持不变：历史来源只有仓库货品、周边价签和付款凭证。执行本节时统一库尚不存在；第一次启动 `0.6.0` 服务会创建 `$LENOVO_STORE_DATA_DIR/store/store.sqlite` 并从旧目录导入已有数据。这不是数据丢失，也不能凭空迁移不存在的旧数据。首次启动后应对统一库执行完整性检查，并确认三个业务板块的记录数量与旧系统一致。
+旧版独立库方向（三个分库文件）不再被任何脚本读写，无需保留。
 
 ## 11. 创建精确生产环境文件
 

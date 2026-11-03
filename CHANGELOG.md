@@ -4,6 +4,13 @@
 
 ## 2026-11-03
 
+- 发布补丁版本 `0.6.5`：移除已失效的旧项目迁移脚本，无功能与数据变更。
+- 删除 `scripts/migrate-legacy-data.js`：该脚本把三个更早的独立系统数据库迁移到 `computer-labels`、`price-labels`、`receipt-assistant` 三个分库，而这三个分库已被统一库 `store/store.sqlite` 取代，脚本在新布局下已无法工作（运行会因找不到源文件直接报错）。同步移除 `package.json` 中的 `migrate:data` 脚本入口与 `check` 中的语法检查项。
+- 移除 `data-paths.js` 中仅供该脚本使用的 `COMPUTER_LABELS_DATABASE_PATH`、`PRICE_LABELS_DATABASE_PATH`、`RECEIPT_ASSISTANT_DATABASE_PATH` 三个常量，至此旧版分库路径已从代码中完全清除。
+- 同步更新文档：README 的数据目录结构不再列出旧版独立库目录，`npm run migrate:data` 说明改为迁移方案指引；`docs/ubuntu-arm64-deployment.md` 第 10.C 节改为「旧项目数据迁移（已移除）」，并给出全新部署与从旧部署恢复数据的两种替代做法。
+
+## 2026-11-03（0.6.4 备份修复）
+
 - 发布补丁版本 `0.6.4`：修复定时备份任务长期备份过期数据的问题，无数据迁移。
 - 修正 `scripts/backup-data.js` 的备份目标：该脚本自统一数据库改造后仍指向 `computer-labels`、`price-labels`、`receipt-assistant` 三个旧版分库路径，而那三个库在统一库接管后已停止写入，导致 `lenovo-store-backup.service` 每次执行备份的都是历史遗留的过期数据，真正在用的 `store/store.sqlite` 从未被备份。现改为直接备份统一库。
 - 同步修正备份内的 OCR 凭据检测：统一库中该表带模块前缀，表名由 `ocr_config` 改为 `receipt_ocr_config`；此前该检测在旧路径下读不到记录，会让“数据库含凭据但缺少密钥”的校验失效。
