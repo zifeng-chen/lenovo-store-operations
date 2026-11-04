@@ -7,6 +7,9 @@ const TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const MAX_IPC_BYTES = 64 * 1024
 const ACTIVE_STATUSES = new Set(['queued', 'running'])
+// 更新器是常驻的 root 服务，正常情况下会在一两秒内领取请求。
+// 超过这个时限仍未领取，说明更新器没在运行或已被停用，继续等待只会一直挂着。
+const CLAIM_TIMEOUT_MS = 3 * 60 * 1000
 const ALLOWED_PHASES = new Set([
   'queued',
   'claimed',
@@ -118,6 +121,24 @@ function queuedState(raw) {
   }
 }
 
+function queuedTimedOut(state, now = Date.now()) {
+  const requestedAtMs = Date.parse(state.requestedAt || '')
+  if (!Number.isFinite(requestedAtMs)) return false
+  return now - requestedAtMs > CLAIM_TIMEOUT_MS
+}
+
+// 超时后把排队中的请求降级为失败态返回，并删除请求文件，
+// 否则更新器晚些启动时仍会领走这条请求真的执行安装，与界面显示不一致。
+function expiredQueuedState(state) {
+  return {
+    ...state,
+    status: 'failed',
+    phase: 'queued',
+    finishedAt: new Date().toISOString(),
+    error: describeError({ code: 'UPDATE_CLAIM_TIMEOUT', message: '更新器未在 3 分钟内领取升级任务' }),
+  }
+}
+
 function validateParentDirectory(filePath) {
   const directory = path.dirname(filePath)
   try {
@@ -127,6 +148,17 @@ function validateParentDirectory(filePath) {
     throw ipcError('更新任务目录不存在或不安全', 503, 'UPDATE_QUEUE_UNAVAILABLE')
   }
   return directory
+}
+
+// 只删除队列里的待处理请求；删除失败不让状态查询整体报错，
+// 下次读取仍会再判一次超时。
+function discardQueuedRequest(requestPath) {
+  try {
+    fs.unlinkSync(requestPath)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function writeRequestAtomic(requestPath, request) {
@@ -214,7 +246,12 @@ export function createUpdateIpcService({
           ? sanitizeState(readSafeJson(statePath, { requireRootOwner: requireRootOwnedState }))
           : null
       }
-      if (fs.existsSync(requestPath)) return queuedState(readSafeJson(requestPath))
+      if (fs.existsSync(requestPath)) {
+        const pending = queuedState(readSafeJson(requestPath))
+        if (!queuedTimedOut(pending)) return pending
+        discardQueuedRequest(requestPath)
+        return expiredQueuedState(pending)
+      }
       if (fs.existsSync(statePath)) return sanitizeState(readSafeJson(statePath, { requireRootOwner: requireRootOwnedState }))
       return null
     } catch (error) {

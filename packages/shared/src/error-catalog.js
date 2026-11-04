@@ -646,6 +646,16 @@ export const ERROR_CATALOG = Object.freeze({
       '执行 systemctl restart lenovo-store-updater 重新创建运行目录。'
     ]
   ),
+  UPDATE_CLAIM_TIMEOUT: entry(
+    '更新器长时间没有领取升级任务',
+    '升级任务已提交超过 3 分钟，但更新器始终没有领取，任务已自动取消。通常是更新器服务没在运行、被停用，或运行目录权限不对。',
+    [
+      '执行 systemctl status lenovo-store-updater 查看更新器服务是否在运行。',
+      '若服务未运行，执行 systemctl start lenovo-store-updater 后重新发起升级。',
+      '确认 /run/lenovo-store-updater 目录存在，权限 0770，属主 root:tianxi。',
+      '以上都正常仍无进展时，查看 journalctl -u lenovo-store-updater 的报错。'
+    ]
+  ),
   UPDATE_ALREADY_QUEUED: entry(
     '已有升级任务在队列中等待',
     '同一时间只允许一个升级任务，当前队列里已有一个未处理的任务。',

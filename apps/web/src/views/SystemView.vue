@@ -313,6 +313,9 @@ const installSummaryText = computed(() => {
     return `已更新到 v${state.target?.version || state.targetTag}，全部步骤通过健康检查。`;
   }
   if (state.status === 'rollback-failed') return '升级失败且回退未成功，需要人工处理。';
+  if (state.error?.code === 'UPDATE_CLAIM_TIMEOUT') {
+    return '更新器超过 3 分钟未领取任务，升级已自动取消。';
+  }
   if (state.status === 'failed') {
     return state.rolledBack
       ? '新版本未通过检查，已自动回到原版本，业务数据未受影响。'
