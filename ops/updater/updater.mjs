@@ -452,6 +452,7 @@ function validateExtractedTree(root) {
     'release-info.json',
     'apps/server/src/server.js',
     'ops/updater/updater.mjs',
+    'ops/updater/error-hints.mjs',
     'apps/web/dist/index.html',
     'apps/computer-labels/dist/index.html',
     'apps/price-labels/dist/index.html',
@@ -695,8 +696,15 @@ function installSignedUpdater(candidateRoot, config, expectedSha256) {
   const sourceStats = fs.lstatSync(source)
   assert(sourceStats.isFile() && !sourceStats.isSymbolicLink() && sourceStats.size > 0 && sourceStats.size <= 2 * 1024 * 1024, '候选版本的更新器程序无效', 'INVALID_UPDATER_PAYLOAD')
   assert(sha256RegularFile(source, 2 * 1024 * 1024, '候选更新器') === expectedSha256, '封存后的候选更新器摘要发生变化', 'UPDATER_PAYLOAD_CHANGED')
+  // updater.mjs 依赖同目录的 error-hints.mjs，两者必须一起更新，
+  // 否则更新器重新启动时会因找不到模块直接退出。
+  const hintsSource = path.join(candidateRoot, 'ops/updater/error-hints.mjs')
+  const hintsStats = fs.lstatSync(hintsSource)
+  assert(hintsStats.isFile() && !hintsStats.isSymbolicLink() && hintsStats.size > 0 && hintsStats.size <= 2 * 1024 * 1024, '候选版本的错误提示模块无效', 'INVALID_UPDATER_PAYLOAD')
   const directory = path.dirname(config.updaterPath)
   assert(fs.realpathSync(directory) === directory, '更新器安装目录不能是符号链接', 'UNSAFE_UPDATER_PATH')
+  const hintsTarget = path.join(directory, 'error-hints.mjs')
+  installUpdaterFile(hintsSource, hintsTarget, 0o644, directory)
   const temporary = path.join(directory, `.updater.${process.pid}.${crypto.randomUUID()}.tmp`)
   fs.copyFileSync(source, temporary, fs.constants.COPYFILE_EXCL)
   try {
@@ -707,6 +715,21 @@ function installSignedUpdater(candidateRoot, config, expectedSha256) {
     fs.renameSync(temporary, config.updaterPath)
     const directoryHandle = fs.openSync(directory, 'r')
     try { fs.fsyncSync(directoryHandle) } finally { fs.closeSync(directoryHandle) }
+  } finally {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary)
+  }
+}
+
+// 与主程序同样的原子替换：先写临时文件再 rename，避免留下半个文件。
+function installUpdaterFile(source, target, mode, directory) {
+  const temporary = path.join(directory, `.${path.basename(target)}.${process.pid}.${crypto.randomUUID()}.tmp`)
+  fs.copyFileSync(source, temporary, fs.constants.COPYFILE_EXCL)
+  try {
+    fs.chownSync(temporary, 0, 0)
+    fs.chmodSync(temporary, mode)
+    const handle = fs.openSync(temporary, 'r')
+    try { fs.fsyncSync(handle) } finally { fs.closeSync(handle) }
+    fs.renameSync(temporary, target)
   } finally {
     if (fs.existsSync(temporary)) fs.unlinkSync(temporary)
   }

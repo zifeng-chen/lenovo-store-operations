@@ -59,6 +59,7 @@ function validateReleaseTree(releaseRoot) {
     'scripts/backup-data.js',
     'scripts/verify-product-name.js',
     'ops/updater/updater.mjs',
+    'ops/updater/error-hints.mjs',
     'ops/systemd/lenovo-store-updater.service',
     ...requiredDistDirectories.map(directory => `${directory}/index.html`),
   ]

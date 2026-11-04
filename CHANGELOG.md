@@ -4,6 +4,12 @@
 
 ## 2026-11-04
 
+- 发布补丁版本 `0.7.4`：修复更新器漏装依赖文件导致服务启动即崩溃、升级任务永久卡在队列的问题。
+- 故障现象：提交升级后任务一直停在「等待更新器领取任务」，「已用时」持续累加；`systemctl status lenovo-store-updater` 显示 `failed`，日志为 `ERR_MODULE_NOT_FOUND: Cannot find module '/usr/local/lib/lenovo-store-updater/error-hints.mjs'`。
+- 根因：`ops/updater/updater.mjs` 第 6 行 import 了同目录的 `error-hints.mjs`，但三处安装逻辑都只装了 `updater.mjs`：`ops/install-updater.sh` 初始化安装时只 `install` 了 `updater.mjs`；`installSignedUpdater()` 在升级收尾更新自身时也只替换 `updater.mjs`；`scripts/create-release-artifacts.js` 的必检清单与 `validateExtractedTree()` 都未校验 `error-hints.mjs`，导致缺文件也能打包发布。
+- 修复：上述三处全部补齐 `error-hints.mjs`。更新器自更新时先用临时文件加 `rename` 原子写入 `error-hints.mjs`（权限 0644、属主 root），再替换主程序，避免留下半个文件。
+- 已有 0.7.1 环境受影响：其更新器已崩溃，在线升级无法触发，需手工补装 `error-hints.mjs` 并重启 `lenovo-store-updater` 后才能恢复正常升级链路。
+
 - 发布小版本 `0.7.3`：升级任务新增领取超时机制，解决更新器未运行导致任务无限等待的问题。
 - 此前升级请求写入队列后没有任何超时回收：更新器若没在运行（服务被停用、崩溃或目录权限不对），任务会一直停在「等待更新器领取任务」，界面上「已用时」持续累加，实际永远不会推进。
 - 现在超过 **3 分钟**未被更新器领取，服务端会将该任务判定为失败、返回错误码 `UPDATE_CLAIM_TIMEOUT`，并删除队列中的请求文件。删除请求文件是关键一步：否则更新器晚些恢复运行时仍会领走这条请求真的执行安装，与界面显示的状态不一致。

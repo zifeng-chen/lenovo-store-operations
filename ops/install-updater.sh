@@ -369,6 +369,7 @@ ln -s "releases/$RELEASE_NAME" "$ROOT/previous"
 
 install -d -m 0755 -o root -g root "$UPDATER_LIB"
 install -m 0755 -o root -g root "$ROOT/current/ops/updater/updater.mjs" "$UPDATER_LIB/updater.mjs"
+install -m 0644 -o root -g root "$ROOT/current/ops/updater/error-hints.mjs" "$UPDATER_LIB/error-hints.mjs"
 install -m 0644 -o root -g root "$WORK/release-signing-public.pem" "$PUBLIC_KEY_TARGET"
 cat >"$UPDATER_CONFIG" <<EOF
 {
