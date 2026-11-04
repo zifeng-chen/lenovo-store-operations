@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { describeError } from '@lenovo-store/shared/error-catalog';
 import ErrorDoc from '../components/ErrorDoc.vue';
 
 const MAINTENANCE_HEADER = { 'X-Lenovo-Store-Maintenance': '1' };
@@ -28,6 +29,10 @@ const maintenanceToken = ref('');
 const installStartedAt = ref(0);
 const installElapsedSeconds = ref(0);
 let installElapsedTimer = null;
+// 升级进度与结果统一在弹窗中呈现，页面只保留入口，避免长期占用版面。
+const installDialogVisible = ref(false);
+// 检查更新失败同样用弹窗说明原因与处理办法。
+const checkErrorDialogVisible = ref(false);
 
 // 安装阶段按顺序展示；weight 为该阶段在总进度中的权重（合计 100）。
 // 更新器只上报阶段、不上报字节进度，因此百分比按阶段权重估算。
@@ -210,7 +215,7 @@ async function checkForUpdates() {
     if (body.data.lastError) {
       updateError.value = body.data.lastError;
       updateErrorDetail.value = body.data.lastErrorDetail || { code: body.data.lastErrorCode || '', title: '检查更新失败', explanation: body.data.lastError, solutions: [], rawMessage: body.data.lastError };
-      ElMessage.warning('GitHub 暂时不可用，已保留上次成功的检查结果');
+      checkErrorDialogVisible.value = true;
     } else if (body.data.updateAvailable) {
       ElMessage.success(`发现新版本 ${body.data.latestRelease.version}`);
     } else if (!body.data.latestRelease) {
@@ -221,7 +226,7 @@ async function checkForUpdates() {
   } catch (requestError) {
     updateError.value = requestError.message;
     updateErrorDetail.value = { code: requestError.code || '', title: '检查更新失败', explanation: '向业务服务发起更新检查时出错。', solutions: ['稍后重试一次。', '若持续失败，联系维护人员检查业务服务与网络。'], severity: 'warning', rawMessage: requestError.message };
-    ElMessage.error(requestError.message);
+    checkErrorDialogVisible.value = true;
   } finally {
     updateLoading.value = false;
   }
@@ -250,6 +255,7 @@ async function installLatestUpdate() {
 
   installSubmitting.value = true;
   updateError.value = '';
+  installDialogVisible.value = true;
   try {
     const response = await fetch('/api/system/update/install', {
       method: 'POST',
@@ -261,14 +267,70 @@ async function installLatestUpdate() {
     });
     const body = await readApiResponse(response);
     await applyUpdateSnapshot(body.data, { notify: true });
-    ElMessage.success(body.msg);
   } catch (requestError) {
     updateError.value = requestError.message;
-    ElMessage.error(requestError.message);
+    updateErrorDetail.value = {
+      code: requestError.code || '',
+      title: '提交升级任务失败',
+      explanation: requestError.message,
+      solutions: [
+        '确认当前没有其他升级任务正在执行。',
+        '刷新页面后重新点击“检查更新”，再提交一次。',
+        '如果反复失败，请把原始错误信息反馈给系统维护人员。',
+      ],
+      retryable: true,
+      severity: 'warning',
+      rawMessage: requestError.message,
+    };
   } finally {
     installSubmitting.value = false;
   }
 }
+
+// 页面上的“升级状态”卡片只做摘要，点击后打开详情弹窗。
+function openInstallDialog() {
+  installDialogVisible.value = true;
+}
+
+const installDialogTitle = computed(() => {
+  const state = installationState.value;
+  if (!state) return '在线升级';
+  if (state.status === 'succeeded') return '升级完成';
+  if (state.status === 'rollback-failed') return '升级异常';
+  if (state.status === 'failed') return state.rolledBack ? '升级失败（已回滚）' : '升级未完成';
+  if (state.status === 'queued') return '等待执行升级';
+  return '正在升级';
+});
+
+// 升级结束后允许关闭弹窗；进行中锁定，避免用户误以为可以中断。
+const installDialogClosable = computed(() => !updateStatus.value?.installation?.active);
+
+// 页面上的摘要只保留一句结论，详情放进弹窗。
+const installSummaryText = computed(() => {
+  const state = installationState.value;
+  if (!state) return '';
+  if (state.status === 'succeeded') {
+    return `已更新到 v${state.target?.version || state.targetTag}，全部步骤通过健康检查。`;
+  }
+  if (state.status === 'rollback-failed') return '升级失败且回退未成功，需要人工处理。';
+  if (state.status === 'failed') {
+    return state.rolledBack
+      ? '新版本未通过检查，已自动回到原版本，业务数据未受影响。'
+      : '升级未完成，当前版本仍正常运行。';
+  }
+  if (state.status === 'queued') return '任务已提交，正在等待更新器领取。';
+  return `${installationPhaseText(state.phase)}…`;
+});
+
+const installSummaryAction = computed(() => (installationState.value?.error ? '查看原因与处理办法' : '查看升级详情'));
+
+// 页面只展示一句结论，完整解释与步骤放在弹窗里，避免长期占用版面。
+const installSummaryError = computed(() => {
+  const error = installationState.value?.error;
+  if (!error) return '';
+  const doc = describeError(error);
+  return doc.title || '升级过程出现问题';
+});
 
 function installationPhaseText(phase) {
   return {
@@ -540,9 +602,11 @@ const installProgress = computed(() => {
   const state = installationState.value;
   if (!state) return 0;
   if (state.status === 'succeeded' || TERMINAL_SUCCESS_PHASES.has(state.phase)) return 100;
-  // 失败与回滚阶段不在安装步骤序列中，进度条改为异常样式，不再推测百分比。
+  // 失败与回滚不在步骤序列内：按实际中断位置估算，避免满格进度造成“已完成”的错觉。
   if (TERMINAL_FAILURE_PHASES.has(state.phase) || state.status === 'failed' || state.status === 'rollback-failed') {
-    return 100;
+    const index = installStepIndex.value;
+    if (index < 0) return 0;
+    return Math.min(99, progressBeforeStep(index));
   }
   const index = installStepIndex.value;
   if (index < 0) return 0;
@@ -709,7 +773,20 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <ErrorDoc v-if="updateError" :error="updateErrorDetail" title="检查更新失败" type="warning" />
+      <el-dialog
+        v-model="checkErrorDialogVisible"
+        title="检查更新失败"
+        width="560px"
+        top="10vh"
+        class="install-dialog"
+        append-to-body
+      >
+        <ErrorDoc v-if="updateErrorDetail" :error="updateErrorDetail" type="warning" :show-raw="true" />
+        <template #footer>
+          <el-button @click="checkErrorDialogVisible = false">关闭</el-button>
+          <el-button type="primary" :loading="updateLoading" @click="checkErrorDialogVisible = false; checkForUpdates()">重新检查</el-button>
+        </template>
+      </el-dialog>
       <el-alert v-if="updateStatus?.updateAvailable && !updateStatus.installation?.enabled" title="已检测到新版本，但在线安装未启用。请安装root updater平台，或在环境文件中显式设置 LENOVO_STORE_UPDATE_ENABLED=true 后重启服务。" type="warning" :closable="false" show-icon />
       <ErrorDoc
         v-if="updateStatus?.installation?.enabled && !updateStatus.installation.configured"
@@ -765,68 +842,116 @@ onBeforeUnmount(() => {
             <el-tag :type="installationTagType" effect="light">{{ installationState?.targetTag || (updateStatus.installation.enabled ? '已启用' : '未启用') }}</el-tag>
           </div>
           <template v-if="installationState">
-            <div
-              v-if="installationState.status === 'succeeded'"
-              class="install-banner install-banner--success"
-              role="status"
-              aria-live="polite"
-            >
-              <div class="install-banner__icon" aria-hidden="true">✓</div>
-              <div class="install-banner__body">
-                <strong>升级完成，系统已更新到 {{ installationState.target?.version || installationState.targetTag }}</strong>
-                <span>
-                  总耗时 {{ installElapsedText || '—' }} · 全部 {{ INSTALL_STEPS.length }} 个步骤已完成并通过健康检查
-                </span>
+            <div class="install-summary">
+              <div class="install-summary__main">
+                <el-tag :type="installationTagType" effect="dark" size="small">{{ installationStatusText }}</el-tag>
+                <span class="install-summary__text">{{ installSummaryText }}</span>
               </div>
+              <el-button link type="primary" @click="openInstallDialog">{{ installSummaryAction }}</el-button>
             </div>
-
-            <div
-              v-else-if="updateStatus.installation.active || installationState.status === 'running' || installationState.status === 'queued'"
-              class="install-progress-head"
-            >
-              <div class="install-progress-head__text">
-                <b>{{ installationPhaseText(installationState.phase) }}</b>
-                <span v-if="installElapsedText">已用时 {{ installElapsedText }}</span>
-              </div>
-              <strong class="install-progress-head__percent">{{ installProgress }}%</strong>
-            </div>
-
             <el-progress
-              v-if="installationState.status !== 'succeeded'"
+              v-if="installationState.status !== 'succeeded' && !installationState.error"
               class="install-progress-bar"
               :percentage="installProgress"
-              :stroke-width="10"
-              :status="installationTagType === 'danger' ? 'exception' : (installationState.status === 'succeeded' ? 'success' : undefined)"
+              :stroke-width="8"
+              :status="installationTagType === 'danger' ? 'exception' : undefined"
               :show-text="false"
             />
-
-            <ol class="install-steps" aria-label="升级步骤">
-              <li
-                v-for="step in installStepsView"
-                :key="step.phase"
-                :class="['install-step', `install-step--${step.status}`, { 'install-step--active': updateStatus.installation.active }]"
-              >
-                <span class="install-step__marker" aria-hidden="true">
-                  <template v-if="step.status === 'done'">✓</template>
-                  <template v-else-if="step.status === 'failed'">!</template>
-                  <template v-else-if="step.status === 'current'">•</template>
-                </span>
-                <span class="install-step__label">{{ step.label }}</span>
-                <span class="install-step__weight">{{ step.weight }}%</span>
-              </li>
-            </ol>
-
-            <p v-if="updateStatus.installation.active" class="installation-note installation-note--live">
-              升级期间服务会在“重启服务”步骤短暂离线，页面会自动重连并继续显示进度，请勿关闭本页。
-            </p>
-
-            <ErrorDoc v-if="installationState.error" :error="installationState.error" :type="installationState.rolledBack ? 'warning' : 'error'" />
-            <p v-if="installationState.rolledBack" class="installation-note">候选版本未通过验证，current 已切回原版本并重新通过健康检查，业务数据未自动覆盖。</p>
+            <div v-if="installationState.error" class="install-summary__alert">
+              <el-alert
+                :title="installSummaryError"
+                :type="installationState.rolledBack || installationState.status === 'failed' ? 'warning' : 'error'"
+                :closable="false"
+                show-icon
+              />
+            </div>
           </template>
           <p v-else class="installation-note">{{ updateStatus.installation.enabled ? '尚无安装任务。安装只接受刚检查到的最新签名稳定版本；可信局域网无维护令牌时可直接确认安装，令牌模式仍需维护令牌。' : '此环境只提供版本检查；需先按 Ubuntu 部署文档配置签名公钥和 systemd 更新平台。' }}</p>
         </section>
       </div>
     </section>
+
+    <el-dialog
+      v-model="installDialogVisible"
+      :title="installDialogTitle"
+      width="640px"
+      top="6vh"
+      class="install-dialog"
+      :close-on-click-modal="installDialogClosable"
+      :close-on-press-escape="installDialogClosable"
+      :show-close="installDialogClosable"
+      append-to-body
+    >
+      <div v-if="installationState" class="install-dialog__body">
+        <div class="install-dialog__meta">
+          <span>目标版本 <strong>{{ installationState.targetTag || installationState.target?.version || '—' }}</strong></span>
+          <span v-if="installElapsedText">已用时 <strong>{{ installElapsedText }}</strong></span>
+          <span v-if="installationState.finishedAt">结束于 <strong>{{ formatUpdateTime(installationState.finishedAt) }}</strong></span>
+        </div>
+
+        <div v-if="installationState.status === 'succeeded'" class="install-banner install-banner--success" role="status" aria-live="polite">
+          <div class="install-banner__icon" aria-hidden="true">✓</div>
+          <div class="install-banner__body">
+            <strong>升级完成，系统已更新到 {{ installationState.target?.version || installationState.targetTag }}</strong>
+            <span>总耗时 {{ installElapsedText || '—' }} · 全部 {{ INSTALL_STEPS.length }} 个步骤已完成并通过健康检查</span>
+          </div>
+        </div>
+
+        <div
+          v-else-if="updateStatus.installation.active || installationState.status === 'running' || installationState.status === 'queued'"
+          class="install-progress-head"
+        >
+          <div class="install-progress-head__text">
+            <b>{{ installationPhaseText(installationState.phase) }}</b>
+            <span v-if="installElapsedText">已用时 {{ installElapsedText }}</span>
+          </div>
+          <strong class="install-progress-head__percent">{{ installProgress }}%</strong>
+        </div>
+
+        <el-progress
+          v-if="installationState.status !== 'succeeded'"
+          class="install-progress-bar"
+          :percentage="installProgress"
+          :stroke-width="10"
+          :status="installationTagType === 'danger' ? 'exception' : (installationState.status === 'succeeded' ? 'success' : undefined)"
+          :show-text="false"
+        />
+
+        <ol class="install-steps" aria-label="升级步骤">
+          <li
+            v-for="step in installStepsView"
+            :key="step.phase"
+            :class="['install-step', `install-step--${step.status}`, { 'install-step--active': updateStatus.installation.active }]"
+          >
+            <span class="install-step__marker" aria-hidden="true">
+              <template v-if="step.status === 'done'">✓</template>
+              <template v-else-if="step.status === 'failed'">!</template>
+              <template v-else-if="step.status === 'current'">•</template>
+            </span>
+            <span class="install-step__label">{{ step.label }}</span>
+            <span class="install-step__weight">{{ step.weight }}%</span>
+          </li>
+        </ol>
+
+        <p v-if="updateStatus.installation.active" class="installation-note installation-note--live">
+          升级期间服务会在“重启服务”步骤短暂离线，页面会自动重连并继续显示进度，请勿关闭本页。
+        </p>
+
+        <ErrorDoc v-if="installationState.error" :error="installationState.error" :type="installationState.rolledBack ? 'warning' : 'error'" />
+        <ErrorDoc v-else-if="updateErrorDetail" :error="updateErrorDetail" type="warning" />
+        <p v-if="installationState.rolledBack" class="installation-note">候选版本未通过验证，current 已切回原版本并重新通过健康检查，业务数据未自动覆盖。</p>
+      </div>
+      <p v-else class="installation-note">尚无安装任务记录。</p>
+
+      <template #footer>
+        <div class="install-dialog__footer">
+          <span v-if="updateStatus.installation?.active" class="install-dialog__hint">升级进行中，完成后可关闭此窗口。</span>
+          <el-button v-if="!updateStatus.installation?.active && !installationState?.error" type="primary" @click="installDialogVisible = false">完成</el-button>
+          <el-button v-if="updateStatus.installation?.active" type="primary" disabled>升级进行中…</el-button>
+          <el-button v-if="!updateStatus.installation?.active" @click="installDialogVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <div v-loading="loading" class="status-table-wrap">
       <table class="status-table">

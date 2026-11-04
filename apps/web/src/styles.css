@@ -329,6 +329,20 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 .installation-status .el-alert { margin-top: 12px; }
 .installation-note { margin: 12px 0 0; color: #64758a; font-size: 11px; line-height: 1.7; }
 .installation-note--live { color: #8a6d3b; }
+
+/* 升级摘要：页面上只留一行结论，详细进度与报错在弹窗中查看 */
+.install-summary { margin-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.install-summary__main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.install-summary__text { color: #4d5c6d; font-size: 12px; line-height: 1.6; }
+.install-summary__alert { margin-top: 10px; }
+
+/* 升级弹窗 */
+.install-dialog .el-dialog__body { padding-top: 8px; }
+.install-dialog__body { max-height: 62vh; overflow-y: auto; padding-right: 4px; }
+.install-dialog__meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #eef1f5; color: #7a8797; font-size: 11px; }
+.install-dialog__meta strong { color: #30465d; font-weight: 600; }
+.install-dialog__footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.install-dialog__hint { margin-right: auto; color: #8a6d3b; font-size: 11px; }
 @keyframes installation-spin { to { transform: rotate(360deg); } }
 
 /* 升级完成横幅 */
