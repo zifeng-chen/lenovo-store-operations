@@ -16,7 +16,6 @@ function createSchema(db) {
       sku TEXT UNIQUE NOT NULL,
       remark TEXT,
       added_date TEXT NOT NULL,
-      stock_date TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -28,7 +27,6 @@ function createSchema(db) {
 function migrateSchema(db) {
   const columns = new Set(db.prepare(`PRAGMA table_info(${PRODUCTS})`).all().map(column => column.name));
   if (!columns.has('added_date')) db.exec(`ALTER TABLE ${PRODUCTS} ADD COLUMN added_date TEXT`);
-  if (!columns.has('stock_date')) db.exec(`ALTER TABLE ${PRODUCTS} ADD COLUMN stock_date TEXT`);
 
   const fallback = currentCalendarDate();
   const update = db.prepare(`UPDATE ${PRODUCTS} SET added_date = ? WHERE id = ?`);
@@ -39,9 +37,6 @@ function migrateSchema(db) {
       if (normalized !== row.added_date) update.run(normalized, row.id);
     });
   })();
-
-  // 新增的入库时间对历史数据默认沿用添加日期，避免标签上出现空白。
-  db.exec(`UPDATE ${PRODUCTS} SET stock_date = added_date WHERE stock_date IS NULL OR TRIM(stock_date) = ''`);
 }
 
 export function initializeDatabase() {
@@ -64,14 +59,13 @@ export function restoreDatabase(sourcePath) {
   const db = getUnifiedDatabase();
   const source = new Database(sourcePath, { readonly: true, fileMustExist: true });
   try {
-    const rows = source.prepare(`SELECT id, name, config, color, sku, remark, added_date, stock_date, created_at, updated_at FROM ${PRODUCTS} ORDER BY id`).all();
+    const rows = source.prepare(`SELECT id, name, config, color, sku, remark, added_date, created_at, updated_at FROM ${PRODUCTS} ORDER BY id`).all();
     const insert = db.prepare(
-      `INSERT INTO ${PRODUCTS} (id, name, config, color, sku, remark, added_date, stock_date, created_at, updated_at) VALUES (@id, @name, @config, @color, @sku, @remark, @added_date, @stock_date, @created_at, @updated_at)`
+      `INSERT INTO ${PRODUCTS} (id, name, config, color, sku, remark, added_date, created_at, updated_at) VALUES (@id, @name, @config, @color, @sku, @remark, @added_date, @created_at, @updated_at)`
     );
     db.transaction(() => {
       db.prepare(`DELETE FROM ${PRODUCTS}`).run();
-      // 旧备份没有 stock_date，恢复时回退到 added_date。
-      for (const row of rows) insert.run({ ...row, stock_date: row.stock_date ?? row.added_date });
+      for (const row of rows) insert.run(row);
     })();
   } finally {
     source.close();
@@ -88,7 +82,6 @@ function validateRestoreFile(filePath) {
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'products'"
     ).get();
     if (!table) throw new Error('备份文件中缺少 products 表');
-
 
     const columns = candidate.prepare('PRAGMA table_info(products)').all();
     const byName = new Map(columns.map((column) => [column.name, column]));

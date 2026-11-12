@@ -133,7 +133,7 @@ function fileSelected(event, type) {
             <label class="card-field">
               <span class="card-field-label">入库</span>
               <el-date-picker
-                :model-value="stockDates[row.id] || row.stock_date || row.added_date || ''"
+                :model-value="stockDates[row.id] || row.added_date || ''"
                 type="date"
                 value-format="YYYY-MM-DD"
                 format="YYYY-MM-DD"
