@@ -29,7 +29,7 @@ function todayCalendarDate() {
 const formRef = ref();
 const skuInput = ref();
 const submitAction = ref('');
-const form = reactive({ sku: '', name: '', config: '', color: '', added_date: todayCalendarDate(), remark: '' });
+const form = reactive({ sku: '', name: '', config: '', color: '', added_date: todayCalendarDate(), stock_date: todayCalendarDate(), remark: '' });
 const isEdit = computed(() => props.mode === 'edit');
 const title = computed(() => ({
   create: '新增商品',
@@ -39,7 +39,8 @@ const title = computed(() => ({
 const rules = {
   sku: [{ required: true, message: '请输入 SKU', trigger: 'blur' }],
   name: [{ required: true, message: '请输入商品名称', trigger: 'blur' }],
-  added_date: [{ required: true, message: '请选择添加日期', trigger: 'change' }]
+  added_date: [{ required: true, message: '请选择添加日期', trigger: 'change' }],
+  stock_date: [{ required: true, message: '请选择入库时间', trigger: 'change' }]
 };
 
 async function initializeForm() {
@@ -50,6 +51,9 @@ async function initializeForm() {
     config: source?.config ?? '',
     color: source?.color ?? '',
     added_date: props.mode === 'edit' ? (source?.added_date ?? todayCalendarDate()) : todayCalendarDate(),
+    stock_date: (props.mode === 'edit' || props.mode === 'copy')
+      ? (source?.stock_date || source?.added_date || todayCalendarDate())
+      : todayCalendarDate(),
     remark: source?.remark ?? ''
   });
   await nextTick();
@@ -121,6 +125,16 @@ async function submit(continueAdding = false) {
           value-format="YYYY-MM-DD"
           format="YYYY-MM-DD"
           placeholder="选择添加日期"
+          style="width: 100%"
+        />
+      </el-form-item>
+      <el-form-item label="入库时间" prop="stock_date">
+        <el-date-picker
+          v-model="form.stock_date"
+          type="date"
+          value-format="YYYY-MM-DD"
+          format="YYYY-MM-DD"
+          placeholder="选择入库时间"
           style="width: 100%"
         />
       </el-form-item>

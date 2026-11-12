@@ -54,6 +54,7 @@ onBeforeUnmount(() => observer?.disconnect());
                     <div class="sku">SKU: {{ item.sku }}</div>
                     <div class="name">{{ item.name }}</div>
                     <div v-if="item.config" class="config">{{ item.config }}</div>
+                    <div class="stock-date">入库时间：{{ item.stock_date || item.added_date || '—' }}</div>
                   </div>
                 </div>
               </div>

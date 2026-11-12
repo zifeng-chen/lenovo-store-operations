@@ -5,6 +5,7 @@ const props = defineProps({
   products: { type: Array, default: () => [] },
   selectedIds: { type: Set, required: true },
   quantities: { type: Object, required: true },
+  stockDates: { type: Object, default: () => ({}) },
   loading: Boolean,
   selectedCount: { type: Number, default: 0 },
   labelCount: { type: Number, default: 0 },
@@ -12,7 +13,7 @@ const props = defineProps({
 });
 const emit = defineEmits([
   'search', 'reset-search', 'create', 'copy', 'edit', 'delete', 'batch-delete',
-  'toggle-one', 'toggle-visible', 'quantity-change', 'import', 'export',
+  'toggle-one', 'toggle-visible', 'quantity-change', 'stock-date-change', 'import', 'export',
   'backup', 'restore', 'print'
 ]);
 
@@ -83,59 +84,76 @@ function fileSelected(event, type) {
         <input ref="importInput" hidden type="file" accept=".xlsx,.xls" @change="fileSelected($event, 'import')" />
         <input ref="restoreInput" hidden type="file" accept=".db" @change="fileSelected($event, 'restore')" />
       </div>
+      <div v-if="products.length" class="select-row">
+        <el-checkbox
+          :model-value="allVisibleSelected"
+          :indeterminate="partiallySelected"
+          @change="emit('toggle-visible', visibleIds, $event)"
+        >全选本页</el-checkbox>
+        <span class="select-hint">已选 {{ selectedVisibleCount }} / {{ products.length }}</span>
+      </div>
     </div>
 
-    <div class="table-wrap">
-      <el-table :data="products" height="100%" v-loading="loading" row-key="id" empty-text="暂无商品数据">
-        <el-table-column width="44" align="center">
-          <template #header>
-            <el-checkbox
-              :model-value="allVisibleSelected"
-              :indeterminate="partiallySelected"
-              aria-label="选择当前列表全部商品"
-              @change="emit('toggle-visible', visibleIds, $event)"
-            />
-          </template>
-          <template #default="{ row }">
-            <el-checkbox
-              :model-value="selectedIds.has(row.id)"
-              :aria-label="`选择 ${row.name}`"
-              @change="emit('toggle-one', row.id, $event)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="SKU" prop="sku" width="90">
-          <template #default="{ row }"><code class="sku-code">{{ row.sku }}</code></template>
-        </el-table-column>
-        <el-table-column label="商品名称" prop="name" min-width="120" show-overflow-tooltip />
-        <el-table-column label="配置" prop="config" min-width="170" show-overflow-tooltip>
-          <template #default="{ row }"><span class="config-cell">{{ row.config || '—' }}</span></template>
-        </el-table-column>
-        <el-table-column label="颜色" prop="color" width="90" align="center">
-          <template #default="{ row }"><span :class="['color-pill', { empty: !row.color }]">{{ row.color || '—' }}</span></template>
-        </el-table-column>
-        <el-table-column label="数量" width="112" align="center">
-          <template #default="{ row }">
-            <el-input-number
-              :model-value="quantities[row.id] || 1"
-              :min="1"
-              :max="999"
-              :step="1"
-              size="small"
-              controls-position="right"
-              @update:model-value="emit('quantity-change', row.id, $event)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="添加日期" prop="added_date" width="112" align="center" />
-        <el-table-column label="操作" width="148" fixed="right" align="center">
-          <template #default="{ row }">
+    <div class="card-list-wrap" v-loading="loading">
+      <div v-if="!products.length" class="card-empty">暂无商品数据</div>
+      <div v-else class="card-grid">
+        <article
+          v-for="row in products"
+          :key="row.id"
+          :class="['product-card', { selected: selectedIds.has(row.id) }]"
+        >
+          <div class="card-body">
+            <div class="card-head">
+              <el-checkbox
+                :model-value="selectedIds.has(row.id)"
+                :aria-label="`选择 ${row.name}`"
+                @change="emit('toggle-one', row.id, $event)"
+              />
+              <span class="card-color" :class="{ empty: !row.color }">{{ row.color || '—' }}</span>
+            </div>
+            <div class="card-sku">SKU: {{ row.sku }}</div>
+            <div class="card-name" :title="row.name">{{ row.name }}</div>
+            <div class="card-config" :title="row.config || ''">{{ row.config || '—' }}</div>
+          </div>
+
+          <div class="card-edit">
+            <label class="card-field">
+              <span class="card-field-label">数量</span>
+              <el-input-number
+                :model-value="quantities[row.id] || 1"
+                :min="1"
+                :max="999"
+                :step="1"
+                size="small"
+                controls-position="right"
+                class="card-qty"
+                @update:model-value="emit('quantity-change', row.id, $event)"
+              />
+            </label>
+            <label class="card-field">
+              <span class="card-field-label">入库</span>
+              <el-date-picker
+                :model-value="stockDates[row.id] || row.stock_date || row.added_date || ''"
+                type="date"
+                value-format="YYYY-MM-DD"
+                format="YYYY-MM-DD"
+                size="small"
+                placeholder="选择日期"
+                :clearable="false"
+                class="card-date"
+                @update:model-value="emit('stock-date-change', row.id, $event)"
+              />
+            </label>
+          </div>
+
+          <div class="card-divider"></div>
+          <div class="card-ops">
             <el-button link type="primary" @click="emit('copy', row)">复制</el-button>
             <el-button link type="primary" @click="emit('edit', row)">编辑</el-button>
             <el-button link type="danger" @click="emit('delete', row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+          </div>
+        </article>
+      </div>
     </div>
 
     <footer class="footer-bar">

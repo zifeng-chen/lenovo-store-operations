@@ -20,6 +20,7 @@ const products = ref([]);
 const displayedProducts = ref([]);
 const selectedIds = ref(new Set());
 const quantities = reactive({});
+const stockDates = reactive({});
 const loading = ref(false);
 const saving = ref(false);
 const modalVisible = ref(false);
@@ -34,7 +35,10 @@ const labels = computed(() => {
   const result = [];
   selectedProducts.value.forEach((item) => {
     const quantity = Math.max(1, Math.min(999, Number(quantities[item.id]) || 1));
-    for (let index = 0; index < quantity; index += 1) result.push(item);
+    // 卡片上改过的入库时间优先生效，未改则用商品自身字段。
+    const stockDate = stockDates[item.id] || item.stock_date || item.added_date || '';
+    const labelItem = { ...item, stock_date: stockDate };
+    for (let index = 0; index < quantity; index += 1) result.push(labelItem);
   });
   return result;
 });
@@ -60,6 +64,9 @@ function syncProductState(items, selectAll = false) {
   });
   Object.keys(quantities).forEach((id) => {
     if (!validIds.has(Number(id))) delete quantities[id];
+  });
+  Object.keys(stockDates).forEach((id) => {
+    if (!validIds.has(Number(id))) delete stockDates[id];
   });
   selectedIds.value = nextSelected;
 }
@@ -210,6 +217,31 @@ function updateQuantity(id, value) {
   quantities[id] = Math.max(1, Math.min(999, Number(value) || 1));
 }
 
+async function updateStockDate(id, value) {
+  const product = products.value.find((item) => item.id === Number(id));
+  const nextDate = String(value || '').trim();
+  if (!product || !nextDate || nextDate === product.stock_date) return;
+  const previous = product.stock_date;
+  stockDates[id] = nextDate;
+  product.stock_date = nextDate;
+  try {
+    await updateProduct(id, {
+      name: product.name,
+      sku: product.sku,
+      config: product.config,
+      color: product.color,
+      remark: product.remark,
+      added_date: product.added_date,
+      stock_date: nextDate
+    });
+  } catch (error) {
+    // 保存失败就回滚界面，避免打印出未落库的日期。
+    stockDates[id] = previous;
+    product.stock_date = previous;
+    showError(error);
+  }
+}
+
 function downloadResponse(response, fallbackName) {
   const disposition = response.headers['content-disposition'] || '';
   const matched = disposition.match(/filename="?([^";]+)"?/i);
@@ -292,6 +324,7 @@ onMounted(initialize);
         :products="displayedProducts"
         :selected-ids="selectedIds"
         :quantities="quantities"
+        :stock-dates="stockDates"
         :loading="loading"
         :selected-count="selectedProducts.length"
         :label-count="labels.length"
@@ -306,6 +339,7 @@ onMounted(initialize);
         @toggle-one="toggleOne"
         @toggle-visible="toggleVisible"
         @quantity-change="updateQuantity"
+        @stock-date-change="updateStockDate"
         @import="handleImport"
         @export="handleExport"
         @backup="handleBackup"
