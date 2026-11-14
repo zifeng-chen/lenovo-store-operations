@@ -32,6 +32,9 @@ const MAX_REQUEST_BYTES = 4096
 const MAX_MANIFEST_BYTES = 1024 * 1024
 const MAX_SIGNATURE_BYTES = 8192
 const MAX_CHECKSUM_BYTES = 64 * 1024
+// 清单/签名/校验和都是几 KB 的小文件，正常一两秒即可返回；
+// 给 30 秒是为了容忍慢速回源，同时避免像发布包那样长时间挂住。
+const SMALL_DOWNLOAD_TIMEOUT_MS = 30000
 const MAX_ARCHIVE_ENTRIES = 30000
 const MAX_UNPACKED_BYTES = 1024 * 1024 * 1024
 
@@ -355,9 +358,26 @@ async function readLimitedResponse(response, maxBytes, name) {
   return Buffer.concat(chunks)
 }
 
-async function downloadSmall(url, maxBytes, name, config) {
-  const response = await fetchWithRedirects(url, { method: 'GET' }, config.downloadTimeoutMs)
+async function downloadSmallOnce(url, maxBytes, name, extraHosts) {
+  const response = await fetchWithRedirects(url, { method: 'GET' }, SMALL_DOWNLOAD_TIMEOUT_MS, extraHosts)
   return readLimitedResponse(response, maxBytes, name)
+}
+
+// 清单、签名与校验和也走镜像：国内网络下官方地址连 808 字节的 manifest 都会超时，
+// 只让发布包走镜像并不能真正恢复升级能力。
+// 安全底线不变——manifest 仍要过 Ed25519 签名校验，发布包仍要过 SHA-256 校验，
+// 镜像返回伪造或陈旧内容都会被拦下，最坏结果只是升级失败，不会装错版本。
+async function downloadSmall(url, maxBytes, name, config) {
+  const prefix = config.artifactMirrorPrefix
+  if (!prefix) return downloadSmallOnce(url, maxBytes, name)
+  const mirrorUrl = mirrorArtifactUrl(url, prefix)
+  const mirrorHosts = new Set([new URL(mirrorUrl).hostname])
+  try {
+    return await downloadSmallOnce(mirrorUrl, maxBytes, name, mirrorHosts)
+  } catch (error) {
+    logUpdaterError('MIRROR_FALLBACK', `镜像下载 ${name} 失败，回退官方直连：${error.message}`)
+    return downloadSmallOnce(url, maxBytes, name)
+  }
 }
 
 async function downloadArtifactOnce(url, destination, expectedBytes, expectedSha256, config) {
