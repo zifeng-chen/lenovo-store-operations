@@ -8,7 +8,9 @@ import { getProducts } from './api.js';
 
 const PER_PAGE = 9;
 
+// products 保留全量结果，仅用于维护选择有效性；displayedProducts 才是当前筛选下要渲染的列表。
 const products = ref([]);
+const displayedProducts = ref([]);
 const selectedIds = ref([]);
 const keyword = ref('');
 const loading = ref(false);
@@ -30,9 +32,9 @@ const pages = computed(() => {
   return result;
 });
 
-const visibleIds = computed(() => products.value.map((item) => item.id));
+const visibleIds = computed(() => displayedProducts.value.map((item) => item.id));
 const allSelected = computed(() =>
-  products.value.length > 0 && visibleIds.value.every((id) => selectedIds.value.includes(id))
+  visibleIds.value.length > 0 && visibleIds.value.every((id) => selectedIds.value.includes(id))
 );
 
 function toggle(id) {
@@ -60,10 +62,13 @@ function clearSelection() {
 async function load() {
   loading.value = true;
   try {
-    products.value = await getProducts(activeQuery.value);
-    // 过滤掉已不在结果里的选择，避免留下幽灵贴纸。
-    const valid = new Set(products.value.map((item) => item.id));
+    const allItems = await getProducts();
+    products.value = allItems;
+    // 只按全量结果清理已删除的商品，筛选不能影响已勾选项。
+    const valid = new Set(allItems.map((item) => item.id));
     selectedIds.value = selectedIds.value.filter((id) => valid.has(id));
+
+    displayedProducts.value = activeQuery.value ? await getProducts(activeQuery.value) : allItems;
   } catch (error) {
     ElMessage.error(error.message || '加载商品失败');
   } finally {
@@ -130,7 +135,7 @@ onMounted(load);
         </div>
 
         <ProductList
-          :products="products"
+          :products="displayedProducts"
           :selected-ids="selectedIds"
           :loading="loading"
           @toggle="toggle"
