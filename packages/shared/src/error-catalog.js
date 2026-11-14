@@ -646,8 +646,17 @@ export const ERROR_CATALOG = Object.freeze({
       '执行 systemctl restart lenovo-store-updater 重新创建运行目录。'
     ]
   ),
-  UPDATE_CLAIM_TIMEOUT: entry(
-    '更新器长时间没有领取升级任务',
+  MIRROR_FALLBACK: entry(
+    '下载镜像不可用，已回退官方直连',
+    '发布包下载镜像本次未成功，更新程序已自动改为从 GitHub 官方地址下载。这是提示信息，升级会继续进行；若官方直连也超时才会导致升级失败。',
+    [
+      '无需立即处理，等待本次升级结果即可。',
+      '若反复出现且官方下载很慢，检查配置项 artifactMirrorPrefix 的镜像是否可用。',
+      '也可以把 artifactMirrorPrefix 置空，改为始终从官方地址下载。'
+    ],
+    { severity: 'warning' }
+  ),
+  UPDATE_CLAIM_TIMEOUT: entry(    '更新器长时间没有领取升级任务',
     '升级任务已提交超过 3 分钟，但更新器始终没有领取，任务已自动取消。通常是更新器服务没在运行、被停用，或运行目录权限不对。',
     [
       '执行 systemctl status lenovo-store-updater 查看更新器服务是否在运行。',

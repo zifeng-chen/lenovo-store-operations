@@ -3,6 +3,15 @@
 // 完整版见 packages/shared/src/error-catalog.js（两者由 scripts/verify-error-catalog.js 校验收敛）。
 
 export const UPDATER_HINTS = Object.freeze({
+  MIRROR_FALLBACK: {
+    title: '下载镜像不可用，已自动改为官方直连',
+    explanation: '配置的发布包下载镜像本次没有成功，更新程序已自动回退到从 GitHub 官方地址下载。这属于提示信息，升级仍会继续；如果官方直连也超时，本次升级才会失败。',
+    solutions: [
+      '无需立即处理，等待本次升级结果即可。',
+      '若反复出现且官方直连下载很慢，检查配置项 artifactMirrorPrefix 的镜像地址是否仍可用。',
+      '也可以把 artifactMirrorPrefix 置空，改为始终从官方地址下载。'
+    ]
+  },
   INTERRUPTED_BEFORE_SWITCH: {
     title: '升级被中断，当前版本没有任何改变',
     explanation: '升级过程中更新程序被意外终止（重启、断电或进程被杀），终止点在切换到新版本之前。当前运行的仍是原版本，业务未受影响，这次升级等同于没有生效。',

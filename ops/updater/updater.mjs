@@ -115,6 +115,7 @@ function validateConfig(raw) {
     installTimeoutMs: Number(raw.installTimeoutMs || 600000),
     healthTimeoutMs: Number(raw.healthTimeoutMs || 90000),
     maxArtifactBytes: Number(raw.maxArtifactBytes || 300 * 1024 * 1024),
+    artifactMirrorPrefix: String(raw.artifactMirrorPrefix || '').trim(),
   }
   assert(/^[a-zA-Z0-9_.@-]+\.service$/.test(config.serviceName), 'serviceName 无效', 'INVALID_CONFIG')
   assert(/^[a-zA-Z0-9_.@-]+\.service$/.test(config.updaterServiceName), 'updaterServiceName 无效', 'INVALID_CONFIG')
@@ -127,6 +128,7 @@ function validateConfig(raw) {
   assert(config.installTimeoutMs >= 60000 && config.installTimeoutMs <= 1800000, 'installTimeoutMs 超出允许范围', 'INVALID_CONFIG')
   assert(config.healthTimeoutMs >= 15000 && config.healthTimeoutMs <= 300000, 'healthTimeoutMs 超出允许范围', 'INVALID_CONFIG')
   assert(config.maxArtifactBytes >= 1024 * 1024 && config.maxArtifactBytes <= 1024 * 1024 * 1024, 'maxArtifactBytes 超出允许范围', 'INVALID_CONFIG')
+  assertArtifactMirrorPrefix(config.artifactMirrorPrefix)
   const healthUrl = new URL(config.healthUrl)
   assert(healthUrl.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(healthUrl.hostname), 'healthUrl 只能使用本机 HTTP 地址', 'INVALID_CONFIG')
   assert(healthUrl.pathname === '/api/system/health' && !healthUrl.search && !healthUrl.hash, 'healthUrl 路径必须是 /api/system/health', 'INVALID_CONFIG')
@@ -279,8 +281,38 @@ function safeAssetUrl(value) {
   return url
 }
 
-async function fetchWithRedirects(url, options, timeoutMs) {
-  let current = safeAssetUrl(url)
+// 镜像前缀只用于加速发布包本身；清单与签名始终走官方 github.com，
+// 因此信任链的根不受镜像影响，镜像即使返回伪造内容也会被签名和 SHA-256 拦下。
+function assertArtifactMirrorPrefix(value) {
+  if (!value) return
+  let url
+  try {
+    url = new URL(value)
+  } catch {
+    throw updaterError('artifactMirrorPrefix 不是合法 URL', 'INVALID_CONFIG')
+  }
+  assert(url.protocol === 'https:', 'artifactMirrorPrefix 必须是 https', 'INVALID_CONFIG')
+  assert(!url.username && !url.password, 'artifactMirrorPrefix 不能包含账号信息', 'INVALID_CONFIG')
+  assert(url.hostname !== 'github.com' && url.hostname !== 'api.github.com', 'artifactMirrorPrefix 不能指向 GitHub 官方域名', 'INVALID_CONFIG')
+}
+
+// 把官方下载地址改写成镜像地址，保持原 URL 作为 / 之后的部分。
+function mirrorArtifactUrl(originalUrl, prefix) {
+  if (!prefix) return originalUrl
+  return `${prefix.replace(/\/+$/, '')}/${originalUrl}`
+}
+
+async function fetchWithRedirects(url, options, timeoutMs, extraHosts) {
+  const isAllowed = (candidate) => {
+    const parsed = new URL(candidate)
+    return parsed.protocol === 'https:' && (ALLOWED_DOWNLOAD_HOSTS.has(parsed.hostname) || (extraHosts && extraHosts.has(parsed.hostname)))
+  }
+  const guard = (value, base) => {
+    const parsed = base ? new URL(value, base) : new URL(value)
+    assert(isAllowed(parsed.href), 'Release 资产地址不在允许域名中', 'UNSAFE_DOWNLOAD_URL')
+    return parsed
+  }
+  let current = guard(url)
   for (let redirects = 0; redirects <= 5; redirects += 1) {
     const response = await fetch(current, {
       ...options,
@@ -297,7 +329,7 @@ async function fetchWithRedirects(url, options, timeoutMs) {
     if (![301, 302, 303, 307, 308].includes(response.status)) return response
     const location = response.headers.get('location')
     assert(location, 'Release 下载重定向缺少地址', 'INVALID_REDIRECT')
-    current = safeAssetUrl(new URL(location, current).href)
+    current = guard(location, current)
   }
   throw updaterError('Release 下载重定向次数过多', 'TOO_MANY_REDIRECTS')
 }
@@ -328,8 +360,8 @@ async function downloadSmall(url, maxBytes, name, config) {
   return readLimitedResponse(response, maxBytes, name)
 }
 
-async function downloadArtifact(url, destination, expectedBytes, expectedSha256, config) {
-  const response = await fetchWithRedirects(url, { method: 'GET', headers: { Accept: 'application/octet-stream' } }, config.downloadTimeoutMs)
+async function downloadArtifactOnce(url, destination, expectedBytes, expectedSha256, config) {
+  const response = await fetchWithRedirects(url, { method: 'GET', headers: { Accept: 'application/octet-stream' } }, config.downloadTimeoutMs, config._extraHosts)
   assert(response.ok, `发布包下载失败（HTTP ${response.status}）`, 'DOWNLOAD_FAILED')
   const declaredLength = Number(response.headers.get('content-length'))
   if (Number.isFinite(declaredLength)) assert(declaredLength === expectedBytes, '发布包 Content-Length 与签名清单不一致', 'ARTIFACT_SIZE_MISMATCH')
@@ -353,6 +385,22 @@ async function downloadArtifact(url, destination, expectedBytes, expectedSha256,
   }
   assert(bytes === expectedBytes, '发布包字节数与签名清单不一致', 'ARTIFACT_SIZE_MISMATCH')
   assert(digest.digest('hex') === expectedSha256, '发布包 SHA-256 与签名清单不一致', 'ARTIFACT_DIGEST_MISMATCH')
+}
+
+// 国内网络直连 GitHub 下载常因超时失败，可配置镜像前缀加速。
+// 镜像失败时自动回退官方直连；两条路径都要通过签名与 SHA-256 校验。
+async function downloadArtifact(url, destination, expectedBytes, expectedSha256, config) {
+  const prefix = config.artifactMirrorPrefix
+  if (!prefix) return downloadArtifactOnce(url, destination, expectedBytes, expectedSha256, config)
+  const mirrorUrl = mirrorArtifactUrl(url, prefix)
+  const mirrorHosts = new Set([new URL(mirrorUrl).hostname])
+  try {
+    return await downloadArtifactOnce(mirrorUrl, destination, expectedBytes, expectedSha256, { ...config, _extraHosts: mirrorHosts })
+  } catch (error) {
+    logUpdaterError('MIRROR_FALLBACK', `镜像下载失败，回退官方直连：${error.message}`)
+    if (fs.existsSync(destination)) fs.unlinkSync(destination)
+    return downloadArtifactOnce(url, destination, expectedBytes, expectedSha256, config)
+  }
 }
 
 function assetMap(release) {

@@ -21,5 +21,6 @@
   "downloadTimeoutMs": 30000,
   "installTimeoutMs": 600000,
   "healthTimeoutMs": 90000,
-  "maxArtifactBytes": 314572800
+  "maxArtifactBytes": 314572800,
+  "artifactMirrorPrefix": ""
 }

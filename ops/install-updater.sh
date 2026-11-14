@@ -371,6 +371,17 @@ install -d -m 0755 -o root -g root "$UPDATER_LIB"
 install -m 0755 -o root -g root "$ROOT/current/ops/updater/updater.mjs" "$UPDATER_LIB/updater.mjs"
 install -m 0644 -o root -g root "$ROOT/current/ops/updater/error-hints.mjs" "$UPDATER_LIB/error-hints.mjs"
 install -m 0644 -o root -g root "$WORK/release-signing-public.pem" "$PUBLIC_KEY_TARGET"
+# 保留已有的下载镜像配置，避免重复安装时把用户设置清掉。
+MIRROR_PREFIX=""
+if [ -r "$UPDATER_CONFIG" ]; then
+  MIRROR_PREFIX=$(/usr/bin/node -e '
+    try {
+      const c = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+      const v = typeof c.artifactMirrorPrefix === "string" ? c.artifactMirrorPrefix.trim() : "";
+      process.stdout.write(v.replace(/[^\x20-\x7e]|["\\]/g, ""));
+    } catch { process.stdout.write(""); }
+  ' "$UPDATER_CONFIG" 2>/dev/null || true)
+fi
 cat >"$UPDATER_CONFIG" <<EOF
 {
   "repository": "zifeng-chen/lenovo-store-operations",
@@ -395,7 +406,8 @@ cat >"$UPDATER_CONFIG" <<EOF
   "downloadTimeoutMs": 30000,
   "installTimeoutMs": 600000,
   "healthTimeoutMs": 90000,
-  "maxArtifactBytes": 314572800
+  "maxArtifactBytes": 314572800,
+  "artifactMirrorPrefix": "$MIRROR_PREFIX"
 }
 EOF
 chmod 0600 "$UPDATER_CONFIG"
