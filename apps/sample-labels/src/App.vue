@@ -102,7 +102,7 @@ onMounted(load);
       <div class="brand">
         <span class="brand-mark">出</span>
         <div>
-          <h1>出样标签打印</h1>
+          <h1>出样标签制作</h1>
           <p>A4 横向 3 × 3，每页 9 枚贴纸</p>
         </div>
       </div>

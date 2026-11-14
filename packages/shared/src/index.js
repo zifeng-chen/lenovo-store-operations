@@ -53,8 +53,8 @@ export const STORE_MODULES = Object.freeze([
   },
   {
     id: 'sample-labels',
-    name: '出样标签打印',
-    shortName: '出样标签',
+    name: '出样标签制作',
+    shortName: '出样标签制作',
     iconText: '样',
     description: '按 A4 横向 3 × 3 打印设备出样贴纸，SKU 与机型取自仓库货品。',
     route: '/sample-labels',
