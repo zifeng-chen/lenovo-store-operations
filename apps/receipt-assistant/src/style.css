@@ -29,6 +29,11 @@ button, input { font: inherit; }
 .section-eyebrow--blue { color: #3370ff; }
 .section-heading h2, .preview-header h2 { margin: 4px 0 0; color: #172033; font-size: 17px; line-height: 1.35; }
 .auto-date, .record-count { color: #9aa4b5; font-size: 11px; }
+.sale-date-picker { width: 132px; }
+.sale-date-picker .el-input__wrapper { background: #f6f8fc; border-radius: 8px; box-shadow: 0 0 0 1px #e5eaf2 inset; }
+.sale-date-picker .el-input__inner { font-size: 12px; color: #4a5568; text-align: center; }
+.backfill-tip { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; color: #a26a1b; font-size: 12px; line-height: 1.4; }
+.backfill-badge { flex: 0 0 auto; padding: 1px 7px; border-radius: 20px; background: #fdf1dc; color: #a26a1b; font-size: 11px; font-weight: 700; }
 .amount-row { gap: 10px; }
 .amount-input { flex: 1; width: auto !important; }
 .amount-input .el-input__wrapper { height: 45px; padding-left: 16px; background: #f6f8fc; border-radius: 10px; box-shadow: 0 0 0 1px #e5eaf2 inset; }

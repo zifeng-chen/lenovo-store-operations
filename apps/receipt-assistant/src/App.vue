@@ -7,7 +7,8 @@
         <div class="today-metrics"><div class="metric"><span class="metric__label">销售笔数</span><strong>{{ todayStats.count }}</strong><span class="metric__unit">笔</span></div><div class="metric-divider"></div><div class="metric metric--amount"><span class="metric__label">销售总额</span><strong>{{ money(todayStats.total) }}</strong></div></div>
       </section>
       <section class="panel-section">
-        <div class="section-heading"><div><span class="section-eyebrow section-eyebrow--dark">快速记账</span><h2>录入销售金额</h2></div><span class="auto-date">自动记录当日</span></div>
+        <div class="section-heading"><div><span class="section-eyebrow section-eyebrow--dark">快速记账</span><h2>录入销售金额</h2></div><el-date-picker v-model="saleDate" type="date" value-format="YYYY-MM-DD" format="YYYY-MM-DD" size="small" :clearable="false" :disabled-date="disabledSaleDate" class="sale-date-picker" placeholder="选择日期"/></div>
+        <div v-if="isBackfill" class="backfill-tip"><span class="backfill-badge">补录</span>将记录到 {{ backfillLabel }}，不会计入今日销售</div>
         <div class="amount-row"><el-input-number v-model="saleAmount" :min="0.01" :precision="2" :step="100" :controls="false" class="amount-input" placeholder="0.00" @input="markAmountEdited" @keyup.enter="saveSale"/><el-button type="primary" :loading="saving" class="save-button" @click="saveSale">保存记录</el-button></div>
         <div :class="['ocr-hint', `ocr-hint--${ocrMessageType}`]" aria-live="polite"><span v-if="recognizing" class="ocr-spinner"></span><span>{{ ocrMessage }}</span><el-button v-if="currentHistoryId" link type="primary" class="ocr-result-link" @click="openHistoryDetail(currentHistoryId)">查看识别结果</el-button></div>
       </section>
@@ -87,6 +88,14 @@ const usageLoading=ref(false); const ocrUsage=ref({month:'',timezone:'Asia/Shang
 const togglingSaleIds=reactive(new Set())
 let ocrController=null, ocrRequestId=0, amountEditVersion=0, amountManuallyEdited=false, historyController=null, historyRequestId=0, detailController=null, detailRequestId=0, usageRequestId=0, releasePrint=null
 const displayToday=new Intl.DateTimeFormat('zh-CN',{month:'long',day:'numeric',weekday:'short'}).format(new Date())
+function localISODate(date){const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,'0'),d=String(date.getDate()).padStart(2,'0');return `${y}-${m}-${d}`}
+const TODAY_ISO=localISODate(new Date())
+// 补录只允许最近 90 天且不能选未来，避免误选到往年把账记错。
+const SALE_DATE_MIN=new Date(Date.now()-89*86400000)
+const saleDate=ref(TODAY_ISO)
+const isBackfill=computed(()=>saleDate.value && saleDate.value!==TODAY_ISO)
+const backfillLabel=computed(()=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(saleDate.value||'');return m?`${Number(m[2])}月${Number(m[3])}日`:''})
+const disabledSaleDate=time=>time>Date.now()||time<new Date(Date.now()-90*86400000).setHours(0,0,0,0)
 const money=value=>new Intl.NumberFormat('zh-CN',{style:'currency',currency:'CNY',minimumFractionDigits:2}).format(Number(value)||0)
 const ocrConfigSourceLabel=computed(()=>ocrConfig.value.source==='database'?'页面持久化配置':ocrConfig.value.source==='environment'?'后端环境配置':'未配置')
 const usagePercentage=computed(()=>{const limit=Math.max(1,Number(ocrUsage.value.limit)||500);return Math.min(100,Math.max(0,Math.round((Number(ocrUsage.value.used)||0)/limit*100)))})
@@ -95,8 +104,8 @@ function applySaleStatusChange(originalStatus,updated){if(originalStatus===updat
 
 async function fetchConfig(){ocrConfig.value=await request('/ocr/config')}
 async function loadUsage(){const id=++usageRequestId;usageLoading.value=true;try{const data=await request('/ocr/usage');if(id===usageRequestId)ocrUsage.value=data;return data}finally{if(id===usageRequestId)usageLoading.value=false}}
-async function refresh(){try{const [all,today,last30]=await Promise.all([request('/sales?days=2'),request('/sales/today'),request('/sales/trend')]);sales.value=all;todayStats.value=today;trend.value=last30}catch(error){throw error}}
-async function saveSale(){const amount=Number(saleAmount.value);if(!Number.isFinite(amount)||amount<=0)return ElMessage.warning('请输入大于 0 的销售金额');saving.value=true;const payload={amount};const s=recognizedStructured.value;if(s){if(s.date)payload.saleDate=s.date;if(Array.isArray(s.items)&&s.items.length)payload.items=s.items.map(i=>({name:i.name,qty:i.qty,unitPrice:i.unitPrice,subtotal:i.subtotal}))}try{await request('/sales',{method:'POST',body:payload});saleAmount.value=null;amountManuallyEdited=false;recognizedStructured.value=null;ElMessage.success(payload.items?.length?`销售记录已保存（含 ${payload.items.length} 项商品明细）`:'销售记录已保存')}catch(e){ElMessage.error(message(e,'保存失败，请检查后端服务'));saving.value=false;return}try{await refresh()}catch{ElMessage.warning('记录已保存，但统计刷新失败，请稍后刷新页面')}finally{saving.value=false}}
+async function refresh(){try{const [all,today,last30]=await Promise.all([request('/sales?days=30'),request('/sales/today'),request('/sales/trend')]);sales.value=all;todayStats.value=today;trend.value=last30}catch(error){throw error}}
+async function saveSale(){const amount=Number(saleAmount.value);if(!Number.isFinite(amount)||amount<=0)return ElMessage.warning('请输入大于 0 的销售金额');saving.value=true;const payload={amount,saleDate:saleDate.value||TODAY_ISO};const s=recognizedStructured.value;if(s){if(s.date)payload.saleDate=s.date;if(Array.isArray(s.items)&&s.items.length)payload.items=s.items.map(i=>({name:i.name,qty:i.qty,unitPrice:i.unitPrice,subtotal:i.subtotal}))}try{await request('/sales',{method:'POST',body:payload});saleAmount.value=null;amountManuallyEdited=false;recognizedStructured.value=null;saleDate.value=TODAY_ISO;const backfilled=payload.saleDate!==TODAY_ISO;const dateText=backfilled?`${Number(payload.saleDate.slice(5,7))}月${Number(payload.saleDate.slice(8,10))}日`:'今天';ElMessage.success(backfilled?`已补录 ${dateText} 的销售记录`:(payload.items?.length?`销售记录已保存（含 ${payload.items.length} 项商品明细）`:'销售记录已保存'))}catch(e){ElMessage.error(message(e,'保存失败，请检查后端服务'));saving.value=false;return}try{await refresh()}catch{ElMessage.warning('记录已保存，但统计刷新失败，请稍后刷新页面')}finally{saving.value=false}}
 async function toggleSale(sale){if(togglingSaleIds.has(sale.id))return;togglingSaleIds.add(sale.id);const originalStatus=sale.status;try{const updated=await request(`/sales/${sale.id}/toggle`,{method:'PUT'});Object.assign(sale,updated);applySaleStatusChange(originalStatus,updated);ElMessage.success(originalStatus===1?'记录已撤销':'记录已恢复');try{await refresh()}catch{ElMessage.warning('状态已更新，本页汇总已同步；服务器统计刷新失败，请稍后重试')}}catch(e){ElMessage.error(message(e,'操作失败，请稍后重试'))}finally{togglingSaleIds.delete(sale.id)}}
 function pick(side){(side==='stub'?stubInput.value:receiptInput.value)?.click()}
 function drop(side,event){draggingSide.value=null;readImage(side,event.dataTransfer.files[0])}
