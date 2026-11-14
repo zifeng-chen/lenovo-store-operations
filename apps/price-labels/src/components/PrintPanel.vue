@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import PrintActionBar from '@lenovo-store/shared/components/PrintActionBar.vue'
 import { printPriceLabelPages } from '../printLabels.js'
 
 const props = defineProps({ products: { type: Array, required: true } })
@@ -11,7 +12,6 @@ const LABEL_WIDTH_MM = 70
 const logoUrl = `${import.meta.env.BASE_URL}lenovo-logo.svg`
 const nameFontSizes = ref({})
 const isPreviewOpen = ref(false)
-const previewButtonRef = ref(null)
 const previewDialogRef = ref(null)
 const previewCloseButtonRef = ref(null)
 const printRootRef = ref(null)
@@ -89,7 +89,7 @@ function closePreview({ restoreFocus = true } = {}) {
   isPreviewOpen.value = false
   document.body.classList.remove('print-preview-open')
   setBackgroundInert(false)
-  if (restoreFocus) nextTick(() => previewButtonRef.value?.focus())
+  if (restoreFocus) nextTick(() => document.querySelector('.print-action-dock .pab-btn-main')?.focus())
 }
 
 function handleKeydown(event) {
@@ -143,19 +143,20 @@ async function printLabels() {
 </script>
 
 <template>
-  <aside class="print-actions" aria-label="打印队列">
-    <div class="print-actions-inner">
-      <div class="selection-summary">
-        <span class="selection-count">{{ products.length }}</span>
-        <span>已选择 {{ products.length }} 个商品，共 {{ printPages.length }} 页</span>
-      </div>
-      <div class="print-buttons">
-        <button type="button" class="secondary-button" :disabled="!products.length" @click="emit('clear')">清空打印队列</button>
-        <button ref="previewButtonRef" type="button" class="secondary-button" :disabled="!products.length" @click="openPreview">打印预览</button>
-        <button type="button" class="primary-button print-button" :disabled="!products.length" @click="printLabels">打印价格标签（{{ products.length }}）</button>
-      </div>
-    </div>
-  </aside>
+  <PrintActionBar
+    class="print-action-dock"
+    accent="#d2382f"
+    :count="products.length"
+    :pages="printPages.length"
+    unit="个商品"
+    label="打印标签"
+    show-preview
+    show-clear
+    clear-text="清空打印队列"
+    @print="printLabels"
+    @preview="openPreview"
+    @clear="emit('clear')"
+  />
 
   <div class="print-name-measurer" aria-hidden="true">
     <div v-for="product in products" :key="product.id" class="print-name-measure-width">

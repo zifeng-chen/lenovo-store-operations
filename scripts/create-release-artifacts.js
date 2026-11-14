@@ -22,6 +22,7 @@ const requiredDistDirectories = [
   'apps/receipt-assistant/dist',
   'apps/employee-badges/dist',
   'apps/sales-report/dist',
+  'apps/sample-labels/dist',
 ]
 
 function fail(message) {

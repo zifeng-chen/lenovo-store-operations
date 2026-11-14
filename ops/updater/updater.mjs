@@ -21,7 +21,7 @@ const REQUEST_KEYS = ['action', 'jobId', 'requestedAt', 'schemaVersion', 'tag']
 const REQUIRED_ASSETS = ['manifest.json', 'manifest.json.sig', 'SHA256SUMS']
 const LEGACY_MODULE_IDS = ['computer-labels', 'price-labels', 'receipt-assistant', 'employee-badges']
 const LEGACY_SQLITE_MODULE_IDS = new Set(['computer-labels', 'price-labels', 'receipt-assistant'])
-const CURRENT_MODULE_IDS = ['computer-labels', 'price-labels', 'receipt-assistant', 'employee-badges', 'sales-report']
+const CURRENT_MODULE_IDS = ['computer-labels', 'price-labels', 'receipt-assistant', 'employee-badges', 'sales-report', 'sample-labels']
 const CURRENT_SQLITE_MODULE_IDS = new Set(['computer-labels', 'price-labels', 'receipt-assistant'])
 const V2_MODULE_IDS = ['computer-labels', 'price-labels', 'receipt-assistant', 'price-placards', 'employee-badges']
 const V2_SQLITE_MODULE_IDS = new Set(['computer-labels', 'price-labels', 'receipt-assistant', 'price-placards'])
@@ -526,6 +526,7 @@ function validateExtractedTree(root) {
     'apps/price-labels/dist/index.html',
     'apps/receipt-assistant/dist/index.html',
     'apps/employee-badges/dist/index.html',
+    'apps/sample-labels/dist/index.html',
     'apps/sales-report/dist/index.html',
   ]
   for (const relative of required) {

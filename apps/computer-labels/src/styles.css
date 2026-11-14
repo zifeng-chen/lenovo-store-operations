@@ -111,20 +111,6 @@ button, input, textarea { font: inherit; }
 .select-row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 .select-hint { color: #6a7e96; font-size: 12px; }
 @media (max-width: 700px) { .card-grid { grid-template-columns: 1fr; } }
-.footer-bar {
-  height: 58px;
-  flex: 0 0 58px;
-  padding: 9px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid #e6eaf0;
-  background: #fff;
-}
-.footer-stats { display: flex; gap: 14px; color: #3a4e62; font-size: 13px; }
-.footer-stats b { color: var(--brand-blue); font-size: 15px; }
-.footer-bar .el-button { min-width: 132px; }
-
 .el-button { border-radius: 8px; font-weight: 500; }
 .el-button--primary { --el-button-bg-color: var(--brand-blue); --el-button-border-color: var(--brand-blue); --el-button-hover-bg-color: var(--brand-blue-dark); --el-button-hover-border-color: var(--brand-blue-dark); }
 .el-input__wrapper, .el-textarea__inner { box-shadow: 0 0 0 1.5px var(--border) inset; border-radius: 8px; }
@@ -292,9 +278,7 @@ button, input, textarea { font: inherit; }
   .stat-chip b { color: var(--ls-accent); }
   .left-panel { border-color: var(--ls-color-border); background: var(--ls-color-surface-subtle); }
   .toolbar { border-color: var(--ls-color-border); background: var(--ls-color-surface); }
-  .footer-bar { border-color: var(--ls-color-border); }
-  .footer-stats, .config-cell { color: #526277; }
-  .footer-stats b { color: var(--ls-accent); }
+  .config-cell { color: #526277; }
   .right-panel { background: var(--ls-color-canvas); }
   .preview-header { border-color: var(--ls-color-border); color: #43556b; }
   .preview-header strong { color: var(--ls-color-text-strong); }

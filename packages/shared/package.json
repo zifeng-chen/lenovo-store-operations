@@ -11,6 +11,7 @@
     "./api-client": "./src/api-client.js",
     "./product-name": "./src/product-name.js",
     "./error-catalog": "./src/error-catalog.js",
-    "./vite-element-plus": "./vite-element-plus.js"
+    "./vite-element-plus": "./vite-element-plus.js",
+    "./components/PrintActionBar.vue": "./src/components/PrintActionBar.vue"
   }
 }

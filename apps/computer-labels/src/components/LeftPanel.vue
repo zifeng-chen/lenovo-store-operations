@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import PrintActionBar from '@lenovo-store/shared/components/PrintActionBar.vue';
 
 const props = defineProps({
   products: { type: Array, default: () => [] },
@@ -156,13 +157,15 @@ function fileSelected(event, type) {
       </div>
     </div>
 
-    <footer class="footer-bar">
-      <div class="footer-stats">
-        <span>已选 <b>{{ selectedCount }}</b> 项</span>
-        <span>标签 <b>{{ labelCount }}</b> 个</span>
-        <span>{{ pageCount }} 页</span>
-      </div>
-      <el-button type="primary" size="large" :disabled="labelCount === 0" @click="emit('print')">打印标签</el-button>
-    </footer>
+    <PrintActionBar
+      accent="#1a5e9c"
+      :count="labelCount"
+      :pages="pageCount"
+      unit="项"
+      label="打印标签"
+      show-preview
+      @print="emit('print')"
+      @preview="emit('print')"
+    />
   </section>
 </template>

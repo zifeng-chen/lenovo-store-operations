@@ -87,13 +87,8 @@ input[type='checkbox'] { width: 18px; height: 18px; margin: 0; accent-color: var
 .table-button { font-size: 13px; }
 .table-button.danger { color: #a32721; }
 .empty-cell, .loading-state { padding: 58px 24px !important; color: var(--muted); text-align: center; }
-.print-actions { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; color: #fff; background: rgb(24 24 24 / 96%); border-top: 3px solid var(--lenovo-red); box-shadow: 0 -10px 30px rgb(0 0 0 / 14%); backdrop-filter: blur(10px); }
-.print-actions-inner { display: flex; align-items: center; justify-content: space-between; width: min(1180px, calc(100% - 40px)); min-height: 82px; margin: 0 auto; gap: 24px; }
-.selection-summary { display: flex; align-items: center; gap: 12px; color: #d4d4d4; font-size: 14px; }
-.selection-count { display: grid; width: 34px; height: 34px; place-items: center; color: #fff; background: var(--lenovo-red); font-size: 16px; font-weight: 900; }
-.print-buttons { display: flex; gap: 10px; }
-.print-actions .secondary-button { color: #fff; background: transparent; border-color: #666; }
-.print-button { min-width: 190px; }
+.print-action-dock { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; border-radius: 0; }
+.print-action-dock :deep(.pab-inner) { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
 body.print-preview-open { overflow: hidden; }
 .print-preview-overlay { position: fixed; z-index: 50; inset: 0; display: grid; padding: 24px; place-items: center; background: rgb(10 10 10 / 78%); backdrop-filter: blur(6px); }
 .print-preview-dialog { display: flex; width: min(1180px, 100%); max-height: calc(100vh - 48px); overflow: hidden; flex-direction: column; color: #242424; background: #fff; border-top: 4px solid var(--lenovo-red); box-shadow: 0 28px 80px rgb(0 0 0 / 38%); outline: none; }
@@ -133,7 +128,7 @@ body.print-preview-open { overflow: hidden; }
   .filter-section { grid-template-columns: 1fr; gap: 10px; }
 }
 @media (max-width: 620px) {
-  .header-inner, .page-content, .print-actions-inner { width: min(100% - 24px, 1180px); }
+  .header-inner, .page-content { width: min(100% - 24px, 1180px); }
   .header-inner { min-height: 160px; gap: 16px; }
   .brand-mark { flex-basis: 48px; width: 48px; height: 48px; }
   .header-description { display: none; }
@@ -143,11 +138,6 @@ body.print-preview-open { overflow: hidden; }
   .product-form-card { padding: 20px; }
   .product-form { grid-template-columns: 1fr; }
   .field-name { grid-column: auto; }
-  .print-actions-inner { min-height: 184px; flex-direction: column; align-items: stretch; justify-content: center; gap: 10px; }
-  .selection-summary { justify-content: center; }
-  .print-buttons { display: grid; grid-template-columns: 1fr 1fr; }
-  .print-buttons .print-button { grid-column: 1 / -1; }
-  .print-buttons button { min-width: 0; padding: 0 10px; font-size: 13px; }
   .print-preview-overlay { padding: 0; }
   .print-preview-dialog { width: 100%; height: 100dvh; max-height: none; }
   .print-preview-header, .print-preview-footer { align-items: stretch; padding: 16px; }
@@ -158,7 +148,7 @@ body.print-preview-open { overflow: hidden; }
 @page { size: A4 landscape; margin: 0; }
 @media print {
   html, body, #app, .app-shell { width: 297mm; height: auto; min-width: 297mm; min-height: 0; margin: 0 !important; padding: 0 !important; overflow: visible !important; background: #fff !important; }
-  .management-ui, .print-actions, .print-name-measurer, .print-preview-overlay, .toast { display: none !important; }
+  .management-ui, .print-action-dock, .print-name-measurer, .print-preview-overlay, .toast { display: none !important; }
   .print-root { position: static; display: block !important; width: 297mm; height: auto; margin: 0; padding: 0; overflow: visible; }
   .print-page { position: relative; width: 297mm; height: 210mm; margin: 0; padding: 0; overflow: hidden; break-after: page; break-inside: avoid-page; page-break-after: always; page-break-inside: avoid; }
   .print-page:last-child { break-after: auto; page-break-after: auto; }
@@ -223,8 +213,6 @@ body.print-preview-open { overflow: hidden; }
   .product-table tbody tr:hover { background: #f8fafc; }
   .category-badge { border-radius: var(--ls-radius-pill); background: #eef2f6; color: #506074; }
   .price-cell { color: var(--ls-accent); }
-  .print-actions { border-top: 3px solid var(--ls-accent); background: rgba(20, 35, 55, .97); }
-  .selection-count { border-radius: var(--ls-radius-sm); background: var(--ls-accent); }
   .print-preview-dialog { border-top-color: var(--ls-accent); border-radius: var(--ls-radius-md); }
   .print-preview-close, .toast { border-radius: var(--ls-radius-sm); }
 }
@@ -315,7 +303,6 @@ body.print-preview-open { overflow: hidden; }
   .workspace-results .table-scroll { min-width: 0; min-height: 0; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
   .workspace-results .product-table th { position: sticky; z-index: 2; top: 0; box-shadow: inset 0 -1px 0 var(--ls-color-border); }
   .workspace-results > .loading-state { display: grid; min-height: 0; flex: 1 1 auto; margin: 0; place-items: center; }
-  .print-actions-inner { width: 100%; padding: 0 20px; }
 }
 
 @media screen and (max-width: 900px) {

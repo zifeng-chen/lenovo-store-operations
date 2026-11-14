@@ -1,6 +1,6 @@
 {
   "name": "lenovo-store-operations",
-  "version": "0.7.8",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -11,8 +11,8 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "concurrently -k -n portal,computer,price,placards,receipt,badge,server -c cyan,blue,red,white,magenta,yellow,green \"npm run dev --workspace @lenovo-store/web\" \"npm run dev --workspace @lenovo-store/computer-labels\" \"npm run dev --workspace @lenovo-store/price-labels\" \"npm run dev --workspace @lenovo-store/sales-report\" \"npm run dev --workspace @lenovo-store/receipt-assistant\" \"npm run dev --workspace @lenovo-store/employee-badges\" \"npm run dev --workspace @lenovo-store/server\"",
-    "build": "npm run build --workspace @lenovo-store/web && npm run build --workspace @lenovo-store/computer-labels && npm run build --workspace @lenovo-store/price-labels && npm run build --workspace @lenovo-store/sales-report && npm run build --workspace @lenovo-store/receipt-assistant && npm run build --workspace @lenovo-store/employee-badges",
+    "dev": "concurrently -k -n portal,computer,price,placards,receipt,badge,sample,server -c cyan,blue,red,white,magenta,yellow,green \"npm run dev --workspace @lenovo-store/web\" \"npm run dev --workspace @lenovo-store/computer-labels\" \"npm run dev --workspace @lenovo-store/price-labels\" \"npm run dev --workspace @lenovo-store/sales-report\" \"npm run dev --workspace @lenovo-store/receipt-assistant\" \"npm run dev --workspace @lenovo-store/employee-badges\" \"npm run dev --workspace @lenovo-store/sample-labels\" \"npm run dev --workspace @lenovo-store/server\"",
+    "build": "npm run build --workspace @lenovo-store/web && npm run build --workspace @lenovo-store/computer-labels && npm run build --workspace @lenovo-store/price-labels && npm run build --workspace @lenovo-store/sales-report && npm run build --workspace @lenovo-store/receipt-assistant && npm run build --workspace @lenovo-store/employee-badges && npm run build --workspace @lenovo-store/sample-labels",
     "start": "npm run start --workspace @lenovo-store/server",
     "check": "npm run check --workspaces --if-present && node --check scripts/backup-data.js && node --check scripts/verify-release-tag.js && node --check scripts/create-release-artifacts.js && node --check scripts/sign-release-manifest.js && node --check ops/release/generate-signing-keypair.js && node --check ops/updater/updater.mjs && node --check ops/updater/error-hints.mjs && bash -n ops/install-updater.sh && node scripts/verify-product-name.js && node scripts/verify-error-catalog.js",
     "test:product-name": "node scripts/verify-product-name.js",

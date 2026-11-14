@@ -52,6 +52,19 @@ export const STORE_MODULES = Object.freeze([
     stage: 'ready'
   },
   {
+    id: 'sample-labels',
+    name: '出样标签打印',
+    shortName: '出样标签',
+    iconText: '样',
+    description: '按 A4 横向 3 × 3 打印设备出样贴纸，SKU 与机型取自仓库货品。',
+    route: '/sample-labels',
+    moduleBase: '/modules/sample-labels/',
+    apiBase: null,
+    persistence: 'none',
+    accent: '#e60012',
+    stage: 'ready'
+  },
+  {
     id: 'sales-report',
     name: '销售业绩报表',
     shortName: '销售业绩报表',

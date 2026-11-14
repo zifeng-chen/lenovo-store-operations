@@ -1,0 +1,298 @@
+:root {
+  --red: #e60012;
+  --deep-red: #bd0010;
+  --black: #171717;
+  --line: #dedede;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app { height: 100%; margin: 0; }
+body {
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+  background: #f1f2f4;
+  color: #172033;
+}
+
+.app-shell { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+/* ── 顶部 ── */
+.app-header {
+  flex: 0 0 auto;
+  height: 64px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-bottom: 1px solid #e6eaf0;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark {
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  border-radius: 9px;
+  background: var(--red);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+}
+.brand h1 { margin: 0; font-size: 17px; letter-spacing: -.2px; }
+.brand p { margin: 2px 0 0; color: #7c8a9c; font-size: 11.5px; }
+.header-stats { color: #4a5b70; font-size: 12.5px; }
+.header-stats b { color: var(--red); font-size: 14px; }
+.header-stats .dot { margin: 0 6px; color: #c3ccd8; }
+
+/* ── 主体 ── */
+.main-content {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(380px, 420px) minmax(0, 1fr);
+}
+
+/* ── 左侧列表 ── */
+.left-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fafcff;
+  border-right: 1px solid #e6eaf0;
+}
+.toolbar {
+  flex: 0 0 auto;
+  padding: 12px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  background: #fff;
+  border-bottom: 1px solid #e8ecf0;
+}
+.toolbar-actions { display: flex; gap: 6px; }
+
+.product-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; }
+.product-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  margin-bottom: 6px;
+  border: 1px solid #e3e9f1;
+  border-radius: 7px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .14s, box-shadow .14s;
+}
+.product-row:hover { border-color: #c4d3e4; }
+.product-row.checked { border-color: var(--red); box-shadow: 0 0 0 2px rgba(230, 0, 18, .08); }
+.row-sku {
+  flex: 0 0 auto;
+  min-width: 62px;
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+.row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #172033;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.empty { padding: 60px 20px; color: #7c8a9c; font-size: 13px; text-align: center; }
+
+/* ── 右侧预览 ── */
+.right-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #eef2f7; }
+.preview-header {
+  flex: 0 0 auto;
+  height: 46px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-bottom: 1px solid #e3e8ef;
+  color: #6a7e96;
+  font-size: 12.5px;
+}
+.preview-header strong { color: #0b1a2b; font-size: 14px; }
+.preview-scroll { flex: 1; min-height: 0; overflow: auto; padding: 18px 14px; }
+.preview-container { display: flex; flex-direction: column; align-items: center; gap: 16px; min-width: max-content; }
+.page-shell { position: relative; width: var(--sheet-w); height: var(--sheet-h); flex: 0 0 auto; }
+.page-number { margin-top: 6px; color: #8797a9; font-size: 11px; text-align: center; }
+
+.preview-empty {
+  height: 100%;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #6a7e96;
+}
+.preview-empty .empty-icon {
+  width: 68px; height: 88px; margin-bottom: 18px;
+  display: grid; place-items: center;
+  border: 2px solid #cbd5e1;
+  border-radius: 6px;
+  color: #93a4b6;
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: 8px 8px 0 #e8edf3;
+}
+.preview-empty strong { color: #3a4e62; font-size: 15px; }
+.preview-empty p { margin: 7px 0 0; font-size: 12px; }
+
+/* ══════ A4 横向 3×3 ══════ */
+/* 排版固定使用 mm/pt 物理单位；屏幕预览仅用 transform 等比缩小，字号与打印严格一致 */
+.sheet {
+  width: 297mm;
+  height: 210mm;
+  padding: 7mm;
+  background: #fff;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 3mm;
+  box-shadow: 0 6px 24px rgba(20, 40, 70, .12);
+  transform: scale(var(--preview-scale, 1));
+  transform-origin: top left;
+}
+
+/* 单枚贴纸 */
+.sticker {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 0.45mm solid var(--red);
+  border-radius: 2.5mm;
+  background: #fff;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* 左侧出样区 */
+.sample-panel {
+  position: relative;
+  width: 32%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: linear-gradient(145deg, #ff3038 0%, #ed0010 48%, #bd0010 100%);
+}
+.sample-panel::after {
+  content: "";
+  position: absolute;
+  width: 45%;
+  height: 140%;
+  right: -20%;
+  top: -20%;
+  transform: rotate(28deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .13), transparent);
+}
+.sample-text {
+  position: relative;
+  z-index: 1;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  color: #fff;
+  font-size: 46pt;
+  font-weight: 900;
+  letter-spacing: 2mm;
+  line-height: 1;
+}
+
+/* 右侧信息区 */
+.info-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3mm;
+}
+.sku-row {
+  display: flex;
+  align-items: baseline;
+  padding-bottom: 2.6mm;
+  border-bottom: 0.5mm solid var(--line);
+}
+/* 六位为基准，位数越少字号越大；主字号由内联 --sku-pt 逐枚下发 */
+.sku {
+  color: var(--red);
+  font-size: var(--sku-pt, 40pt);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -.5pt;
+  white-space: nowrap;
+}
+/* 机型与配置最多各占 2 行；行数越多字号自动缩小，确保两行内容也不溢出 */
+.model {
+  padding-top: 2.6mm;
+  color: var(--black);
+  font-size: 22pt;
+  font-weight: 900;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.config {
+  margin-top: 2.6mm;
+  color: #4a5b70;
+  font-size: 10pt;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* ── 屏幕预览：整页等比缩放，仅阴影与边框表现差异化 ── */
+@media screen {
+  .sheet { box-shadow: 0 6px 24px rgba(20, 40, 70, .13); }
+}
+
+/* ── 打印 ── */
+@page { size: A4 landscape; margin: 0; }
+
+@media print {
+  html, body, #app { width: 297mm; height: auto; margin: 0; padding: 0; background: #fff; overflow: visible; }
+
+  .app-header, .left-panel, .preview-header, .page-number, .preview-empty { display: none !important; }
+  .app-shell, .main-content, .right-panel, .preview-scroll, .preview-container { display: block !important; }
+  .main-content { display: block !important; }
+  .preview-scroll { overflow: visible !important; padding: 0 !important; }
+
+  .page-shell {
+    width: 297mm !important;
+    height: 210mm !important;
+    margin: 0 !important;
+    break-after: page;
+    page-break-after: always;
+  }
+  .page-shell:last-child { break-after: auto; page-break-after: auto; }
+
+  .sheet {
+    width: 297mm !important;
+    height: 210mm !important;
+    padding: 7mm !important;
+    gap: 3mm !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .sticker {
+    border-width: 0.45mm !important;
+    border-radius: 2.5mm !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .sample-panel {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
