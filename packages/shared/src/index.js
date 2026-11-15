@@ -1,9 +1,9 @@
 export const STORE_MODULES = Object.freeze([
   {
     id: 'computer-labels',
-    name: '仓库货品标签',
-    shortName: '仓库货品标签',
-    iconText: '仓',
+    name: '电脑标签打印',
+    shortName: '电脑标签打印',
+    iconText: '电',
     description: '管理电脑 SKU、名称、配置和颜色，打印 46mm × 45mm 商品标签。',
     route: '/computer-labels',
     moduleBase: '/modules/computer-labels/',
@@ -14,9 +14,9 @@ export const STORE_MODULES = Object.freeze([
   },
   {
     id: 'price-labels',
-    name: '周边货品价签',
-    shortName: '周边货品价签',
-    iconText: '周',
+    name: '外设价签打印',
+    shortName: '外设价签打印',
+    iconText: '外',
     description: '管理电脑、手机、平板及周边商品价格，打印 70mm × 28mm 价格标签。',
     route: '/price-labels',
     moduleBase: '/modules/price-labels/',
@@ -53,8 +53,8 @@ export const STORE_MODULES = Object.freeze([
   },
   {
     id: 'sample-labels',
-    name: '出样标签制作',
-    shortName: '出样标签制作',
+    name: '出样标签打印',
+    shortName: '出样标签打印',
     iconText: '样',
     description: '按 A4 横向 3 × 3 打印设备出样贴纸，SKU 与机型取自仓库货品。',
     route: '/sample-labels',

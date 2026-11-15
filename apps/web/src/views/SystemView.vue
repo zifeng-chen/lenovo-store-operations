@@ -976,7 +976,7 @@ onBeforeUnmount(() => {
         <div>
           <span class="card-kicker">统一数据保护</span>
           <h2 id="persistence-title">全部备份，按模块恢复</h2>
-          <p>一次下载仓库货品标签、周边货品价签、付款凭证打印和价格展牌四个模块的数据库；上传后只检查，不会立即覆盖数据。</p>
+          <p>一次下载电脑标签打印、外设价签打印、付款凭证打印和价格展牌四个模块的数据库；上传后只检查，不会立即覆盖数据。</p>
         </div>
         <el-button type="primary" :loading="backupLoading" @click="downloadBackup">下载全部数据库备份</el-button>
       </div>
@@ -1029,8 +1029,8 @@ onBeforeUnmount(() => {
         <p>统一入口稳定验证期间，原页面功能不会取消，可继续用于单模块迁移或应急恢复。</p>
       </div>
       <div class="legacy-links">
-        <a href="/#/computer-labels">仓库货品标签：Excel / SQLite <span>→</span></a>
-        <a href="/#/price-labels">周边货品价签：JSON <span>→</span></a>
+        <a href="/#/computer-labels">电脑标签打印：Excel / SQLite <span>→</span></a>
+        <a href="/#/price-labels">外设价签打印：JSON <span>→</span></a>
         <span>付款凭证打印：当前通过本页统一入口恢复</span>
       </div>
     </section>

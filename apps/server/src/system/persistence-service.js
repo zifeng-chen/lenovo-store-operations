@@ -88,8 +88,8 @@ function extractModuleSnapshot(sharedSnapshotPath, targetPath, moduleId) {
 }
 
 const MODULES = [
-  { id: 'computer-labels', name: '仓库货品标签', entryId: 'computer-labels.database' },
-  { id: 'price-labels', name: '周边货品价签', entryId: 'price-labels.database' },
+  { id: 'computer-labels', name: '电脑标签打印', entryId: 'computer-labels.database' },
+  { id: 'price-labels', name: '外设价签打印', entryId: 'price-labels.database' },
   { id: 'receipt-assistant', name: '付款凭证打印', entryId: 'receipt-assistant.database' },
 ]
 const ROW_LIMITS = {

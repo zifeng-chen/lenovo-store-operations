@@ -16,8 +16,8 @@
 
 | 板块 | 数据位置 |
 | --- | --- |
-| 仓库货品标签 | `$LENOVO_STORE_DATA_DIR/store/store.sqlite` 中的 `computer_*` 表 |
-| 周边货品价签 | `$LENOVO_STORE_DATA_DIR/store/store.sqlite` 中的 `price_*` 表 |
+| 电脑标签打印 | `$LENOVO_STORE_DATA_DIR/store/store.sqlite` 中的 `computer_*` 表 |
+| 外设价签打印 | `$LENOVO_STORE_DATA_DIR/store/store.sqlite` 中的 `price_*` 表 |
 | 付款凭证打印 | `$LENOVO_STORE_DATA_DIR/store/store.sqlite` 中的 `receipt_*` 表 |
 | 付款凭证 OCR 密钥 | `$LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key` |
 
@@ -595,7 +595,7 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 - 当前 v3 包可恢复三个模块；历史 v1/v2 包中的价格展牌条目显示“未包含”，恢复按钮禁用且不会清空任何现有数据；
 - 旧 `0.5.x` 及更早服务不能读取 v3；恢复 v3 前必须先更新代码并重启服务，再上传检查；
 - 上传检查验证格式、摘要、SQLite 完整性、表结构、业务字段与计数，但不证明备份来源；
-- 仓库货品标签原 Excel/SQLite、周边货品价签原 JSON 入口继续保留；销售业绩报表只读且无独立导入导出。
+- 电脑标签打印原 Excel/SQLite、外设价签打印原 JSON 入口继续保留；销售业绩报表只读且无独立导入导出。
 
 生产环境维护接口始终要求同源请求和 `X-Lenovo-Store-Maintenance: 1`。令牌模式还要求正确的 Bearer 维护令牌；不要通过命令行历史直接拼接真实令牌，自动化应从 root-only 环境文件或密钥管理系统读取。可信局域网免令牌模式只取消 Bearer 要求，不取消同源和维护标识检查；任何能访问服务端口并构造请求的客户端仍可能执行备份或覆盖业务数据，因此必须通过防火墙限制可信网段，禁止在公网启用。人工操作优先使用系统状态页。
 
