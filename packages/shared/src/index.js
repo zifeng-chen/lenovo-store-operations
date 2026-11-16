@@ -76,6 +76,19 @@ export const STORE_MODULES = Object.freeze([
     persistence: 'none',
     accent: '#1a5e9c',
     stage: 'migrated'
+  },
+  {
+    id: 'sample-devices',
+    name: '样机设备管理',
+    shortName: '样机设备管理',
+    iconText: '样',
+    description: '管理门店样机客户端的在线状态，批量下发 Sysprep、弹窗提示、信息采集与远程升级。',
+    route: '/sample-devices',
+    moduleBase: '/modules/sample-devices/',
+    apiBase: '/api/sample-devices',
+    persistence: 'sqlite',
+    accent: '#0f7a6c',
+    stage: 'migrated'
   }
 ]);
 

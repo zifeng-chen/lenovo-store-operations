@@ -13,6 +13,7 @@ export const TABLE_PREFIX = Object.freeze({
   'computer-labels': 'computer_',
   'price-labels': 'price_',
   'receipt-assistant': 'receipt_',
+  'sample-devices': 'sampledev_',
 })
 
 export function tableName(moduleId, name) {

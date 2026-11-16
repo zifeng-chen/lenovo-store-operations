@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import compression from 'compression';
@@ -28,6 +29,19 @@ import receiptAssistantRouter, {
   receiptAssistantMaintenance
 } from './modules/receipt-assistant/index.js';
 import {
+  apiBase as sampleDevicesApiBase,
+  createAgentContractRouter,
+  createAgentWebSocketServer,
+  createManagementRouter as createSampleDevicesRouter,
+  getDatabase as getSampleDevicesDatabase,
+  initializeDatabase as initializeSampleDevicesDatabase,
+  refreshDeviceStatuses as refreshSampleDeviceStatuses
+} from './modules/sample-devices/index.js';
+import {
+  createUploadStore,
+  resolveServerUrl as resolveSampleDeviceServerUrl
+} from './modules/sample-devices/upload-store.js';
+import {
   DATA_ROOT,
   DATA_ROOT_SOURCE,
   EXTERNAL_DATA_ROOT_CONFIGURED,
@@ -53,6 +67,13 @@ const webDist = path.join(projectRoot, 'apps/web/dist');
 const webIndex = path.join(webDist, 'index.html');
 const host = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.PORT) || 8900;
+// 样机设备管理：Agent 契约端口。LanAgent 的 validateServerURL 要求 host:port 全等，
+// 上线时必须是 8080；本地冒烟测试可用 SAMPLE_DEVICES_AGENT_PORT 覆盖。
+const agentPort = Number(process.env.SAMPLE_DEVICES_AGENT_PORT) || 8080;
+const agentHost = process.env.SAMPLE_DEVICES_AGENT_HOST || '0.0.0.0';
+const sampleDevicesEnrollSecret = String(process.env.LENOVO_STORE_ENROLL_SECRET || '').trim();
+const sampleDevicesOfflineSelfDestructHours = Number(process.env.LENOVO_STORE_OFFLINE_SELF_DESTRUCT_HOURS) || 0;
+const sampleDevicesHeartbeatWindowSeconds = Number(process.env.LENOVO_STORE_HEARTBEAT_WINDOW) || 90;
 const maintenanceToken = String(process.env.LENOVO_STORE_MAINTENANCE_TOKEN || '').trim();
 const updateRequestPath = process.env.LENOVO_STORE_UPDATE_REQUEST_PATH || '/run/lenovo-store-updater/request.json';
 const updateProcessingPath = process.env.LENOVO_STORE_UPDATE_PROCESSING_PATH || '/run/lenovo-store-updater/claimed/processing.json';
@@ -84,6 +105,17 @@ if (updateEnablementSource === 'detected') {
 }
 const app = express();
 
+const sampleDevicesUploads = createUploadStore({
+  uploadDir: path.join(UNIFIED_DATA_DIR, 'sample-devices', 'uploads'),
+  agentExePath: process.env.LENOVO_STORE_AGENT_EXE || path.join(projectRoot, 'agent', 'LanAgent.exe'),
+  installerDir: process.env.LENOVO_STORE_INSTALLER_DIR || path.join(projectRoot, 'installer')
+});
+const sampleDevicesRouter = createSampleDevicesRouter({
+  getDb: getSampleDevicesDatabase,
+  resolveServerUrl: (req) => resolveSampleDeviceServerUrl(req, agentPort),
+  enrollSecret: sampleDevicesEnrollSecret,
+  uploads: sampleDevicesUploads
+});
 const moduleRuntimes = new Map([
   ['computer-labels', {
     apiBase: computerLabelsApiBase,
@@ -100,6 +132,12 @@ const moduleRuntimes = new Map([
     apiBase: receiptAssistantApiBase,
     router: receiptAssistantRouter,
     initializeDatabase: initializeReceiptAssistantDatabase
+  }],
+  ['sample-devices', {
+    apiBase: sampleDevicesApiBase,
+    router: sampleDevicesRouter,
+    initializeDatabase: initializeSampleDevicesDatabase,
+    jsonParser: express.json({ limit: '2mb' })
   }]
 ]);
 const databaseStatuses = new Map();
@@ -107,7 +145,8 @@ const persistenceService = createPersistenceService({
   runtimes: new Map([
     ['computer-labels', { getDatabase: getComputerLabelsDatabase }],
     ['price-labels', { getDatabase: getPriceLabelsDatabase }],
-    ['receipt-assistant', { getDatabase: getReceiptAssistantDatabase }]
+    ['receipt-assistant', { getDatabase: getReceiptAssistantDatabase }],
+    ['sample-devices', { getDatabase: getSampleDevicesDatabase }]
   ]),
   receiptMaintenance: receiptAssistantMaintenance,
   ocrKeyPath: receiptOcrKeyPath
@@ -362,7 +401,55 @@ app.use((error, _req, res, _next) => {
   });
 });
 
-app.listen(port, host, () => {
+const httpServer = app.listen(port, host, () => {
   console.log(`联想门店运营系统运行于 http://${host}:${port}`);
   console.log(`持久化数据目录：${dataRoot}（${DATA_ROOT_SOURCE}）`);
 });
+
+// 样机设备管理单独占用 Agent 契约端口：LanAgent 只认 host:port 全等，
+// 且这些路由（心跳/WS/结果回传）与门户 API 的鉴权和 CORS 策略不同。
+const agentApp = express();
+agentApp.disable('x-powered-by');
+agentApp.use(compression({ threshold: 1024 }));
+agentApp.locals.sampleDevicesDb = getSampleDevicesDatabase;
+agentApp.use(createAgentContractRouter({
+  enrollSecret: sampleDevicesEnrollSecret,
+  offlineSelfDestructHours: sampleDevicesOfflineSelfDestructHours
+}));
+agentApp.use((_req, res) => {
+  res.status(404).json({ code: 1, data: null, msg: '接口不存在' });
+});
+agentApp.use((error, _req, res, _next) => {
+  console.error(error);
+  res.status(500).json({ code: 1, data: null, msg: error.message || '服务器内部错误' });
+});
+
+const agentServer = http.createServer(agentApp);
+createAgentWebSocketServer({ server: agentServer, getDatabase: getSampleDevicesDatabase });
+agentServer.listen(agentPort, agentHost, () => {
+  console.log(`样机设备管理 Agent 契约端口运行于 http://${agentHost}:${agentPort}`);
+  if (!sampleDevicesEnrollSecret) {
+    console.warn('警告：未配置 LENOVO_STORE_ENROLL_SECRET，新设备将无法自动注册，部署包也无法生成');
+  }
+});
+
+// 15 秒巡检：心跳窗口外的设备标离线。Node 侧与 agent 上报频率一致，不做懒判定。
+const deviceStatusTimer = setInterval(() => {
+  try {
+    refreshSampleDeviceStatuses(getSampleDevicesDatabase(), sampleDevicesHeartbeatWindowSeconds);
+  } catch (error) {
+    console.error(`样机设备状态巡检失败：${error.message}`);
+  }
+}, 15_000);
+deviceStatusTimer.unref();
+
+function shutdown(signal) {
+  console.log(`收到 ${signal}，正在关闭服务`);
+  clearInterval(deviceStatusTimer);
+  httpServer.close();
+  agentServer.close();
+  setTimeout(() => process.exit(0), 3000).unref();
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

@@ -23,6 +23,7 @@ const requiredDistDirectories = [
   'apps/employee-badges/dist',
   'apps/sales-report/dist',
   'apps/sample-labels/dist',
+  'apps/sample-devices/dist',
 ]
 
 function fail(message) {
