@@ -13,11 +13,11 @@ const DEPLOY_README = `========================================
 
 【安装步骤】
 
-1. 解压本压缩包到 U 盘或目标电脑的任意位置
-2. 右键点击 LanAgent.exe → 以管理员身份运行
-3. 出现安装界面，显示本机 IP 和服务器地址
-4. 等待显示「[成功]LAN Agent 已安装并启动」
-5. 按回车键关闭窗口，安装完成
+1. 解压本压缩包到目标电脑的任意位置（deploy.conf 必须与 bat 在同一目录）
+2. 右键点击 reinstall.bat → 以管理员身份运行
+3. 脚本依次显示 权限检查 / 找到 LanAgent.exe / 停止旧服务 / 复制文件 / 安装启动
+4. 看到「安装成功！服务正在运行」即完成
+5. 管理端约 10 秒内可见该设备上线
 
 【已安装旧版本的升级方式】
 
@@ -25,7 +25,10 @@ const DEPLOY_README = `========================================
   右键点击 reinstall.bat → 以管理员身份运行
   脚本会自动停止旧服务、等待其完全退出、替换文件并启动新服务。
 
-方式二：直接右键 LanAgent.exe → 以管理员身份运行（覆盖安装）
+方式二（等同方式一，便于命令行执行）：
+  以管理员身份打开命令提示符，进入本压缩包的解压目录，执行：
+  LanAgent.exe /silent
+  该命令读取同目录的 deploy.conf 完成安装，不会清理桌面密码。
 
 【卸载步骤】
 
@@ -88,6 +91,19 @@ export function resolveServerUrl(req, fallbackPort) {
     return { serverUrl: `http://${lanIp}:${port}`, port };
   }
   return { serverUrl: `http://${host}`, port };
+}
+
+// 部署包里的 Agent 要连的是 Agent 契约端口（8080），不是浏览器访问的管理端端口（8900）。
+// 沿用 Host 头的主机名，仅把端口换成 Agent 端口。
+export function resolveAgentServerUrl(req, agentPort, fallbackPort) {
+  const host = String(req.headers.host || `localhost:${fallbackPort}`);
+  const [hostname] = host.split(':');
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    const lanIp = detectLanIp();
+    if (!lanIp) throw new Error('无法检测宿主机局域网 IP，请改用局域网 IP 访问管理端后重试');
+    return { serverUrl: `http://${lanIp}:${agentPort}`, port: String(agentPort) };
+  }
+  return { serverUrl: `http://${hostname}:${agentPort}`, port: String(agentPort) };
 }
 
 export function isPortableExecutable(buffer) {

@@ -96,7 +96,7 @@ function bodyDeviceIds(body) {
   return list.map(Number).filter(id => Number.isInteger(id) && id > 0);
 }
 
-export function createManagementRouter({ getDb, resolveServerUrl, enrollSecret, uploads }) {
+export function createManagementRouter({ getDb, resolveServerUrl, resolveAgentServerUrl, enrollSecret, uploads }) {
   const router = Router();
   const ok = (res, data, msg = 'success') => res.json({ code: 0, data, msg });
   const fail = (res, status, msg) => res.status(status).json({ code: 1, data: null, msg });
@@ -507,7 +507,8 @@ export function createManagementRouter({ getDb, resolveServerUrl, enrollSecret, 
     if (!enrollSecret) return fail(res, 500, '未配置注册密钥，无法生成部署包');
     let serverUrl;
     try {
-      serverUrl = resolveServerUrl(req).serverUrl;
+      // 部署包内配置的是 Agent 要连的地址，必须是 Agent 契约端口。
+      serverUrl = resolveAgentServerUrl(req).serverUrl;
     } catch (error) {
       return fail(res, 500, error.message);
     }

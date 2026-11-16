@@ -39,6 +39,7 @@ import {
 } from './modules/sample-devices/index.js';
 import {
   createUploadStore,
+  resolveAgentServerUrl as resolveSampleDeviceAgentServerUrl,
   resolveServerUrl as resolveSampleDeviceServerUrl
 } from './modules/sample-devices/upload-store.js';
 import {
@@ -113,6 +114,7 @@ const sampleDevicesUploads = createUploadStore({
 const sampleDevicesRouter = createSampleDevicesRouter({
   getDb: getSampleDevicesDatabase,
   resolveServerUrl: (req) => resolveSampleDeviceServerUrl(req, agentPort),
+  resolveAgentServerUrl: (req) => resolveSampleDeviceAgentServerUrl(req, agentPort, port),
   enrollSecret: sampleDevicesEnrollSecret,
   uploads: sampleDevicesUploads
 });
