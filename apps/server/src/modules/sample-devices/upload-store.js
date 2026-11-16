@@ -1,11 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
-
-const require = createRequire(import.meta.url);
-const AdmZip = require('adm-zip');
+import { buildZip } from './zip-writer.js';
 
 export const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 export const UPLOAD_KEEP = 20;
@@ -180,18 +177,22 @@ export function createUploadStore({ uploadDir, agentExePath, installerDir }) {
 
   function buildPackage(serverUrl, enrollSecret) {
     if (!fs.existsSync(agentExePath)) throw new Error('服务器上未找到 LanAgent.exe');
-    const zip = new AdmZip();
-    zip.addLocalFile(agentExePath, '', 'LanAgent.exe');
-    zip.addFile('deploy.conf', Buffer.from(`# LAN Agent deploy config\nserver=${serverUrl}\nenroll=${enrollSecret}\n`, 'utf8'));
-    zip.addFile('安装请阅读此文档.txt', Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(DEPLOY_README, 'utf8')]));
-    zip.addFile('uninstall.bat', Buffer.from(UNINSTALL_BAT, 'ascii'));
+    const entries = [
+      { name: 'LanAgent.exe', data: fs.readFileSync(agentExePath) },
+      { name: 'deploy.conf', data: `# LAN Agent deploy config\nserver=${serverUrl}\nenroll=${enrollSecret}\n` },
+      {
+        name: '安装请阅读此文档.txt',
+        data: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(DEPLOY_README, 'utf8')])
+      },
+      { name: 'uninstall.bat', data: Buffer.from(UNINSTALL_BAT, 'ascii') }
+    ];
     for (const name of ['reinstall.bat', 'reset-password.bat']) {
       const source = path.join(installerDir, name);
       if (!fs.existsSync(source)) continue;
       const normalized = fs.readFileSync(source, 'utf8').replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
-      zip.addFile(name, Buffer.from(normalized, 'utf8'));
+      entries.push({ name, data: Buffer.from(normalized, 'utf8') });
     }
-    return zip.toBuffer();
+    return buildZip(entries);
   }
 
   return { cleanup, list, resolve, saveExe, saveFile, latestAgent, buildPackage, uploadDir };
