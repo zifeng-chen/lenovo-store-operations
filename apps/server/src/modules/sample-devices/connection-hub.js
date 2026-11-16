@@ -33,7 +33,9 @@ export function sendCommand(deviceId, command) {
   const socket = agents.get(key(deviceId));
   if (!socket || socket.readyState !== 1) return false;
   try {
-    socket.send(JSON.stringify(command));
+    // Agent 侧按小写动作名分发（sysprep/shutdown/...），库里存的是大写任务类型，这里统一转换。
+    const payload = command?.action ? { ...command, action: String(command.action).toLowerCase() } : command;
+    socket.send(JSON.stringify(payload));
     return true;
   } catch {
     return false;
