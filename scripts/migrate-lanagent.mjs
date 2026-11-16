@@ -204,11 +204,11 @@ export function migrateLanagent({ sourcePath, targetPath, prefix = 'sampledev_',
            (hostname, hostname_locked, ip, os_info, status, group_name, rearm_count, agent_version,
             cpu_model, cpu_cores, memory_total_mb, disk_total_gb, disk_free_gb, os_version,
             serial_number, mac_address, manufacturer, model, sysinfo_updated_at,
-            token, last_heartbeat, created_at, updated_at, deleted_at)
+            token, legacy_id, last_heartbeat, created_at, updated_at, deleted_at)
            VALUES (@hostname, @hostname_locked, @ip, @os_info, @status, @group_name, @rearm_count, @agent_version,
                    @cpu_model, @cpu_cores, @memory_total_mb, @disk_total_gb, @disk_free_gb, @os_version,
                    @serial_number, @mac_address, @manufacturer, @model, @sysinfo_updated_at,
-                   @token, @last_heartbeat, @created_at, @updated_at, @deleted_at)`
+                   @token, @legacy_id, @last_heartbeat, @created_at, @updated_at, @deleted_at)`
         );
         for (const row of devices) {
           const info = insertDevice.run({
@@ -233,6 +233,8 @@ export function migrateLanagent({ sourcePath, targetPath, prefix = 'sampledev_',
             model: text(row.model),
             sysinfo_updated_at: toIso(row.sysinfo_updated_at),
             token: text(row.token),
+            // 旧库主键是 UUID，新版改自增整数；老 Agent 的 WS 路径仍用旧值，保留下来用于反查。
+            legacy_id: text(row.id),
             last_heartbeat: toIso(row.last_heartbeat),
             created_at: toIso(row.created_at) ?? new Date().toISOString().slice(0, 19),
             updated_at: toIso(row.updated_at) ?? new Date().toISOString().slice(0, 19),

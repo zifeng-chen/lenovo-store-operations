@@ -93,12 +93,35 @@ export function createAgentContractRouter({ enrollSecret, offlineSelfDestructHou
 export function createAgentWebSocketServer({ server, getDatabase }) {
   const wss = new WebSocketServer({ noServer: true });
 
+  // 老版 Agent 配置里存的是迁移前的 UUID 主键，新版是自增数字，两种都要能接上。
+  const AGENT_PATH = /^\/ws\/agents\/([^/]+)$/;
+
+  // 路径里可能是：自增主键、迁移前的旧 UUID、或令牌本身。三者都尝试解析。
+  function resolveAgentDevice(db, rawId) {
+    const text = String(rawId);
+    if (/^\d+$/.test(text)) {
+      const byId = db.prepare(`SELECT id, token, deleted_at FROM ${DEVICES} WHERE id = ?`).get(Number(text));
+      if (byId) return byId;
+    }
+    return (
+      db.prepare(`SELECT id, token, deleted_at FROM ${DEVICES} WHERE token = ?`).get(text) ??
+      db.prepare(`SELECT id, token, deleted_at FROM ${DEVICES} WHERE legacy_id = ?`).get(text) ??
+      null
+    );
+  }
+
   // ws 在 handleUpgrade 后若无 connection 监听器会立刻关闭连接，必须显式接管。
   wss.on('connection', (ws, request) => {
     const url = new URL(request.url, 'http://localhost');
-    const agentMatch = /^\/ws\/agents\/(\d+)$/.exec(url.pathname);
+    const agentMatch = AGENT_PATH.exec(url.pathname);
     if (agentMatch) {
-      handleAgentConnection(ws, Number(agentMatch[1]));
+      const db = getDatabase();
+      const device = resolveAgentDevice(db, decodeURIComponent(agentMatch[1]));
+      if (!device) {
+        ws.close(4004, 'Unknown device');
+        return;
+      }
+      handleAgentConnection(ws, device.id);
       return;
     }
     const taskMatch = /^\/ws\/tasks\/(\d+)$/.exec(url.pathname);
@@ -120,7 +143,7 @@ export function createAgentWebSocketServer({ server, getDatabase }) {
       return;
     }
 
-    const agentMatch = /^\/ws\/agents\/(\d+)$/.exec(url.pathname);
+    const agentMatch = AGENT_PATH.exec(url.pathname);
     const taskMatch = /^\/ws\/tasks\/(\d+)$/.exec(url.pathname);
     if (!agentMatch && !taskMatch) {
       socket.destroy();
@@ -128,10 +151,9 @@ export function createAgentWebSocketServer({ server, getDatabase }) {
     }
 
     if (agentMatch) {
-      const deviceId = Number(agentMatch[1]);
       const token = url.searchParams.get('token') || '';
       const db = getDatabase();
-      const device = db.prepare(`SELECT id, token, deleted_at FROM ${DEVICES} WHERE id = ?`).get(deviceId);
+      const device = resolveAgentDevice(db, decodeURIComponent(agentMatch[1]));
       if (!device || !device.token || !tokensEqual(device.token, token)) {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
         socket.destroy();

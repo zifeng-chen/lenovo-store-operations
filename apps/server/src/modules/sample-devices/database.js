@@ -53,6 +53,8 @@ function createSchema(db) {
       model TEXT,
       sysinfo_updated_at TEXT,
       token TEXT,
+      -- 迁移前 lanagent 的 UUID 主键，老 Agent 的 WS 路径仍带着它
+      legacy_id TEXT,
       last_heartbeat TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -114,9 +116,19 @@ function createSchema(db) {
   `);
 }
 
+function ensureDeviceColumns(db) {
+  // 已存在的库不会被 CREATE TABLE IF NOT EXISTS 改结构，这里补上后加的列。
+  const columns = new Set(db.prepare(`PRAGMA table_info(${DEVICES})`).all().map(column => column.name));
+  if (!columns.has('legacy_id')) {
+    db.exec(`ALTER TABLE ${DEVICES} ADD COLUMN legacy_id TEXT`);
+  }
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_${DEVICES}_legacy ON ${DEVICES}(legacy_id) WHERE legacy_id IS NOT NULL`);
+}
+
 export function initializeDatabase() {
   const db = getUnifiedDatabase();
   createSchema(db);
+  ensureDeviceColumns(db);
   return db;
 }
 
