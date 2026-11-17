@@ -35,6 +35,7 @@ import {
   createManagementRouter as createSampleDevicesRouter,
   getDatabase as getSampleDevicesDatabase,
   initializeDatabase as initializeSampleDevicesDatabase,
+  pruneRetainedRecords as pruneSampleDevicesRecords,
   refreshDeviceStatuses as refreshSampleDeviceStatuses
 } from './modules/sample-devices/index.js';
 import {
@@ -441,9 +442,22 @@ const deviceStatusTimer = setInterval(() => {
 }, 15_000);
 deviceStatusTimer.unref();
 
+// 保留策略兜底：任务记录最多 50 条、审计日志 3 天。写入路径已各自触发一次，
+// 这里每天全量收一遍，避免长期无写入时历史数据滞留。
+const retentionTimer = setInterval(() => {
+  try {
+    const { tasks, audits } = pruneSampleDevicesRecords(getSampleDevicesDatabase());
+    if (tasks || audits) console.log(`保留策略清理：任务 ${tasks} 条，审计 ${audits} 条`);
+  } catch (error) {
+    console.error(`保留策略清理失败：${error.message}`);
+  }
+}, 24 * 60 * 60 * 1000);
+retentionTimer.unref();
+
 function shutdown(signal) {
   console.log(`收到 ${signal}，正在关闭服务`);
   clearInterval(deviceStatusTimer);
+  clearInterval(retentionTimer);
   httpServer.close();
   setTimeout(() => process.exit(0), 3000).unref();
 }

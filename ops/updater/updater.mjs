@@ -4,11 +4,11 @@ import path from 'node:path'
 import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
 import { logUpdaterError } from './error-hints.mjs'
+import { TAG_PATTERN, parseVersionTag } from './version-rules.mjs'
 
 const execFileAsync = promisify(execFile)
 const REPOSITORY = 'zifeng-chen/lenovo-store-operations'
 const GITHUB_TOKEN = String(process.env.LENOVO_STORE_UPDATER_GITHUB_TOKEN || '').trim()
-const TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const ALLOWED_DOWNLOAD_HOSTS = new Set([
@@ -53,8 +53,7 @@ function isPlainObject(value) {
 }
 
 function parseStrictVersion(tag) {
-  const match = TAG_PATTERN.exec(tag)
-  return match ? match.slice(1).map(Number) : null
+  return parseVersionTag(tag)
 }
 
 function compareVersions(leftTag, rightTag) {

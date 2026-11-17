@@ -146,7 +146,7 @@ rollback_on_exit() {
     systemctl stop "$SERVICE_NAME" lenovo-store-updater.path lenovo-store-updater.service || rollback_ok=false
     systemctl disable lenovo-store-updater.path lenovo-store-updater.service || true
     rm -f -- "$SYSTEMD_DIR/lenovo-store-updater.path" "$SYSTEMD_DIR/lenovo-store-updater.service" "$TMPFILES_TARGET" || rollback_ok=false
-    rm -f -- "$UPDATER_CONFIG" "$PUBLIC_KEY_TARGET" "$UPDATER_LIB/updater.mjs" || rollback_ok=false
+    rm -f -- "$UPDATER_CONFIG" "$PUBLIC_KEY_TARGET" "$UPDATER_LIB/updater.mjs" "$UPDATER_LIB/version-rules.mjs" || rollback_ok=false
     rmdir -- "$UPDATER_LIB" 2>/dev/null || true
     rm -rf -- "$RUNTIME_ROOT" "$STATE_ROOT" || rollback_ok=false
 
@@ -370,6 +370,7 @@ ln -s "releases/$RELEASE_NAME" "$ROOT/previous"
 install -d -m 0755 -o root -g root "$UPDATER_LIB"
 install -m 0755 -o root -g root "$ROOT/current/ops/updater/updater.mjs" "$UPDATER_LIB/updater.mjs"
 install -m 0644 -o root -g root "$ROOT/current/ops/updater/error-hints.mjs" "$UPDATER_LIB/error-hints.mjs"
+install -m 0644 -o root -g root "$ROOT/current/ops/updater/version-rules.mjs" "$UPDATER_LIB/version-rules.mjs"
 install -m 0644 -o root -g root "$WORK/release-signing-public.pem" "$PUBLIC_KEY_TARGET"
 # 保留已有的下载镜像配置，避免重复安装时把用户设置清掉。
 MIRROR_PREFIX=""

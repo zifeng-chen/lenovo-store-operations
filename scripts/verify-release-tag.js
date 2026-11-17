@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(currentDir, '..')
 const tag = String(process.env.GITHUB_REF_NAME || process.argv[2] || '').trim()
-const stableTagPattern = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
+const { isVersionTag } = await import(path.join(projectRoot, 'ops/updater/version-rules.mjs'))
 
 function fail(message) {
   console.error(`Release 校验失败：${message}`)
@@ -17,7 +17,7 @@ function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(projectRoot, relativePath), 'utf8'))
 }
 
-if (!stableTagPattern.test(tag)) fail('tag 必须严格使用 vX.Y.Z 稳定语义版本格式')
+if (!isVersionTag(tag)) fail('tag 必须使用 vX.Y.Z 格式，且 Y、Z 各自只能是 0-9')
 const version = tag.slice(1)
 const packageMetadata = readJson('package.json')
 const lockMetadata = readJson('package-lock.json')

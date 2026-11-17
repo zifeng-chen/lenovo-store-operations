@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { DEVICES, DEVICE_STATUS, TASKS, TASK_RESULTS, TASK_STATUS, writeAudit } from './database.js';
+import { DEVICES, DEVICE_STATUS, TASKS, TASK_RESULTS, TASK_STATUS, pruneTaskRecords, writeAudit } from './database.js';
 import { broadcastTaskUpdate, isAgentOnline, sendCommand } from './connection-hub.js';
 import { nowIso } from './tokens.js';
 
@@ -154,6 +154,7 @@ export function createTask(db, { taskType, deviceIds, params, operator, sourceIp
     detail: `${taskType} → ${valid.length} 台${skipped.length ? `，跳过 ${skipped.length} 台` : ''}`,
     sourceIp
   });
+  pruneTaskRecords(db);
   return taskId;
 }
 

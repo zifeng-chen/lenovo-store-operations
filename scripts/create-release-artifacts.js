@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(currentDir, '..')
 const repository = 'zifeng-chen/lenovo-store-operations'
-const stableTagPattern = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
+const { isVersionTag } = await import(path.join(projectRoot, 'ops/updater/version-rules.mjs'))
 const packageMetadata = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'))
 const tag = String(process.env.GITHUB_REF_NAME || process.argv[2] || '').trim()
 const version = tag.slice(1)
@@ -62,6 +62,7 @@ function validateReleaseTree(releaseRoot) {
     'scripts/verify-product-name.js',
     'ops/updater/updater.mjs',
     'ops/updater/error-hints.mjs',
+    'ops/updater/version-rules.mjs',
     'ops/systemd/lenovo-store-updater.service',
     ...requiredDistDirectories.map(directory => `${directory}/index.html`),
   ]
@@ -88,7 +89,7 @@ function validateReleaseTree(releaseRoot) {
   }
 }
 
-if (!stableTagPattern.test(tag)) fail('必须提供严格的 vX.Y.Z 稳定版本 tag')
+if (!isVersionTag(tag)) fail('必须提供 vX.Y.Z 格式的 tag，且 Y、Z 各自只能是 0-9')
 if (packageMetadata.version !== version) fail(`tag ${tag} 与根 package.json 版本 ${packageMetadata.version} 不一致`)
 
 const commit = String(process.env.GITHUB_SHA || run('git', ['rev-parse', 'HEAD'], { capture: true })).trim()

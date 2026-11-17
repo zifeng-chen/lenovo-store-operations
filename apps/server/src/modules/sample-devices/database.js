@@ -154,8 +154,56 @@ export function setSetting(key, value) {
     .run(key, value == null ? null : String(value), new Date().toISOString());
 }
 
+let lastAuditPruneAt = 0;
+
 export function writeAudit({ action, deviceId = null, taskId = null, detail = null, sourceIp = null }) {
-  getUnifiedDatabase()
-    .prepare(`INSERT INTO ${AUDIT_LOGS} (action, device_id, task_id, detail, source_ip, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
+  const db = getUnifiedDatabase();
+  db.prepare(`INSERT INTO ${AUDIT_LOGS} (action, device_id, task_id, detail, source_ip, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
     .run(action, deviceId, taskId, detail, sourceIp, new Date().toISOString());
+  // 心跳类审计写入频繁，按小时节流，不每次都扫一遍表。
+  if (Date.now() - lastAuditPruneAt < 60 * 60 * 1000) return;
+  lastAuditPruneAt = Date.now();
+  pruneAuditLogs(db);
+}
+
+// 保留策略：任务记录最多 50 条，操作审计只留 3 天。
+// 删除时连带清理子结果，未结束的任务一律规避，避免把进行中的记录删掉。
+export const MAX_TASK_RECORDS = 50;
+export const AUDIT_RETENTION_DAYS = 3;
+
+const UNFINISHED_TASK_STATUSES = [TASK_STATUS.PENDING, TASK_STATUS.DISPATCHED, TASK_STATUS.RUNNING];
+
+export function pruneTaskRecords(db = getUnifiedDatabase()) {
+  const rows = db.prepare(`SELECT id, status FROM ${TASKS} ORDER BY id DESC`).all();
+  const unfinished = rows.filter(row => UNFINISHED_TASK_STATUSES.includes(row.status));
+  // 未结束的任务始终保留，但会占掉 50 条配额；配额用尽后只按新到旧保留已结束的记录。
+  const budget = Math.max(MAX_TASK_RECORDS - unfinished.length, 0);
+  const finished = rows.filter(row => !UNFINISHED_TASK_STATUSES.includes(row.status)).slice(0, budget);
+  const keep = new Set([...unfinished, ...finished].map(row => row.id));
+  const stale = rows.filter(row => !keep.has(row.id)).map(row => row.id);
+  if (!stale.length) return 0;
+
+  const deleteResults = db.prepare(`DELETE FROM ${TASK_RESULTS} WHERE task_id = ?`);
+  const deleteTask = db.prepare(`DELETE FROM ${TASKS} WHERE id = ?`);
+  db.transaction(() => {
+    for (const taskId of stale) {
+      deleteResults.run(taskId);
+      deleteTask.run(taskId);
+    }
+  })();
+  return stale.length;
+}
+
+export function pruneAuditLogs(db = getUnifiedDatabase()) {
+  const cutoff = new Date(Date.now() - AUDIT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  return db.prepare(`DELETE FROM ${AUDIT_LOGS} WHERE created_at < ?`).run(cutoff).changes;
+}
+
+export function pruneRetainedRecords(db = getUnifiedDatabase()) {
+  const tasks = pruneTaskRecords(db);
+  const audits = pruneAuditLogs(db);
+  if (tasks || audits) {
+    db.exec('PRAGMA wal_checkpoint(PASSIVE)');
+  }
+  return { tasks, audits };
 }
