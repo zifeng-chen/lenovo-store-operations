@@ -127,6 +127,10 @@ export function createManagementRouter({ getDb, resolveServerUrl, enrollSecret, 
     }
     const rows = db.prepare(`SELECT * FROM ${DEVICES} WHERE ${clauses.join(' AND ')}`).all(...params);
     rows.sort((a, b) => {
+      // 在线设备置顶，离线沉底；同状态内按 IP 数值升序
+      const onlineA = a.status === DEVICE_STATUS.ONLINE ? 0 : 1;
+      const onlineB = b.status === DEVICE_STATUS.ONLINE ? 0 : 1;
+      if (onlineA !== onlineB) return onlineA - onlineB;
       const [ka, va, ha] = ipSortKey(a);
       const [kb, vb, hb] = ipSortKey(b);
       if (ka !== kb) return ka - kb;

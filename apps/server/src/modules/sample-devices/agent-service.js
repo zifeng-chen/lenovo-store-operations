@@ -3,6 +3,7 @@ import { generateToken, pickDeviceToken, safeText, secondsSince, tokensEqual } f
 
 const HEARTBEAT_DEVICE_FIELDS = [
   'hostname',
+  'ip',
   'os_info',
   'agent_version',
   'cpu_model',
@@ -19,6 +20,22 @@ const HEARTBEAT_DEVICE_FIELDS = [
   'group_name'
 ];
 
+// 只有真实可路由的局域网地址才值得写进设备记录。
+// Agent 多网卡时可能误报回环/链路本地地址，这类地址不能覆盖已知的有效 IP。
+function isUsableDeviceIp(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return false;
+  const parts = text.split('.');
+  if (parts.length !== 4) return false;
+  if (!parts.every(part => /^\d{1,3}$/.test(part))) return false;
+  const bytes = parts.map(Number);
+  if (bytes.some(byte => byte > 255)) return false;
+  if (bytes[0] === 127) return false;
+  if (bytes[0] === 169 && bytes[1] === 254) return false;
+  if (bytes.every(byte => byte === 0)) return false;
+  return true;
+}
+
 function pickHeartbeatFields(payload, existing) {
   const source = payload?.device ?? payload?.info ?? payload ?? {};
   const result = {};
@@ -26,6 +43,11 @@ function pickHeartbeatFields(payload, existing) {
     const value = source[field] ?? payload?.[field];
     if (value === undefined || value === null || value === '') continue;
     if (field === 'hostname' && existing?.hostname_locked) continue;
+    // ip 单独处理：Agent 多网卡时可能报回环或链路本地地址，不可用就丢弃
+    if (field === 'ip') {
+      if (isUsableDeviceIp(value)) result.ip = String(value).trim();
+      continue;
+    }
     result[field] = typeof value === 'string' ? safeText(value, 512) : value;
   }
   return result;
@@ -71,12 +93,15 @@ function adoptDevice(db, device, { token, fields, ip }) {
   const assignments = ['token = ?', 'status = ?', 'last_heartbeat = ?', 'updated_at = ?', 'deleted_at = NULL'];
   const values = [nextToken, DEVICE_STATUS.ONLINE, now, now];
   for (const [key, value] of Object.entries(fields)) {
+    // ip 在下面单独合并，避免同一条 UPDATE 里出现两次赋值
+    if (key === 'ip') continue;
     assignments.push(`${key} = ?`);
     values.push(value);
   }
-  if (ip) {
+  const nextIp = isUsableDeviceIp(fields.ip) ? fields.ip : (isUsableDeviceIp(ip) ? ip : null);
+  if (nextIp) {
     assignments.push('ip = ?');
-    values.push(ip);
+    values.push(nextIp);
   }
   values.push(device.id);
   db.prepare(`UPDATE ${DEVICES} SET ${assignments.join(', ')} WHERE id = ?`).run(...values);
@@ -131,7 +156,7 @@ export function handleHeartbeat(db, { payload, ip, agentToken, enrollValid }) {
        VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       fields.hostname ?? null,
-      ip,
+      isUsableDeviceIp(fields.ip) ? fields.ip : ip,
       fields.os_info ?? null,
       DEVICE_STATUS.ONLINE,
       fields.group_name ?? null,
@@ -217,14 +242,20 @@ export function handleHeartbeat(db, { payload, ip, agentToken, enrollValid }) {
   const assignments = [];
   const values = [];
   for (const [key, value] of Object.entries(fields)) {
+    // ip 在下面单独合并，避免同一条 UPDATE 里出现两次赋值
+    if (key === 'ip') continue;
     assignments.push(`${key} = ?`);
     values.push(value);
   }
   assignments.push('status = ?', 'last_heartbeat = ?', 'updated_at = ?');
   values.push(DEVICE_STATUS.ONLINE, now, now);
-  if (ip && ip !== device.ip) {
+  // 网络恢复或换网后 Agent 会带上新地址，这里跟着更新，保证管理端显示的是当前真实 IP。
+  // Agent 自报的地址优先（多网卡时更准确），无效时退回连接来源 IP。
+  const reportedIp = isUsableDeviceIp(fields.ip) ? fields.ip : null;
+  const nextIp = reportedIp ?? (isUsableDeviceIp(ip) ? ip : null);
+  if (nextIp && nextIp !== device.ip) {
     assignments.push('ip = ?');
-    values.push(ip);
+    values.push(nextIp);
   }
   values.push(device.id);
   db.prepare(`UPDATE ${DEVICES} SET ${assignments.join(', ')} WHERE id = ?`).run(...values);

@@ -53,7 +53,6 @@ function diskText(device) {
           </th>
           <th>状态</th>
           <th>主机名 / IP</th>
-          <th>分组</th>
           <th>硬件信息</th>
           <th>Agent</th>
           <th>最后心跳</th>
@@ -84,7 +83,6 @@ function diskText(device) {
               <span v-if="device.model">{{ device.manufacturer }} {{ device.model }}</span>
             </div>
           </td>
-          <td>{{ device.group_name || '—' }}</td>
           <td>
             <div class="device-meta">
               <span v-if="device.cpu_model">{{ device.cpu_model }}</span>
