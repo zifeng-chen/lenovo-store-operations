@@ -4,6 +4,15 @@
 
 ## 2026-11-17
 
+- 发布 `1.0.2`：修复更新器自更新时漏装依赖模块，补齐部署脚本与文档。
+- **故障现象**：升级到 `1.0.1` 时更新器服务 `failed`，日志为 `ERR_MODULE_NOT_FOUND: Cannot find module '/usr/local/lib/lenovo-store-updater/version-rules.mjs'`，连续失败 3 次后触发 systemd 的 `unit-start-limit-hit`，升级链路彻底中断。
+- **根因**：`1.0.0` 起更新器 import 了同目录的 `version-rules.mjs`，但只有 `ops/install-updater.sh` 会安装它；升级收尾更新器替换自身时（`installSignedUpdater()`）仍只拷贝 `updater.mjs` 和 `error-hints.mjs`，新装出的宿主目录缺文件，更新器重启即退出。这与 `0.7.2` 遇到的 `error-hints.mjs` 缺失是同一类问题。
+- **修复**：`installSignedUpdater()` 改为按统一清单 `UPDATER_DEPENDENCIES`（`error-hints.mjs`、`version-rules.mjs`）先全部校验、再逐个原子写入，新增依赖只需改一处；`install-updater.sh` 的失败回滚路径补上 `error-hints.mjs`；发布包的必检清单与运行时语法检查清单均加入 `version-rules.mjs`，缺文件不再能打包发布。
+- **注意（更新器自举）**：执行本次升级的仍是 `1.0.1` 自带的旧更新器，它依旧只装两个文件。因此升级到 `1.0.2` 后宿主目录是否完整，取决于 `1.0.2` 的更新器在**下一次**升级时才真正接管；若目标机器当前更新器目录缺 `version-rules.mjs`，需先手工补装该文件（`root:root 0644`）并 `systemctl reset-failed lenovo-store-updater.path`。
+- 文档同步：`docs/ubuntu-deployment.md`、`docs/ubuntu-arm64-deployment.md` 明确 `/usr/local/lib/lenovo-store-updater/` 必须包含三个文件，部署核对清单加入 `version-rules.mjs`。
+
+## 2026-11-17
+
 - 发布 `1.0.1`：按实际使用频率重排模块顺序。
 - **侧边栏顺序调整**：改为「付款助手 → 电脑标签 → 价签打印 → 样机管理 → 出样标签 → 销售报表 → 员工工牌」，使用频率最高的付款助手排到第一位，员工工牌放到最后。
 - 模块顺序统一由 `packages/shared` 的模块注册表驱动，侧边栏、首页卡片和前端路由一次性生效，无需各自维护。本次仅调整注册表顺序，各模块代码与数据结构未改动。

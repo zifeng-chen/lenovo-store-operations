@@ -37,6 +37,8 @@ const MAX_CHECKSUM_BYTES = 64 * 1024
 const SMALL_DOWNLOAD_TIMEOUT_MS = 30000
 const MAX_ARCHIVE_ENTRIES = 30000
 const MAX_UNPACKED_BYTES = 1024 * 1024 * 1024
+// 更新器自身依赖的同目录模块，必须与 updater.mjs 一起安装到宿主目录。
+const UPDATER_DEPENDENCIES = ['error-hints.mjs', 'version-rules.mjs']
 
 function updaterError(message, code = 'UPDATER_FAILED') {
   const error = new Error(message)
@@ -520,6 +522,7 @@ function validateExtractedTree(root) {
     'apps/server/src/server.js',
     'ops/updater/updater.mjs',
     'ops/updater/error-hints.mjs',
+    'ops/updater/version-rules.mjs',
     'apps/web/dist/index.html',
     'apps/computer-labels/dist/index.html',
     'apps/price-labels/dist/index.html',
@@ -658,6 +661,7 @@ const RUNTIME_CHECK_SCRIPTS = [
   'scripts/backup-data.js',
   'scripts/create-release-artifacts.js',
   'ops/updater/error-hints.mjs',
+  'ops/updater/version-rules.mjs',
 ]
 const RUNTIME_DIST_ENTRIES = [
   'apps/web/dist/index.html',
@@ -1034,15 +1038,19 @@ function installSignedUpdater(candidateRoot, config, expectedSha256) {
   const sourceStats = fs.lstatSync(source)
   assert(sourceStats.isFile() && !sourceStats.isSymbolicLink() && sourceStats.size > 0 && sourceStats.size <= 2 * 1024 * 1024, '候选版本的更新器程序无效', 'INVALID_UPDATER_PAYLOAD')
   assert(sha256RegularFile(source, 2 * 1024 * 1024, '候选更新器') === expectedSha256, '封存后的候选更新器摘要发生变化', 'UPDATER_PAYLOAD_CHANGED')
-  // updater.mjs 依赖同目录的 error-hints.mjs，两者必须一起更新，
-  // 否则更新器重新启动时会因找不到模块直接退出。
-  const hintsSource = path.join(candidateRoot, 'ops/updater/error-hints.mjs')
-  const hintsStats = fs.lstatSync(hintsSource)
-  assert(hintsStats.isFile() && !hintsStats.isSymbolicLink() && hintsStats.size > 0 && hintsStats.size <= 2 * 1024 * 1024, '候选版本的错误提示模块无效', 'INVALID_UPDATER_PAYLOAD')
   const directory = path.dirname(config.updaterPath)
   assert(fs.realpathSync(directory) === directory, '更新器安装目录不能是符号链接', 'UNSAFE_UPDATER_PATH')
-  const hintsTarget = path.join(directory, 'error-hints.mjs')
-  installUpdaterFile(hintsSource, hintsTarget, 0o644, directory)
+  // updater.mjs 依赖同目录的 error-hints.mjs 与 version-rules.mjs，
+  // 三者必须一起更新，否则更新器重新启动时会因找不到模块直接退出。
+  for (const dependency of UPDATER_DEPENDENCIES) {
+    const dependencySource = path.join(candidateRoot, 'ops/updater', dependency)
+    const dependencyStats = fs.lstatSync(dependencySource)
+    assert(dependencyStats.isFile() && !dependencyStats.isSymbolicLink() && dependencyStats.size > 0 && dependencyStats.size <= 2 * 1024 * 1024, `候选版本的 ${dependency} 模块无效`, 'INVALID_UPDATER_PAYLOAD')
+  }
+  for (const dependency of UPDATER_DEPENDENCIES) {
+    const dependencySource = path.join(candidateRoot, 'ops/updater', dependency)
+    installUpdaterFile(dependencySource, path.join(directory, dependency), 0o644, directory)
+  }
   const temporary = path.join(directory, `.updater.${process.pid}.${crypto.randomUUID()}.tmp`)
   fs.copyFileSync(source, temporary, fs.constants.COPYFILE_EXCL)
   try {

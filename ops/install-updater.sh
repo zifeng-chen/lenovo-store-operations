@@ -146,7 +146,7 @@ rollback_on_exit() {
     systemctl stop "$SERVICE_NAME" lenovo-store-updater.path lenovo-store-updater.service || rollback_ok=false
     systemctl disable lenovo-store-updater.path lenovo-store-updater.service || true
     rm -f -- "$SYSTEMD_DIR/lenovo-store-updater.path" "$SYSTEMD_DIR/lenovo-store-updater.service" "$TMPFILES_TARGET" || rollback_ok=false
-    rm -f -- "$UPDATER_CONFIG" "$PUBLIC_KEY_TARGET" "$UPDATER_LIB/updater.mjs" "$UPDATER_LIB/version-rules.mjs" || rollback_ok=false
+    rm -f -- "$UPDATER_CONFIG" "$PUBLIC_KEY_TARGET" "$UPDATER_LIB/updater.mjs" "$UPDATER_LIB/error-hints.mjs" "$UPDATER_LIB/version-rules.mjs" || rollback_ok=false
     rmdir -- "$UPDATER_LIB" 2>/dev/null || true
     rm -rf -- "$RUNTIME_ROOT" "$STATE_ROOT" || rollback_ok=false
 

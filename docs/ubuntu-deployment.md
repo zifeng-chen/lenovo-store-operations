@@ -49,8 +49,10 @@
 /etc/lenovo-store-operations.env       # root-only 服务环境变量
 /etc/lenovo-store-updater.json         # root-only 更新器配置
 /etc/lenovo-store-release-signing.pub  # 固定 Ed25519 发布公钥
-/usr/local/lib/lenovo-store-updater/   # root-owned 更新器程序
+/usr/local/lib/lenovo-store-updater/   # root-owned 更新器程序（updater.mjs + error-hints.mjs + version-rules.mjs）
 ```
+
+`/usr/local/lib/lenovo-store-updater/` 必须同时存在三个文件：`updater.mjs`（主程序，`0755`）、`error-hints.mjs`、`version-rules.mjs`（均为 `0644 root:root`）。后两个是主程序的同目录依赖，缺任何一个更新器都会以 `ERR_MODULE_NOT_FOUND` 直接退出，升级链路随即中断。`ops/install-updater.sh` 初次安装、更新器自更新（`installSignedUpdater()`）和发布包内容校验都已覆盖这三个文件；若手工修复历史机器，补装缺失模块后需 `systemctl reset-failed lenovo-store-updater.path && systemctl start lenovo-store-updater.path`。
 
 新服务器先在 `/opt/lenovo-store-operations` 建立可运行的 bootstrap Git checkout；执行 `ops/install-updater.sh` 后，脚本会把已提交且已推送的当前 HEAD 构建为首个 `releases/<version>-<commit>`，再原子建立 `current` 和 `previous`。迁移前 checkout 会以 `root:root 0700` 保留在同级 bootstrap 备份中，完成故障演练前不要删除。
 

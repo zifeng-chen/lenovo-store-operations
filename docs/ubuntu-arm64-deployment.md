@@ -24,8 +24,10 @@
 /etc/lenovo-store-operations.env       # root-only 服务环境变量
 /etc/lenovo-store-updater.json         # root-only updater 配置
 /etc/lenovo-store-release-signing.pub  # 固定 Ed25519 发布公钥
-/usr/local/lib/lenovo-store-updater/   # root-owned updater 程序
+/usr/local/lib/lenovo-store-updater/   # root-owned updater 程序（updater.mjs + error-hints.mjs + version-rules.mjs）
 ```
+
+更新器目录必须同时存在三个文件：`updater.mjs`（`0755`）、`error-hints.mjs`、`version-rules.mjs`（`0644 root:root`）。后两者是主程序的同目录依赖，缺失会导致 `ERR_MODULE_NOT_FOUND` 并使升级链路中断。`ops/install-updater.sh`、更新器自更新和发布包校验均已覆盖这三个文件。
 
 固定账号：
 
@@ -885,6 +887,8 @@ sudo stat -c '%U:%G %a %n' \
   /etc/lenovo-store-updater.json \
   /etc/lenovo-store-release-signing.pub \
   /usr/local/lib/lenovo-store-updater/updater.mjs \
+  /usr/local/lib/lenovo-store-updater/error-hints.mjs \
+  /usr/local/lib/lenovo-store-updater/version-rules.mjs \
   /var/lib/lenovo-store-updater \
   /run/lenovo-store-updater \
   /run/lenovo-store-updater/claimed
