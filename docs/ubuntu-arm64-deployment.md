@@ -1048,10 +1048,26 @@ sudo journalctl -u lenovo-store-operations.service -n 200 --no-pager
 - `manifest.json.sig`、SHA-256、包内 `release-info.json`；
 - updater contract `1`、`npm-ci-on-target`、可逆迁移声明；
 - tar 路径、链接、特殊文件、重复项、文件数和解压体积限制；
-- 独立 builder 安装和检查；
+- 独立 builder 安装运行时依赖并做语义校验（逐文件 `node --check` + 前端产物完整性）；
 - 切换前外部一致性备份；
 - 新服务连续 health 检查；
 - `current/previous` 原子链接和 fsync 事务 journal。
+
+### 升级耗时构成
+
+`installing` 阶段是升级耗时的主要来源，优化后由两部分组成：
+
+| 步骤 | 典型耗时 | 说明 |
+| --- | --- | --- |
+| `npm ci --omit=dev` | 5–10 秒 | 只装运行时依赖；前端产物已随发布包提供，无需在目标机构建 |
+| 原生模块编译（`better-sqlite3`） | 0 秒（命中缓存）/ 100–130 秒（未命中） | 见下方缓存说明 |
+| 语义校验 | 约 2 秒 | 32 个服务端文件 `node --check` + 8 个前端产物存在性检查 |
+
+更新器把 `better-sqlite3` 的编译产物缓存在 `/var/lib/lenovo-store-updater/native-cache/`，命中时跳过 `install` 脚本并在装完依赖后还原二进制，命中时 `installing` 阶段约 5 秒。
+
+缓存键由 lockfile 的 `version` + `integrity` 加 `process.versions.modules`、平台和架构共同决定。任何一项变化都会导致未命中并重新编译，因此升级 Node 主版本或 `better-sqlite3` 版本时仍会走完整编译，属预期行为。
+
+还原后会真实 `require` 一次并执行 `select 1`，二进制不可用时自动降级为完整编译并回写健康缓存。缓存目录 `0700` 且属主为 root；更新器在复用前会校验该目录未被篡改，否则以 `UNSAFE_NATIVE_CACHE` 拒绝启动本次升级。
 
 事务可能处于 `claimed`、`preparing`、`prepared`、`switched`、`recovered`、`committed`。进程被杀或断电后，主服务启动门会调用 updater 的恢复模式，优先恢复保守一致的链接。`rollback-failed` 表示旧版本也未恢复健康，必须人工处理，不能继续提交更新。
 

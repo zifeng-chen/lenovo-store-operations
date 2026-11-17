@@ -454,6 +454,18 @@ export const ERROR_CATALOG = Object.freeze({
     ['联系维护人员按部署文档重新创建该目录。'],
     { retryable: false }
   ),
+  UNSAFE_NATIVE_CACHE: entry(
+    '原生模块缓存目录不安全',
+    '原生模块编译产物缓存目录必须由 root 独占且不能是符号链接，否则可能被非特权账号替换成任意二进制。',
+    ['确认 /var/lib/lenovo-store-updater/native-cache 属主为 root、权限为 0700。', '无法修复时可直接删除该目录，下次升级会重新编译并重建缓存。'],
+    { retryable: true, severity: 'critical' }
+  ),
+  NATIVE_MODULE_UNUSABLE: entry(
+    '候选版本的原生模块无法加载',
+    '候选版本安装完成后，原生模块无法被 require 加载或执行基础查询，继续切换会导致服务启动失败。',
+    ['确认服务器上已安装 build-essential 与 python3。', '检查 builder 账号是否有编译权限。', '重新提交一次升级。'],
+    { retryable: true, severity: 'warning' }
+  ),
 
   // ── 升级流程：事务、目录与请求 ─────────────────────────
   INVALID_TRANSACTION: entry(

@@ -39,14 +39,14 @@ const checkErrorDialogVisible = ref(false);
 const INSTALL_STEPS = [
   { phase: 'queued', label: '等待更新器领取任务', weight: 2 },
   { phase: 'claimed', label: '更新器已领取任务', weight: 3 },
-  { phase: 'backing-up', label: '创建数据库备份', weight: 8 },
-  { phase: 'downloading', label: '下载签名发布包', weight: 25 },
-  { phase: 'verifying', label: '验证 Ed25519 签名与校验和', weight: 7 },
-  { phase: 'installing', label: '安装依赖并检查候选版本', weight: 30 },
-  { phase: 'switching', label: '原子切换运行版本', weight: 5 },
-  { phase: 'restarting', label: '重启服务', weight: 5 },
-  { phase: 'health-check', label: '验证版本、数据库与模块', weight: 10 },
-  { phase: 'finalizing', label: '更新签名更新器程序', weight: 5 },
+  { phase: 'backing-up', label: '创建数据库备份', weight: 3 },
+  { phase: 'downloading', label: '下载签名发布包', weight: 17 },
+  { phase: 'verifying', label: '验证 Ed25519 签名与校验和', weight: 5 },
+  { phase: 'installing', label: '安装运行时依赖并校验候选版本', weight: 55 },
+  { phase: 'switching', label: '原子切换运行版本', weight: 3 },
+  { phase: 'restarting', label: '重启服务', weight: 3 },
+  { phase: 'health-check', label: '验证版本、数据库与模块', weight: 7 },
+  { phase: 'finalizing', label: '更新签名更新器程序', weight: 2 },
 ];
 const INSTALL_PHASE_INDEX = new Map(INSTALL_STEPS.map((step, index) => [step.phase, index]));
 const TERMINAL_SUCCESS_PHASES = new Set(['completed']);
@@ -342,7 +342,7 @@ function installationPhaseText(phase) {
     'backing-up': '正在创建一致性备份',
     downloading: '正在下载签名发布包',
     verifying: '正在验证签名和发布包',
-    installing: '正在安装依赖并检查候选版本',
+    installing: '正在安装运行时依赖并校验候选版本',
     switching: '正在原子切换运行版本',
     restarting: '正在重启服务',
     'health-check': '正在验证版本、数据库和模块',

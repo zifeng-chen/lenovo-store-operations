@@ -619,8 +619,219 @@ function sha256RegularFile(filePath, maxBytes, name) {
   return crypto.createHash('sha256').update(readRegularFile(filePath, maxBytes, name)).digest('hex')
 }
 
+// 发布包已经在 CI 里跑过 npm run build + npm run check + npm audit，dist 也一起进包了，
+// 目标机再跑一遍 vite build 是纯重复劳动。这里只做两件事：
+// 1) 用 --omit=dev 装生产依赖（前端产物已固化，目标是静态文件，运行期只有服务端需要依赖）
+// 2) 语义检查：逐个对服务端入口执行 node --check（不产生副作用）并确认 8 个前端产物齐全
+// 这样可以把 installing 阶段从“全量装依赖 + 7 次 vite build”压缩到“只装运行时依赖 + 语法检查”。
+const RUNTIME_CHECK_ENTRIES = [
+  'apps/server/src/server.js',
+  'apps/server/src/calendar-date.js',
+  'apps/server/src/system/backup-package.js',
+  'apps/server/src/system/github-release-service.js',
+  'apps/server/src/system/maintenance-auth.js',
+  'apps/server/src/system/persistence-service.js',
+  'apps/server/src/system/router.js',
+  'apps/server/src/system/runtime-info.js',
+  'apps/server/src/system/update-ipc-service.js',
+  'apps/server/src/system/update-router.js',
+  'apps/server/src/modules/computer-labels/database.js',
+  'apps/server/src/modules/computer-labels/router.js',
+  'apps/server/src/modules/price-labels/database.js',
+  'apps/server/src/modules/price-labels/router.js',
+  'apps/server/src/modules/receipt-assistant/database.js',
+  'apps/server/src/modules/receipt-assistant/baidu-ocr.js',
+  'apps/server/src/modules/receipt-assistant/ocr-storage.js',
+  'apps/server/src/modules/receipt-assistant/router.js',
+  'apps/server/src/modules/sample-devices/database.js',
+  'apps/server/src/modules/sample-devices/tokens.js',
+  'apps/server/src/modules/sample-devices/agent-service.js',
+  'apps/server/src/modules/sample-devices/connection-hub.js',
+  'apps/server/src/modules/sample-devices/task-service.js',
+  'apps/server/src/modules/sample-devices/agent-router.js',
+  'apps/server/src/modules/sample-devices/router.js',
+  'apps/server/src/modules/sample-devices/upload-store.js',
+  'apps/server/src/modules/sample-devices/zip-writer.js',
+  'apps/server/src/modules/sample-devices/index.js',
+  'packages/shared/src/index.js',
+]
+const RUNTIME_CHECK_SCRIPTS = [
+  'scripts/backup-data.js',
+  'scripts/create-release-artifacts.js',
+  'ops/updater/error-hints.mjs',
+]
+const RUNTIME_DIST_ENTRIES = [
+  'apps/web/dist/index.html',
+  'apps/computer-labels/dist/index.html',
+  'apps/price-labels/dist/index.html',
+  'apps/receipt-assistant/dist/index.html',
+  'apps/employee-badges/dist/index.html',
+  'apps/sales-report/dist/index.html',
+  'apps/sample-labels/dist/index.html',
+  'apps/sample-devices/dist/index.html',
+]
+
+// 环境里有变量名，遇到未来版本删掉某个文件时按“文件不存在”跳过，由 validateExtractedTree 兜住核心入口。
+async function verifyCandidateSemantics(candidateRoot, config, environment) {
+  for (const relative of RUNTIME_DIST_ENTRIES) {
+    assert(fs.existsSync(path.join(candidateRoot, relative)), `发布包缺少前端产物 ${relative}`, 'INVALID_RELEASE_TREE')
+  }
+  for (const relative of [...RUNTIME_CHECK_ENTRIES, ...RUNTIME_CHECK_SCRIPTS]) {
+    const absolute = path.join(candidateRoot, relative)
+    if (!fs.existsSync(absolute)) continue
+    await runFixed(process.execPath, ['--check', absolute], {
+      cwd: candidateRoot,
+      timeout: 60000,
+      env: environment,
+      uid: config.builderUid,
+      gid: config.builderGid,
+    })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 原生模块编译产物缓存
+//
+// better-sqlite3 每次升级都要重新编译：prebuild-install 先尝试从 GitHub Release
+// 拉预编译二进制，内网环境通常超时（约 20-30 秒），随后回退到 node-gyp 源码编译
+// （ARM64 上 70-90 秒）。这是升级耗时的主要来源，而绝大多数升级并不改这个依赖。
+//
+// 因此把编译产物缓存下来，下次升级直接复用。缓存键必须覆盖所有会影响二进制兼容性
+// 的因素（ABI、平台、架构、模块版本、源码 integrity），任何一项对不上就不复用，
+// 退回正常编译；还原后还会真正 require 一次确认二进制可用，绝不冒险。
+//
+// 缓存只由 root 更新器写入，写入前先复制到临时目录再原子改名，避免半成品被复用。
+const NATIVE_MODULE_CACHE_ROOT = '/var/lib/lenovo-store-updater/native-cache'
+const NATIVE_CACHE_MODULES = ['better-sqlite3']
+
+// 缓存里放的是可执行二进制，必须保证非 root 账号不能篡改，否则等于给 builder 一个
+// 往生产环境塞代码的通道。目录不存在时跳过（首次升级会创建）。
+function assertNativeCacheSafe() {
+  let stats
+  try {
+    stats = fs.lstatSync(NATIVE_MODULE_CACHE_ROOT)
+  } catch (error) {
+    if (error.code === 'ENOENT') return
+    throw error
+  }
+  assert(stats.isDirectory() && !stats.isSymbolicLink(), '原生模块缓存目录无效', 'UNSAFE_NATIVE_CACHE')
+  assert(stats.uid === 0 && (stats.mode & 0o077) === 0, '原生模块缓存目录必须由 root 独占', 'UNSAFE_NATIVE_CACHE')
+}
+
+// 缓存键必须在装依赖之前就能算出来（否则无法决定要不要跳过 install 脚本），
+// 因此用 lockfile 里的版本与 integrity 摘要作为源码身份，等价于源码内容摘要，
+// 且不依赖 node_modules 是否已存在。
+function nativeCacheKey(candidateRoot, moduleName) {
+  const lockMetadata = parseJson(readRegularFile(path.join(candidateRoot, 'package-lock.json'), 20 * 1024 * 1024, 'package-lock.json'), 'package-lock.json')
+  const entry = lockMetadata.packages?.[`node_modules/${moduleName}`]
+  if (!isPlainObject(entry)) return null
+  if (typeof entry.version !== 'string' || !entry.version) return null
+  if (typeof entry.integrity !== 'string' || !entry.integrity) return null
+  const identity = {
+    abi: process.versions.modules,
+    platform: process.platform,
+    arch: process.arch,
+    moduleVersion: entry.version,
+    sourceIntegrity: entry.integrity,
+  }
+  const key = crypto.createHash('sha256').update(JSON.stringify(identity)).digest('hex').slice(0, 32)
+  return { key, identity }
+}
+
+function nativeCachePath(moduleName, key) {
+  return path.join(NATIVE_MODULE_CACHE_ROOT, moduleName, key)
+}
+
+function cacheContainsBuild(entryPath) {
+  const releasePath = path.join(entryPath, 'build', 'Release')
+  const metadataPath = path.join(entryPath, 'identity.json')
+  if (!fs.existsSync(releasePath) || !fs.existsSync(metadataPath)) return false
+  const stats = fs.lstatSync(releasePath)
+  if (!stats.isDirectory() || stats.isSymbolicLink()) return false
+  return fs.readdirSync(releasePath).some(name => name.endsWith('.node'))
+}
+
+// 复用前先验证二进制真的能加载，避免把损坏或 ABI 不匹配的缓存带进候选版本。
+function verifyNativeModuleLoads(candidateRoot, moduleName, config, environment) {
+  const script = 'try{const m=require(process.argv[1]);if(m&&m.constructor&&m.constructor.name==="Database"){const d=new m(":memory:");d.prepare("select 1").get();d.close()}console.log("ok")}catch(e){console.error(e.message);process.exit(1)}'
+  execFileSync(process.execPath, ['-e', script, path.join(candidateRoot, 'node_modules', moduleName)], {
+    cwd: candidateRoot,
+    timeout: 60000,
+    env: environment,
+    uid: config.builderUid,
+    gid: config.builderGid,
+    stdio: 'pipe',
+  })
+}
+
+// 只缓存最终 .node 二进制：obj/ 和 sqlite3.a 是中间产物，复制它们既慢又没必要。
+// loadable 二进制必须能被 require 加载，所以缓存前先确认它存在。
+function listReleaseBinaries(source) {
+  const releaseSource = path.join(source, 'Release')
+  if (!fs.existsSync(releaseSource)) return []
+  return fs.readdirSync(releaseSource, { withFileTypes: true })
+    .filter(entry => entry.isFile() && entry.name.endsWith('.node'))
+    .map(entry => entry.name)
+}
+
+function restoreNativeBuild(candidateRoot, moduleName, cache) {
+  const source = path.join(nativeCachePath(moduleName, cache.key), 'build')
+  const destination = path.join(candidateRoot, 'node_modules', moduleName, 'build')
+  fs.rmSync(destination, { recursive: true, force: true })
+  fs.mkdirSync(path.join(destination, 'Release'), { recursive: true, mode: 0o755 })
+  for (const entry of fs.readdirSync(path.join(source, 'Release'), { withFileTypes: true })) {
+    if (!entry.isFile()) continue
+    fs.copyFileSync(path.join(source, 'Release', entry.name), path.join(destination, 'Release', entry.name))
+  }
+}
+
+function persistNativeBuild(candidateRoot, moduleName, cache) {
+  const source = path.join(candidateRoot, 'node_modules', moduleName, 'build')
+  if (!fs.existsSync(source)) return
+  const binaries = listReleaseBinaries(source)
+  if (binaries.length === 0) return
+  fs.mkdirSync(NATIVE_MODULE_CACHE_ROOT, { recursive: true, mode: 0o700 })
+  const moduleRoot = path.join(NATIVE_MODULE_CACHE_ROOT, moduleName)
+  fs.mkdirSync(moduleRoot, { recursive: true, mode: 0o700 })
+  const finalPath = nativeCachePath(moduleName, cache.key)
+  const temporary = `${finalPath}.tmp-${process.pid}-${crypto.randomUUID()}`
+  fs.rmSync(temporary, { recursive: true, force: true })
+  fs.mkdirSync(path.join(temporary, 'build', 'Release'), { recursive: true, mode: 0o755 })
+  for (const name of binaries) {
+    fs.copyFileSync(path.join(source, 'Release', name), path.join(temporary, 'build', 'Release', name))
+  }
+  fs.writeFileSync(path.join(temporary, 'identity.json'), `${JSON.stringify(cache.identity, null, 2)}\n`, { mode: 0o600 })
+  fs.rmSync(finalPath, { recursive: true, force: true })
+  fs.renameSync(temporary, finalPath)
+  pruneNativeCache(moduleRoot)
+}
+
+// 每个模块只保留最近 3 个来源版本，避免缓存目录随版本无限增长。
+function pruneNativeCache(moduleRoot) {
+  const entries = fs.readdirSync(moduleRoot, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && !entry.name.includes('.tmp-'))
+    .map(entry => ({ name: entry.name, stats: fs.statSync(path.join(moduleRoot, entry.name)) }))
+    .sort((left, right) => right.stats.mtimeMs - left.stats.mtimeMs)
+  for (const entry of entries.slice(3)) {
+    fs.rmSync(path.join(moduleRoot, entry.name), { recursive: true, force: true })
+  }
+}
+
+async function installDependencies(candidateRoot, config, environment, ignoreScripts) {
+  const arguments_ = ['ci', '--omit=dev']
+  if (ignoreScripts) arguments_.push('--ignore-scripts')
+  await runFixed(config.npmPath, arguments_, {
+    cwd: candidateRoot,
+    timeout: config.installTimeoutMs,
+    env: environment,
+    uid: config.builderUid,
+    gid: config.builderGid,
+  })
+}
+
 async function prepareCandidate(candidateRoot, config) {
   assertBuilderIdle(config)
+  assertNativeCacheSafe()
   const updaterSource = path.join(candidateRoot, 'ops/updater/updater.mjs')
   const trustedUpdaterSha256 = sha256RegularFile(updaterSource, 2 * 1024 * 1024, '候选更新器')
   const builderHome = path.join(candidateRoot, '.builder-home')
@@ -629,28 +840,55 @@ async function prepareCandidate(candidateRoot, config) {
   const environment = {
     HOME: builderHome,
     PATH: `${path.dirname(config.npmPath)}:/usr/local/bin:/usr/bin:/bin`,
-    NODE_ENV: 'development',
+    NODE_ENV: 'production',
     npm_config_audit: 'false',
     npm_config_fund: 'false',
     npm_config_update_notifier: 'false',
     npm_config_cache: path.join(candidateRoot, '.npm-cache'),
   }
+  // 先算缓存键：用 lockfile 的 version + integrity 作为源码身份，
+  // 这样在装依赖之前就能判断有没有可直接复用的编译产物。
+  const nativePlan = []
+  for (const moduleName of NATIVE_CACHE_MODULES) {
+    const cache = nativeCacheKey(candidateRoot, moduleName)
+    if (!cache) continue
+    nativePlan.push({ moduleName, cache, reusable: cacheContainsBuild(nativeCachePath(moduleName, cache.key)) })
+  }
   let buildError = null
   try {
-    await runFixed(config.npmPath, ['ci', '--include=dev'], {
-      cwd: candidateRoot,
-      timeout: config.installTimeoutMs,
-      env: environment,
-      uid: config.builderUid,
-      gid: config.builderGid,
-    })
-    await runFixed(config.npmPath, ['run', 'check'], {
-      cwd: candidateRoot,
-      timeout: config.installTimeoutMs,
-      env: environment,
-      uid: config.builderUid,
-      gid: config.builderGid,
-    })
+    // 能复用编译产物时跳过 install 脚本：依赖安装本身只要 5-10 秒，
+    // node-gyp 编译（含 prebuild-install 超时）的 100 秒以上完全省掉。
+    const canSkipScripts = nativePlan.length > 0 && nativePlan.every(plan => plan.reusable)
+    await installDependencies(candidateRoot, config, environment, canSkipScripts)
+    let reusedAll = true
+    for (const plan of nativePlan) {
+      if (!plan.reusable) {
+        reusedAll = false
+        continue
+      }
+      restoreNativeBuild(candidateRoot, plan.moduleName, plan.cache)
+      try {
+        verifyNativeModuleLoads(candidateRoot, plan.moduleName, config, environment)
+      } catch {
+        // 缓存二进制加载不起来（ABI 变了、依赖升级了），这个模块退回编译。
+        plan.reusable = false
+        reusedAll = false
+      }
+    }
+    // 跳过脚本却没有可用缓存时必须重装，否则这个原生模块根本没有二进制。
+    if (canSkipScripts && !reusedAll) {
+      await installDependencies(candidateRoot, config, environment, false)
+    }
+    for (const plan of nativePlan) {
+      if (plan.reusable) continue
+      try {
+        verifyNativeModuleLoads(candidateRoot, plan.moduleName, config, environment)
+        persistNativeBuild(candidateRoot, plan.moduleName, plan.cache)
+      } catch (error) {
+        throw updaterError(`候选版本的原生模块 ${plan.moduleName} 无法加载：${error.message}`, 'NATIVE_MODULE_UNUSABLE')
+      }
+    }
+    await verifyCandidateSemantics(candidateRoot, config, environment)
   } catch (error) {
     buildError = error
   } finally {
