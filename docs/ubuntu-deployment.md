@@ -37,6 +37,12 @@
 ├── current -> releases/<...>         # 主服务当前版本
 └── previous -> releases/<...>        # 最近可回退版本
 /var/lib/lenovo-store-operations/      # 持久化业务数据
+├── store/store.sqlite                 # 统一数据库（含 sample_devices_* 表）
+├── secrets/receipt-ocr.key            # OCR 加密密钥
+├── sample-devices/uploads/            # Agent 与分发文件上传目录
+└── resources/                         # 可替换的外部资源，替换即生效
+    ├── agent/LanAgent.exe             # 分发的 Windows Agent
+    └── installer/                     # 部署包内说明与 bat 脚本
 /var/backups/lenovo-store-operations/  # 一致性备份
 /var/lib/lenovo-store-updater/         # root-owned 状态与事务 journal
 /run/lenovo-store-updater/             # Web→systemd 受限单任务 IPC
@@ -145,6 +151,7 @@ LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations
 LENOVO_STORE_BACKUP_DIR=/var/backups/lenovo-store-operations
 # LENOVO_STORE_GITHUB_TOKEN=<固定仓库只读 GitHub token>
 # LENOVO_STORE_MAINTENANCE_TOKEN=<可选，至少24字符的随机维护令牌>
+LENOVO_STORE_ENROLL_SECRET=<32位十六进制注册密钥>
 ```
 
 说明：
@@ -156,6 +163,41 @@ LENOVO_STORE_BACKUP_DIR=/var/backups/lenovo-store-operations
 - 无令牌模式仍要求 `X-Lenovo-Store-Maintenance: 1`，浏览器请求仍执行同源检查，但这两项不是身份认证，不能替代防火墙；任何能访问服务端口并构造请求的客户端都可能下载或覆盖数据库；
 - 可用 `openssl rand -base64 32` 生成维护令牌，并只写入权限 `0600` 的环境文件；页面令牌只保存在当前内存；
 - 如果使用 `OCR_CONFIG_ENCRYPTION_KEY`，应将它放在权限受控的环境文件或密钥管理系统中，不要提交到 Git。
+
+#### 样机设备管理（可选板块）
+
+只在使用「样机设备管理」时需要以下变量，其余板块可忽略：
+
+```ini
+LENOVO_STORE_ENROLL_SECRET=<设备注册密钥，必填才有完整功能>
+# LENOVO_STORE_HEARTBEAT_WINDOW=90
+# LENOVO_STORE_OFFLINE_SELF_DESTRUCT_HOURS=0
+# LENOVO_STORE_AGENT_EXE=/var/lib/lenovo-store-operations/resources/agent/LanAgent.exe
+# LENOVO_STORE_INSTALLER_DIR=/var/lib/lenovo-store-operations/resources/installer
+```
+
+用 `openssl rand -hex 16` 生成注册密钥。**未配置 `LENOVO_STORE_ENROLL_SECRET` 时新设备无法注册，管理端「生成部署包」会直接返回 500**，启动日志也会打印警告。该密钥与设备令牌相互独立：注册密钥用于首次接入与令牌轮换，设备令牌用于每次心跳与 WebSocket 握手；注册密钥泄露意味着任何能访问 `8900/tcp` 的主机都能把自己注册成设备，因此必须与维护令牌一样靠防火墙限制来源。
+
+Agent 与分发文件上传目录为 `$LENOVO_STORE_DATA_DIR/sample-devices/uploads/`，服务账号需有写权限。安装说明与 `reinstall.bat`、`reset-password.bat` 从 `$LENOVO_STORE_INSTALLER_DIR` 读取（默认 `resources/installer`），属于外部资源文件：替换文件后重新生成部署包即可生效，**不需要发版**。
+
+Agent 的心跳与 WebSocket 与管理端共用 `8900` 端口，不再有独立 Agent 端口。若前面有反向代理，必须额外转发 WebSocket 并保留 `Upgrade` 与 `X-Forwarded-For` 头，否则样机只能心跳、无法接收任何指令（表现为设备显示在线但下发指令无反应）。Nginx 示例：
+
+```nginx
+location /ws/ {
+    proxy_pass http://127.0.0.1:8900;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_read_timeout 3600s;
+}
+location / {
+    proxy_pass http://127.0.0.1:8900;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
 
 ### 4.3 创建 systemd 服务
 
@@ -266,7 +308,9 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 
 health 必须返回 `persistentDataConfigured: true`、`updateInstallationEnabled: true`，且 `build.version`、40 位 `build.commit` 与 `current/release-info.json` 完全一致。无维护令牌时还应显示 `maintenanceAccessMode: trusted-lan` 和 `updateAuthenticationRequired: false`；配置维护令牌时后者必须为 `true`。
 
-从 `0.6.0` 起，updater 按目标版本分级校验 health 契约：`v0.6.0` 及以上要求五个业务模块（含销售业绩报表）加统一数据库 `store/store.sqlite`；`v0.5.0`–`v0.5.x` 仍按五模块加四套独立库校验；更早版本使用四模块兼容视图。跨版本升级时不会因模块集合或数据库布局变化被判为失败，也不会误回滚。
+updater 按目标版本分级校验 health 契约：`v0.9.0` 及以上要求六个业务模块（新增 `sample-devices` 样机设备管理）加统一数据库 `store/store.sqlite`；`v0.6.0`–`v0.8.x` 要求五个业务模块加统一库；`v0.5.0`–`v0.5.x` 仍按五模块加四套独立库校验；更早版本使用四模块兼容视图。跨版本升级时不会因模块集合或数据库布局变化被判为失败，也不会误回滚。
+
+新增板块时**必须同步发布包内 `ops/updater/updater.mjs` 的 `CURRENT_MODULE_IDS` 并重装更新器**。该白名单是硬编码的，遗漏新模块会让健康检查判定模块集合不符而自动回滚，表现为升级反复退回上一版本。`sample-devices` 就曾因漏加白名单导致 `0.9.0` 首次在线升级回滚。
 
 ## 5. 现有服务器无损迁移
 
@@ -397,7 +441,7 @@ curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 3. 无维护令牌的可信局域网可直接继续；配置维护令牌时按页面提示输入，令牌只保存在当前页面内存；
 4. 在二次确认框完整输入“安装”；
 5. 保持页面打开，观察排队、备份、下载、验签、构建、切换、重启、连续健康检查和完成/回滚阶段；
-6. 完成后核对 health 的版本和完整 commit，并检查五个业务模块、统一数据库及关键业务记录。
+6. 完成后核对 health 的版本和完整 commit，并检查六个业务模块、统一数据库及关键业务记录。
 
 Web 服务只提交 tag 和任务编号，不接收 URL、commit、Shell 参数或任意历史版本。root updater 会重新从固定 GitHub Release 获取 `manifest.json`、Ed25519 签名、`SHA256SUMS` 和发布包；只有四项身份与摘要绑定、候选构建检查和升级前备份全部成功后才切换 `current`。健康检查失败会自动把 `current`、`previous` 恢复到旧 release 并重新验证；数据目录不会随代码切换。
 
@@ -587,7 +631,7 @@ sudo journalctl -u lenovo-store-backup.service -n 100 --no-pager
 
 在线恢复有以下边界：
 
-- 三个持久化模块没有跨模块事务，因此不提供“一键恢复全部”；某模块失败不会回滚之前已明确成功的其他模块；
+- 四个持久化模块没有跨模块事务，因此不提供“一键恢复全部”；某模块失败不会回滚之前已明确成功的其他模块；
 - 仓库货品、周边价签和付款凭证在统一库的各自事务中替换已知表；每个模块恢复前先严格校验完整数据集，失败保留恢复前数据；
 - 付款凭证存在进行中的 OCR 识别或配置保存时会拒绝恢复；成功后会重建 OCR runtime；
 - 本机密钥备份会先用包内密钥解密，再用目标服务器当前有效密钥重新加密，不直接覆盖目标密钥；
@@ -808,7 +852,7 @@ sudo systemctl start lenovo-store-operations.service
 curl -fsS http://127.0.0.1:8900/api/system/health | python3 -m json.tool
 ```
 
-保持 updater path 停止，核对 health 的版本/完整 commit 与回退目标 `release-info.json`，并检查六套前端构建产物（Portal + 5 个业务 SPA）、统一数据库和业务数据。验收失败时不要连续交换链接。
+保持 updater path 停止，核对 health 的版本/完整 commit 与回退目标 `release-info.json`，并检查七套前端构建产物（Portal + 6 个业务 SPA）、统一数据库和业务数据。验收失败时不要连续交换链接。
 
 验收成功后，再次停止主服务并检查三个状态文件；确认验收期间没有新请求后，先恢复 path，再启动主服务：
 
@@ -914,9 +958,10 @@ volumes:
 - [ ] 健康接口 `persistentDataConfigured` 和 `updateInstallationEnabled` 均为 `true`；
 - [ ] 四个 SQLite 板块 `databaseConnected` 为 `true`；
 - [ ] 各业务板块的记录数量和最新记录正确，销售业绩报表统计结果与源数据一致；
-- [ ] health/updater 已识别五个业务模块、统一数据库和六套前端构建产物（Portal + 5 个业务 SPA）；
+- [ ] health/updater 已识别六个业务模块、统一数据库和七套前端构建产物（Portal + 6 个业务 SPA）；
 - [ ] 付款凭证 OCR 配置可用；
 - [ ] 员工工牌页面可访问，并理解其数据不会持久化；
+- [ ] 使用样机设备管理时：`LENOVO_STORE_ENROLL_SECRET` 已配置、管理端可生成部署包、样机接入后显示在线且「长连接在线」为真，并能下发「采集设备信息」拿到结果；
 - [ ] 手动备份成功生成时间戳目录和 `manifest.json`；
 - [ ] systemd 定时备份已启用；
 - [ ] UFW/VLAN/ACL 只允许可信网段访问，`8900/tcp` 未暴露公网；

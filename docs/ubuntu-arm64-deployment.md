@@ -711,7 +711,7 @@ sudo journalctl -u lenovo-store-operations.service -n 100 --no-pager
 2. version 是预期版本，当前为 `0.5.0`；
 3. commit 是完整 40 位提交；
 4. 数据目录是 `/var/lib/lenovo-store-operations`，不是 checkout 内 `data/`；
-5. Portal 和五套业务 SPA 都可打开，共六套前端构建产物；
+5. Portal 和六套业务 SPA 都可打开，共七套前端构建产物；
 6. 统一数据库健康；
 7. 迁移场景下，三个业务板块的记录总数、最新记录和抽样内容与旧系统一致；
 8. 付款凭证页面可读取现有 OCR 配置，密钥没有丢失；
@@ -1035,7 +1035,7 @@ sudo journalctl -u lenovo-store-updater.service -n 300 --no-pager
 sudo journalctl -u lenovo-store-operations.service -n 200 --no-pager
 ```
 
-必须核对目标 version、完整 commit、外部数据目录、六套前端构建产物（Portal + 5 个业务 SPA）、统一数据库，以及各业务板块的记录数量和最新记录。更新只切换代码；业务数据继续使用同一外部目录。
+必须核对目标 version、完整 commit、外部数据目录、七套前端构建产物（Portal + 6 个业务 SPA）、统一数据库，以及各业务板块的记录数量和最新记录。更新只切换代码；业务数据继续使用同一外部目录。
 
 ## 18. updater 安全与恢复机制
 
@@ -1220,7 +1220,7 @@ curl -fsS http://127.0.0.1:8900/api/system/health \
   | python3 -m json.tool
 ```
 
-保持 `lenovo-store-updater.path` 停止，人工核对 health 的 version/完整 commit 与回退目标 `release-info.json` 一致，并检查六套前端构建产物（Portal + 5 个业务 SPA）、统一数据库、各业务板块记录和 OCR。若验收失败，不要连续交换链接，应使用控制台、可信 release 和第 21 节恢复。
+保持 `lenovo-store-updater.path` 停止，人工核对 health 的 version/完整 commit 与回退目标 `release-info.json` 一致，并检查七套前端构建产物（Portal + 6 个业务 SPA）、统一数据库、各业务板块记录和 OCR。若验收失败，不要连续交换链接，应使用控制台、可信 release 和第 21 节恢复。
 
 业务验收成功后，先再次停止主服务并检查三类状态文件；确认没有人在验收期间提交更新请求后，先启动 path，再启动主服务。这一顺序消除“检查后、恢复 path 前”由 Web 服务创建请求的竞态：
 
@@ -1416,7 +1416,7 @@ curl -I --connect-timeout 10 https://nodejs.org/
 - [ ] 两个目录都不是符号链接且不与代码重叠；
 - [ ] 统一数据库完整性检查通过；
 - [ ] OCR 密钥与付款凭证数据库成对保留；
-- [ ] health、六套前端构建产物（Portal + 5 个业务 SPA）、五个业务模块和统一数据库均正常；
+- [ ] health、七套前端构建产物（Portal + 6 个业务 SPA）、六个业务模块和统一数据库均正常；
 - [ ] 各业务板块记录数量和最新记录已人工核对，销售业绩报表统计结果正确；
 - [ ] backup service 手动运行成功且已检查 manifest；
 - [ ] daily timer 已启用；

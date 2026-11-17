@@ -2,6 +2,64 @@
 
 本文件记录联想门店运营系统每次更新的日期和主要内容，最新记录排列在最前。功能、配置、部署方式或文档发生变化时，应同步更新相关说明，并在此补充一条记录。
 
+## 2026-11-17
+
+- 发布 `0.10.1`：样机设备管理界面精简，并修正设备 IP 自动更正。
+- 设备列表去掉分组列，分组改为筛选器选择；顶部多余间距移除；排序固定为在线置顶、离线沉底，同状态内按 IP 数值升序，IP 比较改用整数换算，`192.168.2.9` 不再排到 `192.168.2.10` 之后。
+- 设备 IP 改为每次心跳自动校正：Agent 自报地址优先，为回环、链路本地或非法 IPv4 时退回连接来源地址，两者都不可用时保留原 IP 不覆盖。设备断网期间仍显示最后一次有效地址，恢复联网后自动更新，不再需要人工改 IP。
+- 新增 `isUsableDeviceIp` 校验，排除 `127.x.x.x`、`169.254.x.x` 和全零地址。
+- 配套 Agent `1.7.6` 修复心跳响应解析：服务端统一用 `{code, data, msg}` 信封返回，`device_id`、`token`、`commands` 都在 `data` 内，而 Agent 此前在顶层解析。`json.Unmarshal` 对缺失字段不报错只给零值，导致 `device_id` 永远为空、WebSocket 连不上、指令全部下发失败且日志无报错。现在先解信封再解 `data`。
+
+## 2026-11-17
+
+- 发布 `0.10.0`：样机 Agent 契约合并到管理端单端口。
+- 此前 Agent 心跳与 WebSocket 需要独立端口，部署包中必须单独配置 Agent 端口。现在全部收敛到管理端 8900：Agent 心跳 `/api/agents/heartbeat`、恢复上报 `/api/agents/recover`、WebSocket `/ws/agents/{device_id}` 与 `/ws/tasks/{task_id}` 都由主服务直接提供。
+- 合并后有三处必须同时满足的约束：Agent 契约路由要挂在 `/api` 的 404 兜底之前；挂载前需通过 `app.locals.sampleDevicesDb` 注入数据库；WebSocket 必须绑定 `app.listen()` 返回的同一个 `httpServer`。
+- Agent 路径前缀显式清空 `Access-Control-Allow-Origin`，不参与门户同源 CORS，避免向任意来源暴露管理端接口。
+- 部署包 `deploy.conf` 中的 `server=` 改为写门户地址，不再写独立 Agent 端口。
+- 反向代理除 `/`、`/assets/`、`/modules/`、`/api/` 外，还需转发 `/ws/` 并保留 `Upgrade` 与 `X-Forwarded-For`，否则设备只能心跳、无法接收指令。
+
+## 2026-11-17
+
+- 发布 `0.9.4`：样机部署包中的安装说明改为读取 `installerDir` 外部文件。
+- 说明文档与 `reinstall.bat`、`reset-password.bat` 优先从 `LENOVO_STORE_INSTALLER_DIR/安装说明.txt` 读取，文件不存在时才回退内置文案。运维修改文案或脚本时直接替换 `/var/lib/lenovo-store-operations/resources/installer/` 下的文件即可，无需发版。
+- 打包时统一把换行规范化为 CRLF，说明文档补 UTF-8 BOM，避免 Windows 记事本打开乱码。
+
+## 2026-11-16
+
+- 发布 `0.9.3`：修复部署包安装脚本闪退与服务器端口写错。
+- `reinstall.bat` 调用 Agent 可执行文件时漏了 `/silent`，安装完成后终端窗口一闪而过；同时补上标签段落拆分，避免 `goto` 落在括号块内失效。
+- 按回车无法关闭窗口：空参数时 `echo %~1` 会打印「ECHO 处于打开状态」，结尾 `exit /b` 不可靠。改为空参数走独立分支，并以 `pause >nul` 加 `goto :eof` 结束。
+- 部署包中 `deploy.conf` 的 `server=` 误写成 Agent 端口，导致设备注册到错误地址；修正为门户地址。
+- 覆盖安装时必须先彻底清理 `C:\Program Files\LanAgent` 再安装新版本，否则残留的旧 Agent 会让安装过程直接退出。
+
+## 2026-11-16
+
+- 发布 `0.9.2`：下发指令动作名统一转为小写，修复样机不执行指令。
+- 数据库中的任务类型是大写（`SHUTDOWN`、`SYSPREP` 等），而 Agent 按小写动作名分发。此前下发大写动作名，Agent 全部落入 default 分支静默忽略，表现为指令已送达但样机毫无反应。现在 `sendCommand` 在发送前统一 `toLowerCase()`。
+- 创建任务时 `task_type` 大小写不敏感，内部统一归一到大写。
+
+## 2026-11-16
+
+- 发布 `0.9.1`：兼容迁移前的 UUID 设备标识，修复指令无法下发。
+- 从旧 Python 项目迁移后设备主键由 UUID 改为自增整数，但老 Agent 配置里存的仍是 UUID，WebSocket 路径 `/ws/agents/{uuid}` 无法匹配数字主键，握手直接被拒。
+- 新增 `legacy_id` 列保存迁移前的 UUID，WebSocket 路径解析改为依次尝试自增主键、令牌、`legacy_id` 三种写法。
+- `ensureDeviceColumns` 在启动时补齐后加的列，因为 `CREATE TABLE IF NOT EXISTS` 不会修改已存在表的结构。
+
+## 2026-11-16
+
+- 发布 `0.9.0`：新增「样机设备管理」板块，接管原独立项目 `batch-shutdown-assistant`（Python FastAPI 管理端 + Go Agent）的全部局域网设备管理能力。原项目停止维护，功能并入本系统。
+- 设备台账：自动注册与心跳，采集主机名、IP、序列号、机型、CPU、内存、磁盘、系统版本和重装次数；支持编辑、批量删除、批量分组、按 IP 段导入和 CSV 导入。
+- 任务下发：状态检查、采集设备信息、弹窗提示、Sysprep 关机、Sysprep 重启、重启、关机、清空账户密码、远程升级、文件分发。
+- 离线设备不丢任务：子任务保持待发状态，设备上线或长连接恢复后自动补发；父任务终态由子任务聚合，全成功为完成，含取消为已取消，其余为失败。
+- 远程升级任务带 5 分钟超时保护，超时子任务标记 `timeout` 并将任务判为失败，避免任务永久挂起。
+- 审计日志覆盖设备注册、收养、增删改、导入、任务创建与取消、文件上传、部署包生成和心跳拒绝，支持按动作筛选和分页。
+- 部署包一键生成：包含 Agent、写入服务器地址与注册密钥的 `deploy.conf`、安装说明、卸载、覆盖安装与重置密码脚本。
+- 用内置 ZIP 写入器替换 `adm-zip`，修复发布审计失败。
+- 数据表使用 `sample_devices_` 前缀存入统一库 `store.sqlite`，包含设备、任务、任务结果、审计和设置五张表，不读写其他模块数据。
+- 新增四个环境变量：`LENOVO_STORE_ENROLL_SECRET`、`LENOVO_STORE_HEARTBEAT_WINDOW`、`LENOVO_STORE_OFFLINE_SELF_DESTRUCT_HOURS`、`LENOVO_STORE_AGENT_EXE`。
+- 在线更新器的 `CURRENT_MODULE_IDS` 同步加入 `sample-devices`；遗漏该白名单会导致升级时健康检查判定模块集合不符而自动回滚。
+
 ## 2026-11-15
 
 - 发布小版本 `0.8.3`：三个标签板块全局更名为「电脑标签打印」「外设价签打印」「出样标签打印」。

@@ -1,22 +1,23 @@
 # 联想门店运营系统
 
-联想门店运营系统将五个业务边界彼此独立的门店工具统一到一个品牌、一个入口、一个服务进程和一个维护仓库中：
+联想门店运营系统将六个业务边界彼此独立的门店工具统一到一个品牌、一个入口、一个服务进程和一个维护仓库中：
 
 1. 电脑标签打印：管理并打印仓库电脑 SKU、配置和颜色标签；
 2. 外设价签打印：管理并打印电脑、手机、平板及周边商品价格标签；
 3. 付款凭证打印：合成客户付款后的商务存根和购物小票，辅助识别并记录金额；
 4. 员工工牌制作：批量制作员工工牌并完成 A4 排版与打印；
-5. 销售业绩报表：统计销售流水并展示区间汇总、趋势、周期对比和商品明细。
+5. 销售业绩报表：统计销售流水并展示区间汇总、趋势、周期对比和商品明细；
+6. 样机设备管理：通过局域网 Agent 集中管理局域网样机，远程下发关机、重启、Sysprep、升级、文件分发等指令。
 
-项目默认通过 `http://localhost:8900` 提供统一 Portal 和五个独立业务 SPA，共六个前端构建产物。Portal 工作台首页集中展示全部业务板块，并在“业务板块”标题右侧提供当前项目的 GitHub 仓库入口；该入口会在新标签页中打开，不影响当前工作台。电脑标签打印、外设价签打印和付款凭证打印拥有独立 API 与数据表；销售业绩报表读取付款凭证已记录的销售流水，只做只读统计；员工工牌板块完全在浏览器内运行，不创建 API、数据库或本地持久化数据。
+项目默认通过 `http://localhost:8900` 提供统一 Portal 和六个独立业务 SPA，共七个前端构建产物。Portal 工作台首页集中展示全部业务板块，并在“业务板块”标题右侧提供当前项目的 GitHub 仓库入口；该入口会在新标签页中打开，不影响当前工作台。电脑标签打印、外设价签打印、付款凭证打印和样机设备管理拥有独立 API 与数据表；销售业绩报表读取付款凭证已记录的销售流水，只做只读统计；员工工牌板块完全在浏览器内运行，不创建 API、数据库或本地持久化数据。
 
-> 本项目只统一联想品牌、入口、部署、健康检查和维护方式，不合并各业务的数据模型。三个持久化业务在同一个 SQLite 文件中按模块前缀使用各自独立的表，表结构、索引和读写互不影响；员工工牌使用独立的浏览器内 A4 打印流程，销售业绩报表不拥有独立存储，不接触其他板块数据。
+> 本项目只统一联想品牌、入口、部署、健康检查和维护方式，不合并各业务的数据模型。四个持久化业务在同一个 SQLite 文件中按模块前缀使用各自独立的表，表结构、索引和读写互不影响；员工工牌使用独立的浏览器内 A4 打印流程，销售业绩报表不拥有独立存储，不接触其他板块数据。
 
 ## 更新记录
 
 每次功能、配置、部署方式或文档更新都必须同步维护 GitHub 仓库文档，并按 `YYYY-MM-DD` 记录更新日期和主要内容。最新更新与完整历史请查看 [CHANGELOG.md](CHANGELOG.md)。
 
-当前最新记录：`2026-11-14`，发布 `0.7.8`：镜像加速扩展到清单、签名与校验和。0.7.6 只让发布包走镜像，`manifest.json` 等小文件仍走官方，但实测官方连 808 字节的 manifest 都要 10 秒以上并最终失败，升级仍卡在下载并报 `fetch failed`。现在三类小文件也经镜像获取（超时 30 秒），失败自动回退官方；签名校验与 SHA-256 校验保持不变，镜像返回伪造内容会被拒绝，最坏只是升级失败。`0.7.7`：付款凭证「快速记账」支持选择销售日期，可直接补录漏记的历史销售。此前界面固定按当日记账，接口虽一直支持 `saleDate`（OCR 识别到日期时会带上），但页面没有入口。现在标题右侧为日期选择器，默认今天；选择过去日期时显示「补录 · 将记录到 X月X日，不会计入今日销售」，保存后提示已补录；日期限制近 90 天且不可选未来，保存后复位为今天；「最近记录」查询范围由 2 天扩大到 30 天，补录后立即可见。纯前端改动，接口与数据库未变。`0.7.6`：更新器新增可选的发布包下载镜像。国内网络直连 GitHub 下载 3.46MB 发布包实测仅 18–40 KB/s，最差 145 秒仅下到 2.65MB，而 `downloadTimeoutMs` 硬上限 120 秒无法调大，导致升级反复报 `fetch failed`。新增 `artifactMirrorPrefix` 配置项，填写加速镜像后发布包走镜像（实测 840 KB/s、4.2 秒完成、SHA-256 与清单一致），留空则维持官方直连。镜像只用于发布包本体，`manifest.json`、签名与 `SHA256SUMS` 仍固定走 GitHub 官方，信任根不变；镜像返回伪造内容会被签名与摘要校验拦下，失败自动清理并回退直连。前缀强制 https、禁含账号信息、禁止指向 GitHub 官方域名。`install-updater.sh` 重装时保留已有镜像配置。`0.7.5`：电脑标签打印新增入库时间（仅打印不落库），左侧列表改为可编辑卡片。标签在配置下方新增入库时间行，10pt/800/红色，四行间距统一 0.55mm；配置行提升至 8.5pt/800，色块 14mm→13mm。A4 边距左右 7mm、上下 6mm，列间距 3.6mm、行间距 2.6mm，标签本体 46×45mm 与每页 24 个不变。入库时间仅用于打印、不写入数据库，只保存在页面内存中，因此不改表结构与接口。左侧列表改为双列卡片，勾选框在左上、颜色在右上，底部可直接编辑数量与入库时间，操作按钮置于分割线下靠左，窄屏自动单列。`0.7.4`：修复更新器漏装依赖文件导致启动崩溃。`updater.mjs` import 了同目录的 `error-hints.mjs`，但 `install-updater.sh`、`installSignedUpdater()` 与发布包必检清单都只处理 `updater.mjs`，导致 0.7.1 环境下更新器启动报 `ERR_MODULE_NOT_FOUND` 并持续失败，升级任务停在「等待更新器领取任务」。三处已全部补齐，自更新时以临时文件加 `rename` 原子写入（0644、属主 root）后再替换主程序。`0.7.3`：升级任务新增领取超时机制。此前升级请求写入队列后没有任何超时回收，更新器若没在运行（服务被停用、崩溃或目录权限不对），任务会一直停在「等待更新器领取任务」且「已用时」无限累加，实际永远不会推进。现在超过 3 分钟未被领取，服务端判定任务失败并返回 `UPDATE_CLAIM_TIMEOUT`，同时删除队列中的请求文件，避免更新器晚些恢复运行后领走旧请求真的执行安装；界面摘要改为「更新器超过 3 分钟未领取任务，升级已自动取消」，计时停止，并引导检查 `systemctl status lenovo-store-updater`、核对 `/run/lenovo-store-updater` 权限与 `journalctl -u lenovo-store-updater` 日志。超时清理后可立即重新发起升级，不再被 409 `UPDATE_ALREADY_QUEUED` 挡住。`0.7.2`：修正两个标签打印模块的页边距。电脑标签打印的 A4 容器内边距由 `0 8mm 8mm` 改为 `6mm 8mm 8mm`，第一排不再顶住纸张上沿；顶部取 6mm 使整页占用 295mm，保留 2mm 余量，避免打印误差把最后一排挤到第二页。外设价签打印的打印区由贴顶改为 `top: 5mm`、高 200mm，并以 `row-gap: .67mm` 让 7 行标签纵向均匀铺开，上下留白由「顶部 0mm / 底部 14mm」调整为各约 5mm；70mm × 28mm 标签尺寸与每页 28 张保持不变。`0.6.9`：销售业绩报表排行图布局与商品名修正。修正 OCR 大小写误识别（`小新PrO16` → `小新Pro16`，`小新Air15`、`小新Plus16` 同理归一），并修复 `YOGA Pro14s`、`拯救者Y9000P` 型号末尾字符被误剥离的问题。「月度销售额排行」与「商品销售额排行」改为左右各占一半并排展示，均取销售额前 6 名；横轴上限改为最大值向上取整后加 5 万，避免最长柱条顶到绘图区右边界；商品明细表格拆为独立全宽表格。只改前端展示，数据库仍保留 OCR 原始名称。`0.6.8`：销售业绩报表商品名称展示优化。新增「商品销售额排行 Top 5」横向条形图，Y 轴使用中等截取的商品短名（按品牌系列提取「品牌 + 型号」，如 `Legion Y7000`、`小新Pro16`），悬停显示完整名称与明细；排行表格改为「商品名称 + 配置」两列，名称完整不截断、配置码独立成列并以浅灰字呈现。名称解析统一剥离 OCR 重复追加的 `[型号:...]` 后缀。只改前端展示，数据库仍保留 OCR 原始名称。`0.6.7`：界面交互调整。电脑标签打印取消默认全选（打开页面、导入 Excel、恢复数据库后均不再自动勾选全部商品），并把「添加日期」列移到「操作」列之前；Portal 侧边栏新增收起/展开按钮，收起后宽度由 232px 缩至 76px 只保留图标，状态记入 `localStorage` 保持；侧边栏图标统一为板块首字（总/仓/周/收/员/销/系）。`0.6.6`：升级过程可视化，只改前端展示。系统状态页把安装过程拆成 10 个步骤并显示各自状态，新增百分比进度条、当前阶段说明与已用时；修复升级期间服务重启导致进度停止刷新的问题，改为安装期间持续重试并在恢复后自动接续；安装成功后显示常驻完成横幅（目标版本 + 总耗时），失败时进度条转为异常样式并保留错误原因。`0.6.5`：移除已失效的旧项目迁移脚本，无功能与数据变更。`scripts/migrate-legacy-data.js` 迁移的目标是被统一库取代的三个旧分库，新布局下已无法工作，故连同 `package.json` 的 `migrate:data` 入口、`check` 检查项与 `data-paths.js` 中仅供其使用的三个 `*_DATABASE_PATH` 常量一并移除，旧版分库路径至此从代码中完全清除；文档同步给出替代做法。`0.6.4`：修复定时备份任务长期备份过期数据的问题。`scripts/backup-data.js` 自统一数据库改造后仍指向已停止写入的三个旧版分库路径，导致 `lenovo-store-backup.service` 每次备份的都是历史遗留数据，真正在用的 `store/store.sqlite` 从未被备份；现改为直接备份统一库，并同步把凭据检测表名修正为带模块前缀的 `receipt_ocr_config`。`0.6.3`：代码清理版本，不影响业务功能、接口与数据，无数据迁移。删除备份快照中的恒真死代码块，合并 `persistence-service.js` 中与 `calendar-date.js` 重复的日期校验实现，清理统一数据库改造后遗留的三个废弃路径常量，销售报表改用统一 API 客户端以获得请求超时与统一错误封装。本次发布同时包含此前已合入但未发布到 Release 的更新器修复：systemd 模板 `RestrictSUIDSGID` 调整为 `false`，解决 CIX 等定制 ARM64 内核上 `tar` 解压返回 ENOSYS 导致在线安装中断的问题。`0.6.2` 修复付款凭证 OCR 商品明细长期为空的问题，新增列式分行小票解析，支持银联商务小票「商品名多行 + 单价/折扣/小计三行」版式，使 `receipt_sale_items` 正常写入并让销售业绩报表的商品明细页有数据。`0.6.1` 轮换 Release 签名密钥并重新签发正式 Release，新公钥指纹为 `6e3108efbd2b4951083bfbbc768e628917ef0d289a169a6f26956935ffeff7f6`，同时修正 `lenovo-store-backup.service` 中指向不存在 `current` 路径的 `WorkingDirectory`，恢复长期失败的定时备份。
+当前版本 `0.10.1`。`0.9.0` 将原独立项目 `batch-shutdown-assistant`（Python 管理端 + Go Agent）作为「样机设备管理」板块并入本系统；`0.10.0` 把 Agent 心跳与 WebSocket 合并到管理端同一端口，部署包不再需要单独配置 Agent 端口；`0.10.1` 精简设备列表界面、修正设备 IP 自动更正逻辑，并配套修复 Agent `1.7.6` 的心跳响应解析。最新更新与完整历史见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 板块说明
 
@@ -27,8 +28,9 @@
 | 付款凭证打印 | 将商务存根和购物小票合成到一张 A4，识别并记录付款金额 | `/#/receipt-assistant` | `/modules/receipt-assistant/` | `/api/receipt-assistant` | `store.sqlite` 中的 `receipt_*` 表 | 存根 + 小票，A4 打印或 PNG 下载 |
 | 员工工牌制作 | 批量录入员工姓名、岗位和二维码，生成 A4 工牌排版 | `/#/employee-badges` | `/modules/employee-badges/` | 无 | 无 | 54mm × 85mm，A4 横向，10 张/页 |
 | 销售业绩报表 | 统计销售流水，展示汇总、趋势、周期对比和商品明细 | `/#/sales-report` | `/modules/sales-report/` | `/api/sales-report` | 只读 `store.sqlite` 中的 `receipt_sales`、`receipt_sale_items` 表 | 页面内图表与明细表格，不打印 |
+| 样机设备管理 | 管理局域网样机台账，远程下发指令并采集硬件信息 | `/#/sample-devices` | `/modules/sample-devices/` | `/api/sample-devices`、`/api/agents` | `store.sqlite` 中的 `sample_devices_*` 表 | 页面内设备、任务与审计列表，无打印 |
 
-统一数据库固定位于 `$LENOVO_STORE_DATA_DIR/store/store.sqlite`，使用 WAL 模式、`busy_timeout = 5000` 并开启外键约束。三个持久化模块的表分别以 `computer_`、`price_`、`receipt_` 为前缀，表结构与索引互不影响，等价于原来每个模块一个独立库。
+统一数据库固定位于 `$LENOVO_STORE_DATA_DIR/store/store.sqlite`，使用 WAL 模式、`busy_timeout = 5000` 并开启外键约束。四个持久化模块的表分别以 `computer_`、`price_`、`receipt_`、`sample_devices_` 为前缀，表结构与索引互不影响，等价于原来每个模块一个独立库。
 
 仅在 `npm run dev`、`NODE_ENV=development` 或测试模式下，未设置 `LENOVO_STORE_DATA_DIR` 才会使用仓库内的 `data/`；生产启动缺少该变量会直接失败，防止新 release 静默创建空库。
 
@@ -120,6 +122,24 @@
 
 销售业绩报表不拥有独立存储，删除或卸载报表板块不会影响销售流水本身；流水仍由付款凭证模块维护。
 
+### 样机设备管理
+
+该板块接管原独立项目 `batch-shutdown-assistant` 的全部局域网样机管理能力。完整契约、数据模型与排障步骤见 [样机 Agent 协议与设备管理](docs/sample-devices-agent-protocol.md)。
+
+- 设备台账：自动注册与心跳、主机名/IP/序列号/机型/CPU/内存/磁盘/系统版本采集，支持编辑、批量删除、批量分组、按 IP 段导入和 CSV 导入；
+- 设备列表固定排序为在线置顶、离线沉底，同状态内按 IP 数值升序；IP 比较按整数换算，`192.168.2.9` 不会排到 `192.168.2.10` 之后；列表不设分组列，分组通过筛选器选择；
+- 手动修改主机名后会锁定该字段，之后 Agent 上报的主机名不再覆盖；
+- 设备 IP 每次心跳自动更正：优先采用 Agent 自报地址，自报地址为回环、链路本地或非法 IPv4 时退回连接来源地址，两者都不可用时保留原 IP 不覆盖，因此设备断网期间仍显示最后一次有效地址，恢复联网后自动更新；
+- 任务下发：状态检查、采集设备信息、弹窗提示、Sysprep 关机、Sysprep 重启、重启、关机、清空账户密码、远程升级、文件分发；
+- 离线设备不丢任务：子任务保持待发状态，设备上线或长连接恢复后自动补发；
+- 任务结果实时回传并在任务详情中按设备展示，单条输出超过 100000 字符截断；
+- 远程升级任务带 5 分钟超时保护，超时子任务标记为 `timeout` 并将任务判为失败，避免任务永久挂起；
+- 审计日志记录设备注册、收养、增删改、导入、任务创建与取消、文件上传、部署包生成与心跳拒绝等动作，支持按动作筛选和分页查看；
+- 部署包一键生成：包含 Agent、写入服务器地址与注册密钥的 `deploy.conf`、安装说明、卸载、覆盖安装与重置密码脚本；
+- Agent 心跳每 15 秒一次，WebSocket 长连接用于接收指令并回传结果，两者与管理端共用 8900 端口。
+
+该板块与其他五个板块只共用同一个服务进程和同一个 SQLite 文件，设备与任务表使用 `sample_devices_` 前缀，不读写其他模块数据。
+
 ## 系统架构
 
 ```text
@@ -134,24 +154,39 @@ Express 5 unified server
   |-- /modules/receipt-assistant  付款凭证打印 SPA
   |-- /modules/employee-badges    员工工牌制作 SPA（纯浏览器状态）
   |-- /modules/sales-report       销售业绩报表 SPA
+  |-- /modules/sample-devices     样机设备管理 SPA
   |-- /api/computer-labels        电脑标签打印 API
   |-- /api/price-labels           外设价签打印 API
   |-- /api/receipt-assistant      付款凭证 API
   |-- /api/sales-report           销售业绩报表 API（只读）
-  `-- /api/system                 健康检查与统一备份恢复 API
-         |
-         |-- $LENOVO_STORE_DATA_DIR/store/store.sqlite  统一数据库
-         |     |-- computer_*        电脑标签打印表
-         |     |-- price_*           外设价签打印表
-         |     `-- receipt_*         付款凭证与销售流水的表
-         `-- $LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key
+  |-- /api/sample-devices         样机设备管理 API
+  |-- /api/system                 健康检查与统一备份恢复 API
+  |
+  |-- Agent 契约（同一端口，独立鉴权，不走门户 CORS）
+  |     |-- /api/agents/heartbeat   Agent 心跳，15 秒一次
+  |     |-- /api/agents/recover     Sysprep 后恢复上报
+  |     |-- /api/agents/latest      最新 Agent 版本
+  |     |-- /ws/agents/{device_id}  Agent 指令通道
+  |     `-- /ws/tasks/{task_id}     任务结果实时推送
+  |
+  `-- $LENOVO_STORE_DATA_DIR/
+        |-- store/store.sqlite    统一数据库
+        |     |-- computer_*        电脑标签打印表
+        |     |-- price_*           外设价签打印表
+        |     |-- receipt_*         付款凭证与销售流水的表
+        |     `-- sample_devices_*  样机设备、任务、结果与审计表
+        |-- secrets/receipt-ocr.key OCR 加密密钥
+        |-- sample-devices/uploads/ Agent 与分发文件上传目录
+        `-- resources/installer/   部署包脚本与安装说明（外部文件，替换即生效）
 ```
 
-Portal 通过同源 iframe 加载五个独立业务 SPA。四套打印实现分别维护自己的纸张方向、毫米尺寸、分页和资源加载流程；员工工牌使用独立 iframe 打印 A4 横向页面，不向其他模块注入打印样式。所有模块的页面级打印内容统一从 A4 顶边开始向下排列，末页不再垂直居中或落在页面底部；标签、工牌和票据自身内部的固定布局保持独立。销售业绩报表为纯屏幕展示，不参与打印。
+Portal 通过同源 iframe 加载六个独立业务 SPA。四套打印实现分别维护自己的纸张方向、毫米尺寸、分页和资源加载流程；员工工牌使用独立 iframe 打印 A4 横向页面，不向其他模块注入打印样式。所有模块的页面级打印内容统一从 A4 顶边开始向下排列，末页不再垂直居中或落在页面底部；标签、工牌和票据自身内部的固定布局保持独立。销售业绩报表与样机设备管理为纯屏幕展示，不参与打印。
+
+样机 Agent 的 HTTP 与 WebSocket 与管理端复用同一个 `httpServer`，没有独立端口。Agent 契约路由必须挂在 `/api` 的 404 兜底之前，且挂载前要通过 `app.locals.sampleDevicesDb` 注入数据库；WebSocket 升级请求由 `server.on('upgrade')` 显式接管，只放行 `/ws/agents/*` 与 `/ws/tasks/*`。
 
 ## 前端视觉与打印隔离
 
-六个前端（Portal + 五个业务 SPA）通过 `@lenovo-store/shared/theme.css` 使用同一套屏幕设计令牌，并共享用户指定的红色联想 SVG Logo，统一字体、画布、色板、间距、圆角、阴影、卡片、表单和按钮。Portal 将板块工具栏与 iframe 组合成一个完整工作区，五个业务 SPA 仍可通过各自地址独立开发和打开。
+七个前端（Portal + 六个业务 SPA）通过 `@lenovo-store/shared/theme.css` 使用同一套屏幕设计令牌，并共享用户指定的红色联想 SVG Logo，统一字体、画布、色板、间距、圆角、阴影、卡片、表单和按钮。Portal 将板块工具栏与 iframe 组合成一个完整工作区，六个业务 SPA 仍可通过各自地址独立开发和打开。
 
 共享主题遵循以下边界：
 
@@ -162,6 +197,7 @@ Portal 通过同源 iframe 加载五个独立业务 SPA。四套打印实现分�
 - 付款凭证继续通过 Canvas 合成图片，并在临时隔离 iframe 中打印 A4；
 - 员工工牌通过独立 DOM/CSS 打印文档维护 54mm × 85mm 工牌、A4 横向 5×2 网格和裁切边界；
 - 销售业绩报表使用 ECharts 渲染趋势与对比图表，只参与屏幕显示，不定义打印样式；
+- 样机设备管理为纯屏幕表格与对话框界面，不定义打印样式；
 - 统一的是屏幕操作体验，不是四种打印文档的几何尺寸或业务模型。
 
 ## 技术栈
@@ -176,7 +212,10 @@ Portal 通过同源 iframe 加载五个独立业务 SPA。四套打印实现分�
 - better-sqlite3 `12.0.0`；
 - Multer `2.4.0`；
 - Sharp `0.35.5`；
-- SheetJS `0.20.3`。
+- SheetJS `0.20.3`；
+- `ws`（样机 Agent WebSocket 指令通道）。
+
+样机设备管理的 Windows 侧 Agent 是一个独立的 Go 程序 `LanAgent.exe`，不在本仓库内构建，通过管理端上传或直接替换 `agent/LanAgent.exe` 分发。
 
 ## 目录结构
 
@@ -189,10 +228,13 @@ lenovo-store-operations/
 │   ├── receipt-assistant/      # 付款凭证打印 SPA
 │   ├── employee-badges/        # 员工工牌制作 SPA（无持久化）
 │   ├── sales-report/           # 销售业绩报表 SPA（只读统计）
-│   └── server/                 # Express 服务、统一数据库和四个后端模块
+│   ├── sample-devices/         # 样机设备管理 SPA
+│   └── server/                 # Express 服务、统一数据库和后端模块
+│       └── src/modules/sample-devices/   # Agent 契约、任务、审计与部署包
 ├── packages/
 │   └── shared/                 # 板块元数据、共享屏幕主题与联想 Logo
 ├── docs/
+│   ├── sample-devices-agent-protocol.md # 样机 Agent 契约、数据模型与排障
 │   ├── ubuntu-arm64-deployment.md # Ubuntu ARM64 逐条部署与恢复手册
 │   └── ubuntu-deployment.md    # 通用 Ubuntu 持久化与恢复指南
 ├── ops/
@@ -210,6 +252,8 @@ lenovo-store-operations/
 ```
 
 `data` 下的数据库、WAL/SHM 文件和密钥均被 `.gitignore` 排除，不会提交到 GitHub。
+
+样机相关的分发文件**不在仓库内**，而是放在持久化数据目录下，属于可替换的外部资源：Agent 默认从 `$LENOVO_STORE_DATA_DIR/resources/agent/LanAgent.exe` 读取，安装说明与 bat 脚本从 `$LENOVO_STORE_DATA_DIR/resources/installer/` 读取。这样替换 Agent 或修改安装文案都不需要发版，也不会因为切换 release 而丢失。两者的路径可分别用 `LENOVO_STORE_AGENT_EXE` 和 `LENOVO_STORE_INSTALLER_DIR` 覆盖。
 
 ## 环境要求
 
@@ -235,6 +279,8 @@ Ubuntu ARM64（`arm64/aarch64`）生产服务器应优先阅读 [Ubuntu ARM64 �
 
 其他 Ubuntu 部署及通用数据恢复原理请阅读 [Ubuntu 部署、数据持久化与备份恢复指南](docs/ubuntu-deployment.md)。该指南包含首次部署、systemd 服务、仓库内数据无损外迁、日常升级、定时备份、冷恢复、回滚和“升级后数据为空”的应急排查步骤；以下内容保留为快速参考。
 
+样机设备管理的 Agent 契约、任务类型、数据模型、部署包结构和排障步骤见 [样机 Agent 协议与设备管理](docs/sample-devices-agent-protocol.md)。
+
 生产环境必须将数据目录放在 Git checkout、release 目录和容器临时层之外。以下示例中的目录应由实际服务账号拥有并保持持久化：
 
 ```bash
@@ -259,7 +305,7 @@ http://localhost:8900
 HOST=127.0.0.1 PORT=8900 LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations npm start
 ```
 
-统一服务需要先完成 `npm run build`，因为 Express 会直接托管 Portal 和五个业务 SPA 的六套 `dist` 目录。启动日志会输出当前实际使用的数据根目录及其来源。
+统一服务需要先完成 `npm run build`，因为 Express 会直接托管 Portal 和六个业务 SPA 的七套 `dist` 目录。启动日志会输出当前实际使用的数据根目录及其来源。
 
 ### 现有服务器一次性无损迁移
 
@@ -270,7 +316,7 @@ HOST=127.0.0.1 PORT=8900 LENOVO_STORE_DATA_DIR=/var/lib/lenovo-store-operations 
 3. 创建代码目录之外的持久化目录，并将 `data/` 内全部内容原样复制过去；`store/` 与 `secrets/receipt-ocr.key` 必须成对迁移，旧版本的 `computer-labels/`、`price-labels/`、`receipt-assistant/` 目录一并保留，供首次启动导入；
 4. 为实际服务账号设置目录读写权限，并在进程管理器中永久配置 `LENOVO_STORE_DATA_DIR`；
 5. 拉取代码、执行 `npm ci && npm run build`，然后启动服务；
-6. 从启动日志确认实际数据目录，再检查五个业务模块与统一库 `store/store.sqlite`；仓库货品、周边价签、付款凭证和销售流水记录数应与迁移前一致。
+6. 从启动日志确认实际数据目录，再检查六个业务模块与统一库 `store/store.sqlite`；仓库货品、周边价签、付款凭证、销售流水和样机设备记录数应与迁移前一致。
 
 示例（请将 `<repo>` 和 `<service-user>` 替换为服务器实际值；目标或 staging 已存在时命令会停止，不会合并覆盖）：
 
@@ -301,13 +347,16 @@ Portal 使用 hash 路由，`#` 后的业务路径只由浏览器解析，刷新
 - 付款凭证打印：`http://localhost:8900/#/receipt-assistant`
 - 员工工牌制作：`http://localhost:8900/#/employee-badges`
 - 销售业绩报表：`http://localhost:8900/#/sales-report`
+- 样机设备管理：`http://localhost:8900/#/sample-devices`
 - 系统健康接口：`http://localhost:8900/api/system/health`
 
-服务器仍兼容 `/system`、`/computer-labels`、`/price-labels`、`/receipt-assistant`、`/employee-badges` 和 `/sales-report` 旧直链，并使用 `308` 跳转到对应 hash 地址；新链接统一使用 hash 地址，避免部署环境未配置 history rewrite 时刷新落入 API 404。
+服务器仍兼容 `/system`、`/computer-labels`、`/price-labels`、`/receipt-assistant`、`/employee-badges`、`/sales-report` 和 `/sample-devices` 旧直链，并使用 `308` 跳转到对应 hash 地址；新链接统一使用 hash 地址，避免部署环境未配置 history rewrite 时刷新落入 API 404。
 
 ### 反向代理与刷新
 
 生产反向代理应将 `/`、`/assets/`、`/modules/` 和 `/api/` 保留原始路径转发到统一服务的 `8900` 端口，不要把未命中的页面路径改写到 `/api`，也不要对 API 或缺失的 JavaScript/CSS 使用全局 `index.html` 回退。代理必须保留原始 `Host`，并设置正确的 `X-Forwarded-Proto`；服务仅信任回环代理提供的转发协议，用于统一维护接口的严格同源校验。Portal 的 hash 路由不依赖代理层 SPA rewrite；未知 API 始终返回 JSON 404，缺失资源和未知页面返回普通页面 404。
+
+使用反向代理时还必须额外放行 WebSocket：`/ws/agents/` 与 `/ws/tasks/` 需要带 `Upgrade` 和 `Connection` 头转发，否则样机只能心跳、无法接收任何指令。若代理未处理 `Upgrade`，表现为设备显示在线但下发指令无反应。同时应保留 `X-Forwarded-For`，否则设备 IP 会被记成代理地址。
 
 如果部署后仍返回英文 `{"code":1,"data":null,"msg":"Not Found"}`，说明请求未进入当前 Express 服务或服务器仍运行旧版本；请核对反向代理 upstream、实际启动命令、部署提交哈希和进程重启状态。
 
@@ -317,7 +366,7 @@ Portal 使用 hash 路由，`#` 后的业务路径只由浏览器解析，刷新
 npm run dev
 ```
 
-该命令同时启动统一后端、Portal 和五个业务板块开发服务器：
+该命令同时启动统一后端、Portal 和六个业务板块开发服务器：
 
 | 服务 | 开发地址 |
 | --- | --- |
@@ -327,6 +376,7 @@ npm run dev
 | 付款凭证打印 | `http://localhost:5176/modules/receipt-assistant/` |
 | 员工工牌制作 | `http://localhost:5177/modules/employee-badges/` |
 | 销售业绩报表 | `http://localhost:5178/modules/sales-report/` |
+| 样机设备管理 | `http://localhost:5179/modules/sample-devices/` |
 | API 服务 | `http://localhost:8900/` |
 
 开发模式下应使用上表中的独立 Vite 地址调试业务模块。需要验证统一 Portal iframe、静态托管和生产路径时，请执行 `npm run build && npm start`，并通过 8900 端口访问。
@@ -373,13 +423,13 @@ git push origin v0.6.0
 
 ## 数据备份与恢复
 
-系统状态页 `http://localhost:8900/#/system` 提供统一数据保护入口。员工工牌不保存数据，销售业绩报表只读且不拥有存储；其余三个板块一次生成一个 `.lsbackup` 文件，恢复时上传同一个文件并逐个选择模块：
+系统状态页 `http://localhost:8900/#/system` 提供统一数据保护入口。员工工牌不保存数据，销售业绩报表只读且不拥有存储；其余四个板块一次生成一个 `.lsbackup` 文件，恢复时上传同一个文件并逐个选择模块：
 
 1. 点击“下载全部数据库备份”；维护令牌模式按页面提示输入令牌，可信局域网免令牌模式可直接下载；
-2. 当前 writer 固定生成 `.lsbackup` `formatVersion: 3`，包含电脑标签打印、外设价签打印、付款凭证打印三套逻辑快照；付款凭证快照包含 OCR 识别历史、结构化解析结果、销售流水、商品明细和调用次数账本，本机密钥模式下还会包含配套 OCR 密钥；
+2. 当前 writer 固定生成 `.lsbackup` `formatVersion: 3`，包含电脑标签打印、外设价签打印、付款凭证打印和样机设备管理四套逻辑快照；付款凭证快照包含 OCR 识别历史、结构化解析结果、销售流水、商品明细和调用次数账本，本机密钥模式下还会包含配套 OCR 密钥；样机快照包含设备台账、任务、任务结果与审计日志；
 3. 恢复时选择 `.lsbackup` 并点击“上传并检查”；上传只检查格式、长度、SHA-256、SQLite 完整性、表结构、业务字段和记录数，不会立即覆盖数据；
 4. 核对备份编号、创建时间和各表记录数，在目标模块点击“恢复此模块”；
-5. 二次确认弹窗中完整输入“恢复”。每次只恢复一个模块，没有跨三库的“一键恢复全部”；各模块采用严格校验后的 staged/rollback 整表替换；
+5. 二次确认弹窗中完整输入“恢复”。每次只恢复一个模块，没有跨模块的“一键恢复全部”；各模块采用严格校验后的 staged/rollback 整表替换；
 6. 用完后点击“清除”。服务端恢复会话最长保留 30 分钟，过期后必须重新上传。
 
 reader 接受历史 v1 三库包、v2 四库包和当前 v3 三库包。v1 和 v2 中的价格展牌条目在 `0.6.0` 后不再恢复，inspect 会将其标记为“未包含（not-in-backup）”并保持现有数据不变；v1/v2 内的其他三个模块仍可分别恢复。旧 `0.5.x` 及更早服务不能读取 v3，这是向前版本边界：升级时必须先更新代码并重启服务，再导入 v3，不能用旧服务预先恢复。
@@ -396,7 +446,8 @@ reader 接受历史 v1 三库包、v2 四库包和当前 v3 三库包。v1 和 v
 - 外设价签打印：板块内 JSON 导入导出，导入前校验并在单事务中全量恢复；
 - 付款凭证打印：当前使用系统状态页统一入口恢复；
 - 员工工牌制作：页面刷新或关闭后自动清空，没有数据库备份；
-- 销售业绩报表：只读统计，不拥有存储，没有独立导入导出入口。
+- 销售业绩报表：只读统计，不拥有存储，没有独立导入导出入口；
+- 样机设备管理：使用系统状态页统一入口恢复；部署包与上传的分发文件不进入备份，需单独保留。
 
 统一维护 API 始终要求同源请求和 `X-Lenovo-Store-Maintenance: 1`。`LENOVO_STORE_MAINTENANCE_TOKEN` 为可选增强：配置后必须至少 24 个字符，页面会发送 `Authorization: Bearer <token>`，令牌只保存在当前页面内存；未配置时服务可正常启动，并允许可信局域网客户端免 Bearer 执行统一备份和恢复，不再限制为服务器本机。固定维护标识不是密码，同源检查也不能阻止无 `Origin` 的脚本客户端，因此无令牌部署必须通过 Ubuntu 防火墙或 VLAN 只允许可信网段访问 8900，禁止暴露到公网。
 
@@ -427,14 +478,36 @@ npm run backup:data
 
 本项目定位为门店内部局域网工具，没有完整的用户账号系统或公网部署配置。默认 `HOST=0.0.0.0` 会允许局域网访问；未配置维护令牌时，任何能访问服务端口并构造维护请求的客户端都可能下载或覆盖业务数据库，并在服务端已检测到新版本时提交签名在线更新，因此必须使用防火墙、VLAN 或反向代理 ACL 限制可信网段，禁止暴露到公网。需要更强隔离时配置 `LENOVO_STORE_MAINTENANCE_TOKEN`；维护令牌仍不能替代全站登录系统。
 
+## 样机设备管理配置
+
+样机板块除统一数据目录外还有四个专属环境变量，均通过 `/etc/lenovo-store-operations.env` 配置：
+
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `LENOVO_STORE_ENROLL_SECRET` | 空 | 设备注册密钥。**未配置时新设备无法注册，且无法生成部署包**，启动时会打印警告 |
+| `LENOVO_STORE_HEARTBEAT_WINDOW` | `90` | 心跳超时窗口（秒），超过即判定设备离线 |
+| `LENOVO_STORE_OFFLINE_SELF_DESTRUCT_HOURS` | `0` | 下发给 Agent 的离线自毁小时数，`0` 表示关闭 |
+| `LENOVO_STORE_AGENT_EXE` | `<projectRoot>/agent/LanAgent.exe` | 分发的 Agent 可执行文件路径 |
+| `LENOVO_STORE_INSTALLER_DIR` | `<projectRoot>/installer` | 部署包内说明与脚本目录 |
+
+首次启用时先生成注册密钥并写入环境文件，再重启服务：
+
+```bash
+LENOVO_STORE_ENROLL_SECRET="$(openssl rand -hex 16)"
+```
+
+注册密钥是样机接入的唯一凭据，与设备令牌相互独立：注册密钥用于首次接入和令牌轮换，设备令牌用于每次心跳与 WebSocket 握手。注册密钥泄露意味着任何能访问 8900 端口的主机都可以把自己注册成设备，因此与维护令牌一样，必须靠防火墙或 VLAN 限制访问来源。
+
+Agent 与分发文件的上传目录是 `$LENOVO_STORE_DATA_DIR/sample-devices/uploads/`，服务账号需要写权限。安装说明与 `reinstall.bat`、`reset-password.bat` 从 `$LENOVO_STORE_DATA_DIR/resources/installer/` 读取，属于外部资源文件：替换文件后重新生成部署包即可生效，不需要发版。
+
 ## npm 脚本
 
 | 命令 | 用途 |
 | --- | --- |
-| `npm run dev` | 同时启动六个前端开发服务器和统一后端 |
-| `npm run build` | 构建 Portal 和五个业务 SPA |
+| `npm run dev` | 同时启动七个前端开发服务器和统一后端 |
+| `npm run build` | 构建 Portal 和六个业务 SPA |
 | `npm start` | 启动 8900 统一生产服务 |
-| `npm run check` | 构建检查五个业务 SPA，并检查后端、数据脚本和 Release 脚本语法 |
+| `npm run check` | 构建检查六个业务 SPA，并检查后端、数据脚本和 Release 脚本语法 |
 | `npm run backup:data` | 在线一致性备份统一库各模块逻辑快照、OCR 密钥和校验清单 |
 | `npm run release:verify -- vX.Y.Z` | 校验稳定版 tag 与根 package、lockfile 版本一致 |
 | `npm run release:pack -- vX.Y.Z` | 在全量构建后生成签名 Release 的源码与构建产物包、manifest 和 SHA-256 校验文件 |
@@ -466,7 +539,7 @@ curl http://127.0.0.1:8900/api/system/health
 - 使用 SQLite 的板块是否已有数据目录并成功连接数据库；
 - 板块处于“已迁移”或“已就绪”状态。
 
-员工工牌制作在健康接口中会返回 `apiReady: null`、`dataDirectoryReady: null` 和 `databaseConnected: null`，表示这些能力不适用，而不是运行异常。当前 health、Release 和 updater 契约固定检查五个业务模块、统一数据库 `store/store.sqlite`，以及 Portal + 5 个业务 SPA 的六套前端构建产物。
+员工工牌制作在健康接口中会返回 `apiReady: null`、`dataDirectoryReady: null` 和 `databaseConnected: null`，表示这些能力不适用，而不是运行异常。当前 health、Release 和 updater 契约固定检查六个业务模块、统一数据库 `store/store.sqlite`，以及 Portal + 6 个业务 SPA 的七套前端构建产物。
 
 ## 打印验收
 
@@ -531,19 +604,33 @@ $LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key
 
 确认浏览器缩放为 100%、关闭页眉页脚，并检查打印机驱动是否启用了“适合页面”或二次缩放。最终尺寸必须以实体打印样张为准。
 
+### 样机显示在线但下发指令没有任何反应
+
+先看设备列表的“长连接在线”标记：它对应 WebSocket 是否真的建立。只有心跳没有长连接时，指令会停留在待发状态。再检查反向代理是否放行了 `/ws/agents/` 的 `Upgrade` 头，以及 Agent 日志里是否出现 `[ws] connected`。完整排查顺序见 [样机 Agent 协议与设备管理](docs/sample-devices-agent-protocol.md) 第 9 节。
+
+### 在线升级反复回滚到上一个版本
+
+检查 `/usr/local/lib/lenovo-store-updater/updater.mjs` 中的 `CURRENT_MODULE_IDS` 是否包含全部板块 id（当前应为 `computer-labels`、`price-labels`、`receipt-assistant`、`employee-badges`、`sales-report`、`sample-labels`、`sample-devices`）。白名单缺失会让健康检查判定模块集合不符，从而自动回滚。
+
+### 部署包安装后设备不注册
+
+确认 `deploy.conf` 中 `server=` 写的是可访问的门户地址（8900，不是其他端口）、`enroll=` 与服务端 `LENOVO_STORE_ENROLL_SECRET` 完全一致。服务端日志或审计里出现 `heartbeat.rejected` 且原因“令牌不一致”说明密钥不匹配。
+
 ## 项目状态
 
-五个联想业务板块已统一运行在 8900 端口：
+六个联想业务板块已统一运行在 8900 端口：
 
-- 电脑标签打印、外设价签打印和付款凭证打印均有独立 SPA、API 与数据表，三个模块的数据统一存放在 `store/store.sqlite` 并按模块前缀隔离；员工工牌为纯浏览器 SPA；销售业绩报表为只读统计 SPA，不拥有独立存储；
+- 电脑标签打印、外设价签打印、付款凭证打印和样机设备管理均有独立 SPA、API 与数据表，四个模块的数据统一存放在 `store/store.sqlite` 并按模块前缀隔离；员工工牌为纯浏览器 SPA；销售业绩报表为只读统计 SPA，不拥有独立存储；
+- 样机设备管理已接管原 `batch-shutdown-assistant` 项目的全部局域网设备管理能力，Agent 心跳与 WebSocket 与管理端共用同一端口，部署包不再需要单独配置 Agent 端口；
 - 统一数据库使用 WAL 模式并开启外键约束，各模块表结构、索引和读写互不影响，等价于原来的独立库；旧版按模块拆分的数据库目录会保留但不再被业务读写；
 - 销售业绩报表提供区间汇总、按日/月/季/年趋势、月/季/年周期对比、商品明细聚合和销售流水分页查询，所有口径只统计有效销售记录；
 - 付款凭证的 OCR 识别结果新增结构化解析，可提取商户、日期、金额、订单号、支付方式和商品明细，结构化结果与商品明细一并落库，供销售业绩报表统计；
 - 员工工牌制作支持多员工录入、每人独立设置 1–99 打印份数及默认工牌/联想红工牌主题，使用真实 54mm × 85mm 裁切格、2mm 裁剪通道和完整 A4 横向页面完成 10 张/页预览与打印，不持久化员工信息；
-- 用户指定的联想 SVG Logo 已作为共享屏幕品牌资产，Portal 和五个业务 SPA 的中文命名已统一；
+- 用户指定的联想 SVG Logo 已作为共享屏幕品牌资产，Portal 和六个业务 SPA 的中文命名已统一；
 - 三个旧项目数据库及 OCR 密钥支持一致性迁移到统一库；
-- Portal、五模块 health、三库备份恢复、六套前端构建和生产静态托管已完成；
-- Portal 和五个业务 SPA 已接入共享屏幕设计令牌，板块工作区、页头、卡片、表单和按钮风格保持一致；
+- Portal、六模块 health、统一备份恢复、七套前端构建和生产静态托管已完成；
+- Portal 和六个业务 SPA 已接入共享屏幕设计令牌，板块工作区、页头、卡片、表单和按钮风格保持一致；
 - 四套打印实现分别维护，员工工牌通过隔离 iframe 打印，不会覆盖其他模块打印 CSS；
 - 数据查询、导出、备份和 OCR 配置解密已通过无破坏冒烟验证；
-- 实体标签、员工工牌和 A4 付款凭证仍需在实际打印机上完成最终尺寸与颜色验收。
+- 实体标签、员工工牌和 A4 付款凭证仍需在实际打印机上完成最终尺寸与颜色验收；
+- 样机指令下发依赖 Agent WebSocket 长连接，部署后应在真机上下发一次「采集设备信息」验证链路，确认设备收到指令并回传结果。
