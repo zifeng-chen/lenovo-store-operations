@@ -1,5 +1,18 @@
 export const STORE_MODULES = Object.freeze([
   {
+    id: 'receipt-assistant',
+    name: '付款凭证打印',
+    shortName: '付款凭证打印',
+    iconText: '收',
+    description: '将商务存根和购物小票排版到同一张 A4 纸，并辅助识别付款金额。',
+    route: '/receipt-assistant',
+    moduleBase: '/modules/receipt-assistant/',
+    apiBase: '/api/receipt-assistant',
+    persistence: 'sqlite',
+    accent: '#1a5e9c',
+    stage: 'migrated'
+  },
+  {
     id: 'computer-labels',
     name: '电脑标签打印',
     shortName: '电脑标签打印',
@@ -26,30 +39,17 @@ export const STORE_MODULES = Object.freeze([
     stage: 'migrated'
   },
   {
-    id: 'receipt-assistant',
-    name: '付款凭证打印',
-    shortName: '付款凭证打印',
-    iconText: '收',
-    description: '将商务存根和购物小票排版到同一张 A4 纸，并辅助识别付款金额。',
-    route: '/receipt-assistant',
-    moduleBase: '/modules/receipt-assistant/',
-    apiBase: '/api/receipt-assistant',
+    id: 'sample-devices',
+    name: '样机设备管理',
+    shortName: '样机设备管理',
+    iconText: '样',
+    description: '管理门店样机客户端的在线状态，批量下发 Sysprep、弹窗提示、信息采集与远程升级。',
+    route: '/sample-devices',
+    moduleBase: '/modules/sample-devices/',
+    apiBase: '/api/sample-devices',
     persistence: 'sqlite',
-    accent: '#1a5e9c',
+    accent: '#0f7a6c',
     stage: 'migrated'
-  },
-  {
-    id: 'employee-badges',
-    name: '员工工牌制作',
-    shortName: '员工工牌制作',
-    iconText: '员',
-    description: '录入多名员工的姓名、岗位和二维码，生成 54mm × 85mm 工牌并按 A4 横向批量打印。',
-    route: '/employee-badges',
-    moduleBase: '/modules/employee-badges/',
-    apiBase: null,
-    persistence: 'none',
-    accent: '#d2382f',
-    stage: 'ready'
   },
   {
     id: 'sample-labels',
@@ -78,17 +78,17 @@ export const STORE_MODULES = Object.freeze([
     stage: 'migrated'
   },
   {
-    id: 'sample-devices',
-    name: '样机设备管理',
-    shortName: '样机设备管理',
-    iconText: '样',
-    description: '管理门店样机客户端的在线状态，批量下发 Sysprep、弹窗提示、信息采集与远程升级。',
-    route: '/sample-devices',
-    moduleBase: '/modules/sample-devices/',
-    apiBase: '/api/sample-devices',
-    persistence: 'sqlite',
-    accent: '#0f7a6c',
-    stage: 'migrated'
+    id: 'employee-badges',
+    name: '员工工牌制作',
+    shortName: '员工工牌制作',
+    iconText: '员',
+    description: '录入多名员工的姓名、岗位和二维码，生成 54mm × 85mm 工牌并按 A4 横向批量打印。',
+    route: '/employee-badges',
+    moduleBase: '/modules/employee-badges/',
+    apiBase: null,
+    persistence: 'none',
+    accent: '#d2382f',
+    stage: 'ready'
   }
 ]);
 
