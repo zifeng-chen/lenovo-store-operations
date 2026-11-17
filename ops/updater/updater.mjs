@@ -748,7 +748,14 @@ function cacheContainsBuild(entryPath) {
   if (!fs.existsSync(releasePath) || !fs.existsSync(metadataPath)) return false
   const stats = fs.lstatSync(releasePath)
   if (!stats.isDirectory() || stats.isSymbolicLink()) return false
-  return fs.readdirSync(releasePath).some(name => name.endsWith('.node'))
+  if (!fs.readdirSync(releasePath).some(name => name.endsWith('.node'))) return false
+  try {
+    assertCachedBinariesOwnedByRoot(entryPath)
+  } catch {
+    // 缓存条目权限不对，当作未命中，让它重新编译而不是冒险复用。
+    return false
+  }
+  return true
 }
 
 // 复用前先验证二进制真的能加载，避免把损坏或 ABI 不匹配的缓存带进候选版本。
@@ -796,14 +803,38 @@ function persistNativeBuild(candidateRoot, moduleName, cache) {
   const finalPath = nativeCachePath(moduleName, cache.key)
   const temporary = `${finalPath}.tmp-${process.pid}-${crypto.randomUUID()}`
   fs.rmSync(temporary, { recursive: true, force: true })
-  fs.mkdirSync(path.join(temporary, 'build', 'Release'), { recursive: true, mode: 0o755 })
+  const releasePath = path.join(temporary, 'build', 'Release')
+  fs.mkdirSync(releasePath, { recursive: true, mode: 0o755 })
   for (const name of binaries) {
-    fs.copyFileSync(path.join(source, 'Release', name), path.join(temporary, 'build', 'Release', name))
+    const target = path.join(releasePath, name)
+    fs.copyFileSync(path.join(source, 'Release', name), target)
+    // 候选版本里的二进制属主是降权 builder，必须改回 root 并去掉组/其他写权限，
+    // 否则等于把可执行文件的写权限交给了 builder 账号，下次升级会加载被篡改的二进制。
+    fs.chownSync(target, 0, 0)
+    fs.chmodSync(target, 0o644)
   }
   fs.writeFileSync(path.join(temporary, 'identity.json'), `${JSON.stringify(cache.identity, null, 2)}\n`, { mode: 0o600 })
+  fs.chownSync(path.join(temporary, 'identity.json'), 0, 0)
+  for (const directory of [path.join(temporary, 'build'), releasePath]) {
+    fs.chmodSync(directory, 0o755)
+    fs.chownSync(directory, 0, 0)
+  }
+  fs.chmodSync(temporary, 0o700)
+  fs.chownSync(temporary, 0, 0)
   fs.rmSync(finalPath, { recursive: true, force: true })
   fs.renameSync(temporary, finalPath)
   pruneNativeCache(moduleRoot)
+}
+
+// 复用前再确认一次缓存里的二进制没有被改成组/其他可写，属主必须是 root。
+function assertCachedBinariesOwnedByRoot(entryPath) {
+  const releasePath = path.join(entryPath, 'build', 'Release')
+  for (const name of fs.readdirSync(releasePath)) {
+    if (!name.endsWith('.node')) continue
+    const stats = fs.lstatSync(path.join(releasePath, name))
+    assert(stats.isFile() && !stats.isSymbolicLink(), `原生模块缓存中的 ${name} 不是普通文件`, 'UNSAFE_NATIVE_CACHE')
+    assert(stats.uid === 0 && (stats.mode & 0o022) === 0, `原生模块缓存中的 ${name} 可被非 root 账号改写`, 'UNSAFE_NATIVE_CACHE')
+  }
 }
 
 // 每个模块只保留最近 3 个来源版本，避免缓存目录随版本无限增长。
