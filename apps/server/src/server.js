@@ -39,7 +39,6 @@ import {
 } from './modules/sample-devices/index.js';
 import {
   createUploadStore,
-  resolveAgentServerUrl as resolveSampleDeviceAgentServerUrl,
   resolveServerUrl as resolveSampleDeviceServerUrl
 } from './modules/sample-devices/upload-store.js';
 import {
@@ -68,10 +67,6 @@ const webDist = path.join(projectRoot, 'apps/web/dist');
 const webIndex = path.join(webDist, 'index.html');
 const host = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.PORT) || 8900;
-// 样机设备管理：Agent 契约端口。LanAgent 的 validateServerURL 要求 host:port 全等，
-// 上线时必须是 8080；本地冒烟测试可用 SAMPLE_DEVICES_AGENT_PORT 覆盖。
-const agentPort = Number(process.env.SAMPLE_DEVICES_AGENT_PORT) || 8080;
-const agentHost = process.env.SAMPLE_DEVICES_AGENT_HOST || '0.0.0.0';
 const sampleDevicesEnrollSecret = String(process.env.LENOVO_STORE_ENROLL_SECRET || '').trim();
 const sampleDevicesOfflineSelfDestructHours = Number(process.env.LENOVO_STORE_OFFLINE_SELF_DESTRUCT_HOURS) || 0;
 const sampleDevicesHeartbeatWindowSeconds = Number(process.env.LENOVO_STORE_HEARTBEAT_WINDOW) || 90;
@@ -113,8 +108,7 @@ const sampleDevicesUploads = createUploadStore({
 });
 const sampleDevicesRouter = createSampleDevicesRouter({
   getDb: getSampleDevicesDatabase,
-  resolveServerUrl: (req) => resolveSampleDeviceServerUrl(req, agentPort),
-  resolveAgentServerUrl: (req) => resolveSampleDeviceAgentServerUrl(req, agentPort, port),
+  resolveServerUrl: (req) => resolveSampleDeviceServerUrl(req, port),
   enrollSecret: sampleDevicesEnrollSecret,
   uploads: sampleDevicesUploads
 });
@@ -325,6 +319,29 @@ for (const runtime of moduleRuntimes.values()) {
 
 app.use(salesReportApiBase, createSameOriginAuthorizer('销售报表只能从本系统页面访问'), createSalesReportRouter({ getDatabase: getReceiptAssistantDatabase }));
 
+// 样机 Agent 契约路由与管理端合并到同一端口。
+// Agent 的心跳/恢复/WS 有自己的鉴权（设备令牌与注册密钥），不走门户 CORS，
+// 因此显式关闭该路径前缀的 CORS，避免向任意来源暴露管理端接口。
+const AGENT_PATH_PREFIXES = ['/api/agents', '/ws/agents', '/ws/tasks'];
+function isAgentPath(requestPath) {
+  return AGENT_PATH_PREFIXES.some(prefix => requestPath === prefix || requestPath.startsWith(`${prefix}/`));
+}
+
+app.use((request, response, next) => {
+  if (!isAgentPath(request.path)) return next();
+  response.setHeader('Access-Control-Allow-Origin', '');
+  return next();
+});
+
+// Agent 契约路由通过 req.app.locals 取数据库，与管理端口合并后要在这里注入
+app.locals.sampleDevicesDb = getSampleDevicesDatabase;
+app.use(
+  createAgentContractRouter({
+    enrollSecret: sampleDevicesEnrollSecret,
+    offlineSelfDestructHours: sampleDevicesOfflineSelfDestructHours
+  })
+);
+
 app.use('/api', (_req, res) => {
   res.status(404).json({ code: 1, data: null, msg: '接口不存在' });
 });
@@ -406,34 +423,13 @@ app.use((error, _req, res, _next) => {
 const httpServer = app.listen(port, host, () => {
   console.log(`联想门店运营系统运行于 http://${host}:${port}`);
   console.log(`持久化数据目录：${dataRoot}（${DATA_ROOT_SOURCE}）`);
-});
-
-// 样机设备管理单独占用 Agent 契约端口：LanAgent 只认 host:port 全等，
-// 且这些路由（心跳/WS/结果回传）与门户 API 的鉴权和 CORS 策略不同。
-const agentApp = express();
-agentApp.disable('x-powered-by');
-agentApp.use(compression({ threshold: 1024 }));
-agentApp.locals.sampleDevicesDb = getSampleDevicesDatabase;
-agentApp.use(createAgentContractRouter({
-  enrollSecret: sampleDevicesEnrollSecret,
-  offlineSelfDestructHours: sampleDevicesOfflineSelfDestructHours
-}));
-agentApp.use((_req, res) => {
-  res.status(404).json({ code: 1, data: null, msg: '接口不存在' });
-});
-agentApp.use((error, _req, res, _next) => {
-  console.error(error);
-  res.status(500).json({ code: 1, data: null, msg: error.message || '服务器内部错误' });
-});
-
-const agentServer = http.createServer(agentApp);
-createAgentWebSocketServer({ server: agentServer, getDatabase: getSampleDevicesDatabase });
-agentServer.listen(agentPort, agentHost, () => {
-  console.log(`样机设备管理 Agent 契约端口运行于 http://${agentHost}:${agentPort}`);
   if (!sampleDevicesEnrollSecret) {
     console.warn('警告：未配置 LENOVO_STORE_ENROLL_SECRET，新设备将无法自动注册，部署包也无法生成');
   }
 });
+
+// 样机 Agent 的 WebSocket 与 HTTP 共用同一个监听端口。
+createAgentWebSocketServer({ server: httpServer, getDatabase: getSampleDevicesDatabase });
 
 // 15 秒巡检：心跳窗口外的设备标离线。Node 侧与 agent 上报频率一致，不做懒判定。
 const deviceStatusTimer = setInterval(() => {
@@ -449,7 +445,6 @@ function shutdown(signal) {
   console.log(`收到 ${signal}，正在关闭服务`);
   clearInterval(deviceStatusTimer);
   httpServer.close();
-  agentServer.close();
   setTimeout(() => process.exit(0), 3000).unref();
 }
 

@@ -93,19 +93,6 @@ export function resolveServerUrl(req, fallbackPort) {
   return { serverUrl: `http://${host}`, port };
 }
 
-// 部署包里的 Agent 要连的是 Agent 契约端口（8080），不是浏览器访问的管理端端口（8900）。
-// 沿用 Host 头的主机名，仅把端口换成 Agent 端口。
-export function resolveAgentServerUrl(req, agentPort, fallbackPort) {
-  const host = String(req.headers.host || `localhost:${fallbackPort}`);
-  const [hostname] = host.split(':');
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    const lanIp = detectLanIp();
-    if (!lanIp) throw new Error('无法检测宿主机局域网 IP，请改用局域网 IP 访问管理端后重试');
-    return { serverUrl: `http://${lanIp}:${agentPort}`, port: String(agentPort) };
-  }
-  return { serverUrl: `http://${hostname}:${agentPort}`, port: String(agentPort) };
-}
-
 export function isPortableExecutable(buffer) {
   if (!buffer || buffer.length < 0x40) return false;
   if (buffer[0] !== 0x4d || buffer[1] !== 0x5a) return false;
