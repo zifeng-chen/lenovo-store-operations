@@ -191,6 +191,15 @@ export function createUploadStore({ uploadDir, agentExePath, installerDir }) {
     };
   }
 
+  // 说明文档优先读 installerDir 下的外部文件，运维改文案时替换文件即可，无需发版。
+  function deployReadme() {
+    const source = path.join(installerDir, '安装说明.txt');
+    if (fs.existsSync(source)) {
+      return fs.readFileSync(source, 'utf8').replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
+    }
+    return DEPLOY_README;
+  }
+
   function buildPackage(serverUrl, enrollSecret) {
     if (!fs.existsSync(agentExePath)) throw new Error('服务器上未找到 LanAgent.exe');
     const entries = [
@@ -198,7 +207,7 @@ export function createUploadStore({ uploadDir, agentExePath, installerDir }) {
       { name: 'deploy.conf', data: `# LAN Agent deploy config\nserver=${serverUrl}\nenroll=${enrollSecret}\n` },
       {
         name: '安装请阅读此文档.txt',
-        data: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(DEPLOY_README, 'utf8')])
+        data: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(deployReadme(), 'utf8')])
       },
       { name: 'uninstall.bat', data: Buffer.from(UNINSTALL_BAT, 'ascii') }
     ];
