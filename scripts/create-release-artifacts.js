@@ -19,6 +19,7 @@ const requiredDistDirectories = [
   'apps/web/dist',
   'apps/computer-labels/dist',
   'apps/price-labels/dist',
+  'apps/price-tags/dist',
   'apps/receipt-assistant/dist',
   'apps/employee-badges/dist',
   'apps/sales-report/dist',
