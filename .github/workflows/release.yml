@@ -59,7 +59,9 @@ jobs:
         run: npm run check
 
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        # 只审计生产依赖：构建工具链（vite/unplugin 等）的传递依赖漏洞不进入发布产物，
+        # 由 devDependencies 单独跟踪，避免上游 advisory 更新导致前端改动无法发版。
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Create release artifacts
         run: npm run release:pack
