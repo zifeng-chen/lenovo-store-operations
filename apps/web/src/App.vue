@@ -76,9 +76,9 @@ onMounted(async () => {
           <span v-show="!sidebarCollapsed" class="nav-label">{{ module.shortName }}</span>
         </RouterLink>
         <p v-show="!sidebarCollapsed" class="nav-section-title">系统</p>
-        <RouterLink class="nav-item" to="/system" :title="sidebarCollapsed ? '系统状态' : undefined">
+        <RouterLink class="nav-item" to="/system" :title="sidebarCollapsed ? '系统配置' : undefined">
           <span class="nav-icon">系</span>
-          <span v-show="!sidebarCollapsed" class="nav-label">系统状态</span>
+          <span v-show="!sidebarCollapsed" class="nav-label">系统配置</span>
         </RouterLink>
       </nav>
 

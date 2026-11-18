@@ -22,6 +22,12 @@ const PREFIX_TABLES = {
     categories: tableName('price-labels', 'categories'),
     products: tableName('price-labels', 'products'),
   },
+  'price-tags': {
+    cards: tableName('price-tags', 'cards'),
+    services: tableName('price-tags', 'services'),
+    selection: tableName('price-tags', 'selection'),
+    config: tableName('price-tags', 'config'),
+  },
   'receipt-assistant': {
     sales: tableName('receipt-assistant', 'sales'),
     sale_items: tableName('receipt-assistant', 'sale_items'),
@@ -90,12 +96,17 @@ function extractModuleSnapshot(sharedSnapshotPath, targetPath, moduleId) {
 const MODULES = [
   { id: 'computer-labels', name: '电脑标签打印', entryId: 'computer-labels.database' },
   { id: 'price-labels', name: '外设价签打印', entryId: 'price-labels.database' },
+  { id: 'price-tags', name: '价格展牌打印', entryId: 'price-tags.database' },
   { id: 'receipt-assistant', name: '付款凭证打印', entryId: 'receipt-assistant.database' },
 ]
 const ROW_LIMITS = {
   'computer-labels.products': 200000,
   'price-labels.categories': 5000,
   'price-labels.products': 200000,
+  'price-tags.cards': 5000,
+  'price-tags.services': 5000,
+  'price-tags.selection': 5000,
+  'price-tags.config': 100,
   'receipt-assistant.sales': 2000000,
   'receipt-assistant.sale_items': 4000000,
   'receipt-assistant.ocr_config': 1,
@@ -197,6 +208,43 @@ async function validateDatabase(filePath, moduleId) {
       return {
         categories: countRows(db, moduleId, 'categories'),
         products: countRows(db, moduleId, 'products'),
+      }
+    }
+    if (moduleId === 'price-tags') {
+      requireColumns(db, 'cards', ['id', 'product_title', 'category', 'payload', 'sort_order', 'created_at', 'updated_at'])
+      requireColumns(db, 'services', ['id', 'name', 'price', 'category', 'product_category', 'created_at', 'updated_at'])
+      requireColumns(db, 'selection', ['card_id', 'selected_at'])
+      requireColumns(db, 'config', ['key', 'value', 'updated_at'])
+      const invalidCard = hasInvalidRow(db.prepare('SELECT id, category, payload, sort_order, created_at, updated_at FROM cards'), row => hasBlankText(row.id, 200)
+        || hasBlankText(row.category, 50)
+        || hasBlankText(row.payload, 4 * 1024 * 1024)
+        || !Number.isSafeInteger(row.sort_order) || row.sort_order < 0
+        || !isValidTimestamp(row.created_at) || !isValidTimestamp(row.updated_at))
+      const invalidPayload = hasInvalidRow(db.prepare('SELECT id, payload FROM cards'), row => {
+        try {
+          const parsed = JSON.parse(row.payload)
+          return !parsed || typeof parsed !== 'object' || Array.isArray(parsed)
+        } catch {
+          return true
+        }
+      })
+      const invalidService = hasInvalidRow(db.prepare('SELECT id, name, price, created_at, updated_at FROM services'), row => !Number.isSafeInteger(row.id) || row.id <= 0
+        || hasBlankText(row.name, 200)
+        || typeof row.price !== 'number' || !Number.isFinite(row.price) || row.price < 0
+        || Math.abs(row.price * 100 - Math.round(row.price * 100)) > 1e-8
+        || !isValidTimestamp(row.created_at) || !isValidTimestamp(row.updated_at))
+      const duplicate = db.prepare(`
+        SELECT 1 FROM cards GROUP BY id HAVING COUNT(*) > 1
+        UNION ALL SELECT 1 FROM selection GROUP BY card_id HAVING COUNT(*) > 1
+        UNION ALL SELECT 1 FROM config GROUP BY key HAVING COUNT(*) > 1
+        LIMIT 1
+      `).get()
+      if (invalidCard || invalidPayload || invalidService || duplicate) throw persistenceError('展牌数据库包含重复、空白或格式无效的数据')
+      return {
+        cards: countRows(db, moduleId, 'cards'),
+        services: countRows(db, moduleId, 'services'),
+        selection: countRows(db, moduleId, 'selection'),
+        config: countRows(db, moduleId, 'config'),
       }
     }
     if (moduleId === 'receipt-assistant') {
@@ -346,6 +394,34 @@ function restorePrice(sourcePath, targetDb) {
   }
 }
 
+function restorePriceTags(sourcePath, targetDb) {
+  const source = openCandidate(sourcePath)
+  const P = name => tableName('price-tags', name)
+  try {
+    const insertCard = targetDb.prepare(`INSERT INTO ${P('cards')} (id, product_title, category, payload, sort_order, created_at, updated_at) VALUES (@id, @product_title, @category, @payload, @sort_order, @created_at, @updated_at)`)
+    const insertService = targetDb.prepare(`INSERT INTO ${P('services')} (id, name, price, category, product_category, created_at, updated_at) VALUES (@id, @name, @price, @category, @product_category, @created_at, @updated_at)`)
+    const insertSelection = targetDb.prepare(`INSERT INTO ${P('selection')} (card_id, selected_at) VALUES (@card_id, @selected_at)`)
+    const insertConfig = targetDb.prepare(`INSERT INTO ${P('config')} (key, value, updated_at) VALUES (@key, @value, @updated_at)`)
+    targetDb.transaction(() => {
+      for (const table of ['cards', 'services', 'selection', 'config']) targetDb.prepare(`DELETE FROM ${P(table)}`).run()
+      resetSequence(targetDb, P('services'))
+      for (const row of source.prepare('SELECT id, product_title, category, payload, sort_order, created_at, updated_at FROM cards ORDER BY sort_order, created_at').iterate()) insertCard.run(row)
+      for (const row of source.prepare('SELECT id, name, price, category, product_category, created_at, updated_at FROM services ORDER BY id').iterate()) insertService.run(row)
+      if (tableExists(source, 'selection')) {
+        const cardIds = new Set(targetDb.prepare(`SELECT id FROM ${P('cards')}`).all().map(row => row.id))
+        for (const row of source.prepare('SELECT card_id, selected_at FROM selection ORDER BY card_id').iterate()) {
+          if (cardIds.has(row.card_id)) insertSelection.run(row)
+        }
+      }
+      if (tableExists(source, 'config')) {
+        for (const row of source.prepare('SELECT key, value, updated_at FROM config ORDER BY key').iterate()) insertConfig.run(row)
+      }
+    })()
+  } finally {
+    source.close()
+  }
+}
+
 function restoreReceipt(sourcePath, targetDb, manifest, extracted, ocrKeyPath) {
   const source = openCandidate(sourcePath)
   const P = name => tableName('receipt-assistant', name)
@@ -464,6 +540,7 @@ export function createPersistenceService({ runtimes, receiptMaintenance, ocrKeyP
     assertManifestCounts(manifest, moduleId, counts)
     if (moduleId === 'computer-labels') restoreComputer(sourcePath, runtimes.get(moduleId).getDatabase())
     else if (moduleId === 'price-labels') restorePrice(sourcePath, runtimes.get(moduleId).getDatabase())
+    else if (moduleId === 'price-tags') restorePriceTags(sourcePath, runtimes.get(moduleId).getDatabase())
     else {
       validateOcrPair(manifest, extracted)
       await receiptMaintenance.runRestore(() => restoreReceipt(sourcePath, runtimes.get(moduleId).getDatabase(), manifest, extracted, ocrKeyPath))

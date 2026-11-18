@@ -12,6 +12,7 @@ import { UNIFIED_DATA_DIR, UNIFIED_DATABASE_PATH } from '../config/data-paths.js
 export const TABLE_PREFIX = Object.freeze({
   'computer-labels': 'computer_',
   'price-labels': 'price_',
+  'price-tags': 'pricetag_',
   'receipt-assistant': 'receipt_',
   'sample-devices': 'sampledev_',
 })

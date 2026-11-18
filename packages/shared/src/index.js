@@ -39,6 +39,19 @@ export const STORE_MODULES = Object.freeze([
     stage: 'migrated'
   },
   {
+    id: 'price-tags',
+    name: '价格展牌打印',
+    shortName: '价格展牌打印',
+    iconText: '展',
+    description: '制作联想产品价格展牌，编辑卖点、价格、配件与服务，按 110mm × 110mm 打印。',
+    route: '/price-tags',
+    moduleBase: '/modules/price-tags/',
+    apiBase: '/api/price-tags',
+    persistence: 'sqlite',
+    accent: '#1a5e9c',
+    stage: 'migrated'
+  },
+  {
     id: 'sample-devices',
     name: '样机设备管理',
     shortName: '样机设备管理',

@@ -1,17 +1,18 @@
 # 联想门店运营系统
 
-联想门店运营系统将六个业务边界彼此独立的门店工具统一到一个品牌、一个入口、一个服务进程和一个维护仓库中：
+联想门店运营系统将七个业务边界彼此独立的门店工具统一到一个品牌、一个入口、一个服务进程和一个维护仓库中：
 
 1. 电脑标签打印：管理并打印仓库电脑 SKU、配置和颜色标签；
 2. 外设价签打印：管理并打印电脑、手机、平板及周边商品价格标签；
-3. 付款凭证打印：合成客户付款后的商务存根和购物小票，辅助识别并记录金额；
-4. 员工工牌制作：批量制作员工工牌并完成 A4 排版与打印；
-5. 销售业绩报表：统计销售流水并展示区间汇总、趋势、周期对比和商品明细；
-6. 样机设备管理：通过局域网 Agent 集中管理局域网样机，远程下发关机、重启、Sysprep、升级、文件分发等指令。
+3. 价格展牌打印：制作联想产品价格展牌，编辑卖点、价格、配件与服务，按 110mm × 110mm 打印；
+4. 付款凭证打印：合成客户付款后的商务存根和购物小票，辅助识别并记录金额；
+5. 员工工牌制作：批量制作员工工牌并完成 A4 排版与打印；
+6. 销售业绩报表：统计销售流水并展示区间汇总、趋势、周期对比和商品明细；
+7. 样机设备管理：通过局域网 Agent 集中管理局域网样机，远程下发关机、重启、Sysprep、升级、文件分发等指令。
 
-项目默认通过 `http://localhost:8900` 提供统一 Portal 和六个独立业务 SPA，共七个前端构建产物。Portal 工作台首页集中展示全部业务板块，并在“业务板块”标题右侧提供当前项目的 GitHub 仓库入口；该入口会在新标签页中打开，不影响当前工作台。电脑标签打印、外设价签打印、付款凭证打印和样机设备管理拥有独立 API 与数据表；销售业绩报表读取付款凭证已记录的销售流水，只做只读统计；员工工牌板块完全在浏览器内运行，不创建 API、数据库或本地持久化数据。
+项目默认通过 `http://localhost:8900` 提供统一 Portal 和七个独立业务 SPA，共八个前端构建产物。Portal 工作台首页集中展示全部业务板块，并在“业务板块”标题右侧提供当前项目的 GitHub 仓库入口；该入口会在新标签页中打开，不影响当前工作台。电脑标签打印、外设价签打印、价格展牌打印、付款凭证打印和样机设备管理拥有独立 API 与数据表；销售业绩报表读取付款凭证已记录的销售流水，只做只读统计；员工工牌板块完全在浏览器内运行，不创建 API、数据库或本地持久化数据。
 
-> 本项目只统一联想品牌、入口、部署、健康检查和维护方式，不合并各业务的数据模型。四个持久化业务在同一个 SQLite 文件中按模块前缀使用各自独立的表，表结构、索引和读写互不影响；员工工牌使用独立的浏览器内 A4 打印流程，销售业绩报表不拥有独立存储，不接触其他板块数据。
+> 本项目只统一联想品牌、入口、部署、健康检查和维护方式，不合并各业务的数据模型。五个持久化业务在同一个 SQLite 文件中按模块前缀使用各自独立的表，表结构、索引和读写互不影响；员工工牌使用独立的浏览器内 A4 打印流程，销售业绩报表不拥有独立存储，不接触其他板块数据。
 
 ## 更新记录
 
@@ -25,12 +26,13 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | 电脑标签打印 | 管理电脑 SKU、名称、配置、颜色、添加日期和备注；入库时间仅用于打印，不落库 | `/#/computer-labels` | `/modules/computer-labels/` | `/api/computer-labels` | `store.sqlite` 中的 `computer_*` 表 | 46mm × 45mm，A4 纵向，24 张/页 |
 | 外设价签打印 | 管理电脑、手机、平板及周边商品的品类、名称、价格和添加日期 | `/#/price-labels` | `/modules/price-labels/` | `/api/price-labels` | `store.sqlite` 中的 `price_*` 表 | 70mm × 28mm，A4 横向，28 张/页 |
+| 价格展牌打印 | 制作产品价格展牌，编辑产品信息、卖点、价格、配件与服务，含国补价计算 | `/#/price-tags` | `/modules/price-tags/` | `/api/price-tags` | `store.sqlite` 中的 `pricetag_*` 表，配件读取 `price_products` | 110mm × 110mm，A4 每页 2 张 |
 | 付款凭证打印 | 将商务存根和购物小票合成到一张 A4，识别并记录付款金额 | `/#/receipt-assistant` | `/modules/receipt-assistant/` | `/api/receipt-assistant` | `store.sqlite` 中的 `receipt_*` 表 | 存根 + 小票，A4 打印或 PNG 下载 |
 | 员工工牌制作 | 批量录入员工姓名、岗位和二维码，生成 A4 工牌排版 | `/#/employee-badges` | `/modules/employee-badges/` | 无 | 无 | 54mm × 85mm，A4 横向，10 张/页 |
 | 销售业绩报表 | 统计销售流水，展示汇总、趋势、周期对比和商品明细 | `/#/sales-report` | `/modules/sales-report/` | `/api/sales-report` | 只读 `store.sqlite` 中的 `receipt_sales`、`receipt_sale_items` 表 | 页面内图表与明细表格，不打印 |
 | 样机设备管理 | 管理局域网样机台账，远程下发指令并采集硬件信息 | `/#/sample-devices` | `/modules/sample-devices/` | `/api/sample-devices`、`/api/agents` | `store.sqlite` 中的 `sample_devices_*` 表 | 页面内设备、任务与审计列表，无打印 |
 
-统一数据库固定位于 `$LENOVO_STORE_DATA_DIR/store/store.sqlite`，使用 WAL 模式、`busy_timeout = 5000` 并开启外键约束。四个持久化模块的表分别以 `computer_`、`price_`、`receipt_`、`sample_devices_` 为前缀，表结构与索引互不影响，等价于原来每个模块一个独立库。
+统一数据库固定位于 `$LENOVO_STORE_DATA_DIR/store/store.sqlite`，使用 WAL 模式、`busy_timeout = 5000` 并开启外键约束。五个持久化模块的表分别以 `computer_`、`price_`、`pricetag_`、`receipt_`、`sample_devices_` 为前缀，表结构与索引互不影响，等价于原来每个模块一个独立库。
 
 仅在 `npm run dev`、`NODE_ENV=development` 或测试模式下，未设置 `LENOVO_STORE_DATA_DIR` 才会使用仓库内的 `data/`；生产启动缺少该变量会直接失败，防止新 release 静默创建空库。
 
@@ -62,6 +64,20 @@
 - 70mm × 28mm 标签预览和 A4 横向批量打印。
 
 该模块覆盖电脑、手机、平板和周边商品价格，不要求电脑 SKU，也不复用电脑商品标签数据库。
+
+### 价格展牌打印
+
+- 三栏工作台：左侧展牌管理（按分类分组、搜索、勾选、批量复制与删除），中间编辑，右侧 A4 打印预览；
+- 展牌版式与原独立项目逐项一致：实物 110mm × 110mm，内层 120mm 以 `scale(calc(11 / 12))` 缩放，字号沿用 20px／13px／11.91px／10.82px／11px 体系与思源黑体，不随本系统风格调整；
+- 编辑区分产品信息、卖点、价格、配件、服务五块，每块与每个卖点均可独立展开收起；
+- 卖点可选 3–4 条，图标从内置图标库（181 个，按产品分类与用途分类两层组织）中挑选，图标与卖点描述文案关联；
+- 产品信息与价格来自自建展牌数据（电脑商品标签不含价格，价格独立维护），支持最多 6 行颜色；
+- 配件按分类分组展示，分类名称不可选，只能勾选分类下的具体配件；配件目录复用外设价签的商品数据（`price_products` 表）；
+- 国补规则全局唯一，分电脑（笔记本／台式机）与手机（手机／平板）两档，比例与封顶金额可在系统配置中调整；国补价按「补贴 = min(原价 × 比例, 封顶)，国补价 = 原价 − 补贴」计算，未填国补价的展牌在预览区以红色脉冲提示；
+- A4 纸每页 2 张，打印样式与其他板块隔离；
+- JSON 全量导出与导入，导入前校验并单事务恢复。
+
+展牌的输出尺寸和内部排版固定，不随运营系统视觉风格变化；界面外壳（配色、布局容器）沿用本系统统一风格。
 
 ### 付款凭证打印
 
@@ -138,7 +154,7 @@
 - 部署包一键生成：包含 Agent、写入服务器地址与注册密钥的 `deploy.conf`、安装说明、卸载、覆盖安装与重置密码脚本；
 - Agent 心跳每 15 秒一次，WebSocket 长连接用于接收指令并回传结果，两者与管理端共用 8900 端口。
 
-该板块与其他五个板块只共用同一个服务进程和同一个 SQLite 文件，设备与任务表使用 `sample_devices_` 前缀，不读写其他模块数据。
+该板块与其他六个板块只共用同一个服务进程和同一个 SQLite 文件，设备与任务表使用 `sample_devices_` 前缀，不读写其他模块数据。
 
 ## 系统架构
 
@@ -151,12 +167,14 @@ Express 5 unified server
   |-- /                           Portal SPA
   |-- /modules/computer-labels    电脑标签打印 SPA
   |-- /modules/price-labels       外设价签打印 SPA
+  |-- /modules/price-tags         价格展牌打印 SPA
   |-- /modules/receipt-assistant  付款凭证打印 SPA
   |-- /modules/employee-badges    员工工牌制作 SPA（纯浏览器状态）
   |-- /modules/sales-report       销售业绩报表 SPA
   |-- /modules/sample-devices     样机设备管理 SPA
   |-- /api/computer-labels        电脑标签打印 API
   |-- /api/price-labels           外设价签打印 API
+  |-- /api/price-tags             价格展牌打印 API
   |-- /api/receipt-assistant      付款凭证 API
   |-- /api/sales-report           销售业绩报表 API（只读）
   |-- /api/sample-devices         样机设备管理 API
@@ -173,6 +191,7 @@ Express 5 unified server
         |-- store/store.sqlite    统一数据库
         |     |-- computer_*        电脑标签打印表
         |     |-- price_*           外设价签打印表
+        |     |-- pricetag_*        价格展牌打印表
         |     |-- receipt_*         付款凭证与销售流水的表
         |     `-- sample_devices_*  样机设备、任务、结果与审计表
         |-- secrets/receipt-ocr.key OCR 加密密钥
@@ -180,7 +199,7 @@ Express 5 unified server
         `-- resources/installer/   部署包脚本与安装说明（外部文件，替换即生效）
 ```
 
-Portal 通过同源 iframe 加载六个独立业务 SPA。四套打印实现分别维护自己的纸张方向、毫米尺寸、分页和资源加载流程；员工工牌使用独立 iframe 打印 A4 横向页面，不向其他模块注入打印样式。所有模块的页面级打印内容统一从 A4 顶边开始向下排列，末页不再垂直居中或落在页面底部；标签、工牌和票据自身内部的固定布局保持独立。销售业绩报表与样机设备管理为纯屏幕展示，不参与打印。
+Portal 通过同源 iframe 加载七个独立业务 SPA。四套打印实现分别维护自己的纸张方向、毫米尺寸、分页和资源加载流程；员工工牌使用独立 iframe 打印 A4 横向页面，不向其他模块注入打印样式。所有模块的页面级打印内容统一从 A4 顶边开始向下排列，末页不再垂直居中或落在页面底部；标签、工牌和票据自身内部的固定布局保持独立。销售业绩报表与样机设备管理为纯屏幕展示，不参与打印。
 
 样机 Agent 的 HTTP 与 WebSocket 与管理端复用同一个 `httpServer`，没有独立端口。Agent 契约路由必须挂在 `/api` 的 404 兜底之前，且挂载前要通过 `app.locals.sampleDevicesDb` 注入数据库；WebSocket 升级请求由 `server.on('upgrade')` 显式接管，只放行 `/ws/agents/*` 与 `/ws/tasks/*`。
 
@@ -225,6 +244,7 @@ lenovo-store-operations/
 │   ├── web/                    # 统一 Portal
 │   ├── computer-labels/        # 电脑商品标签 SPA
 │   ├── price-labels/           # 商品价格标签 SPA
+│   ├── price-tags/             # 价格展牌打印 SPA
 │   ├── receipt-assistant/      # 付款凭证打印 SPA
 │   ├── employee-badges/        # 员工工牌制作 SPA（无持久化）
 │   ├── sales-report/           # 销售业绩报表 SPA（只读统计）
@@ -344,13 +364,14 @@ Portal 使用 hash 路由，`#` 后的业务路径只由浏览器解析，刷新
 - 系统状态：`http://localhost:8900/#/system`
 - 电脑标签打印：`http://localhost:8900/#/computer-labels`
 - 外设价签打印：`http://localhost:8900/#/price-labels`
+- 价格展牌打印：`http://localhost:8900/#/price-tags`
 - 付款凭证打印：`http://localhost:8900/#/receipt-assistant`
 - 员工工牌制作：`http://localhost:8900/#/employee-badges`
 - 销售业绩报表：`http://localhost:8900/#/sales-report`
 - 样机设备管理：`http://localhost:8900/#/sample-devices`
 - 系统健康接口：`http://localhost:8900/api/system/health`
 
-服务器仍兼容 `/system`、`/computer-labels`、`/price-labels`、`/receipt-assistant`、`/employee-badges`、`/sales-report` 和 `/sample-devices` 旧直链，并使用 `308` 跳转到对应 hash 地址；新链接统一使用 hash 地址，避免部署环境未配置 history rewrite 时刷新落入 API 404。
+服务器仍兼容 `/system`、`/computer-labels`、`/price-labels`、`/price-tags`、`/receipt-assistant`、`/employee-badges`、`/sales-report` 和 `/sample-devices` 旧直链，并使用 `308` 跳转到对应 hash 地址；新链接统一使用 hash 地址，避免部署环境未配置 history rewrite 时刷新落入 API 404。
 
 ### 反向代理与刷新
 
@@ -366,13 +387,14 @@ Portal 使用 hash 路由，`#` 后的业务路径只由浏览器解析，刷新
 npm run dev
 ```
 
-该命令同时启动统一后端、Portal 和六个业务板块开发服务器：
+该命令同时启动统一后端、Portal 和七个业务板块开发服务器：
 
 | 服务 | 开发地址 |
 | --- | --- |
 | Portal | `http://localhost:5173/` |
 | 电脑标签打印 | `http://localhost:5174/modules/computer-labels/` |
 | 外设价签打印 | `http://localhost:5175/modules/price-labels/` |
+| 价格展牌打印 | `http://localhost:5180/modules/price-tags/` |
 | 付款凭证打印 | `http://localhost:5176/modules/receipt-assistant/` |
 | 员工工牌制作 | `http://localhost:5177/modules/employee-badges/` |
 | 销售业绩报表 | `http://localhost:5178/modules/sales-report/` |
@@ -610,7 +632,7 @@ $LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key
 
 ### 在线升级反复回滚到上一个版本
 
-检查 `/usr/local/lib/lenovo-store-updater/updater.mjs` 中的 `CURRENT_MODULE_IDS` 是否包含全部板块 id（当前应为 `computer-labels`、`price-labels`、`receipt-assistant`、`employee-badges`、`sales-report`、`sample-labels`、`sample-devices`）。白名单缺失会让健康检查判定模块集合不符，从而自动回滚。
+检查 `/usr/local/lib/lenovo-store-updater/updater.mjs` 中的 `CURRENT_MODULE_IDS` 是否包含全部板块 id（当前应为 `computer-labels`、`price-labels`、`price-tags`、`receipt-assistant`、`employee-badges`、`sales-report`、`sample-labels`、`sample-devices`）。白名单缺失会让健康检查判定模块集合不符，从而自动回滚。
 
 ### 部署包安装后设备不注册
 
@@ -620,7 +642,7 @@ $LENOVO_STORE_DATA_DIR/secrets/receipt-ocr.key
 
 六个联想业务板块已统一运行在 8900 端口：
 
-- 电脑标签打印、外设价签打印、付款凭证打印和样机设备管理均有独立 SPA、API 与数据表，四个模块的数据统一存放在 `store/store.sqlite` 并按模块前缀隔离；员工工牌为纯浏览器 SPA；销售业绩报表为只读统计 SPA，不拥有独立存储；
+- 电脑标签打印、外设价签打印、价格展牌打印、付款凭证打印和样机设备管理均有独立 SPA、API 与数据表，五个模块的数据统一存放在 `store/store.sqlite` 并按模块前缀隔离；员工工牌为纯浏览器 SPA；销售业绩报表为只读统计 SPA，不拥有独立存储；
 - 样机设备管理已接管原 `batch-shutdown-assistant` 项目的全部局域网设备管理能力，Agent 心跳与 WebSocket 与管理端共用同一端口，部署包不再需要单独配置 Agent 端口；
 - 统一数据库使用 WAL 模式并开启外键约束，各模块表结构、索引和读写互不影响，等价于原来的独立库；旧版按模块拆分的数据库目录会保留但不再被业务读写；
 - 销售业绩报表提供区间汇总、按日/月/季/年趋势、月/季/年周期对比、商品明细聚合和销售流水分页查询，所有口径只统计有效销售记录；

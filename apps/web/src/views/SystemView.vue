@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { ElMessage } from 'element-plus';
 import { describeError } from '@lenovo-store/shared/error-catalog';
 import ErrorDoc from '../components/ErrorDoc.vue';
 
@@ -712,6 +713,72 @@ const sessionExpiresText = computed(() => restoreSession.value
   ? new Date(restoreSession.value.expiresAt).toLocaleString('zh-CN', { hour12: false })
   : '');
 
+const subsidyGroups = [
+  { key: 'computer', title: '电脑国补', scope: '适用笔记本、台式机' },
+  { key: 'mobile', title: '手机国补', scope: '适用手机、平板' },
+];
+const DEFAULT_SUBSIDY = {
+  computer: { rate: 15, cap: 1500 },
+  mobile: { rate: 15, cap: 500 },
+};
+const subsidyForm = reactive({
+  computer: { ...DEFAULT_SUBSIDY.computer },
+  mobile: { ...DEFAULT_SUBSIDY.mobile },
+});
+const subsidySaving = ref(false);
+const subsidyError = ref('');
+
+function subsidyExample(key, price) {
+  const rule = subsidyForm[key];
+  if (!rule) return '0.00';
+  const subsidy = Math.min(price * (rule.rate / 100), rule.cap);
+  return subsidy.toFixed(2);
+}
+
+async function loadSubsidyConfig() {
+  try {
+    const response = await fetch('/api/price-tags/subsidy-config');
+    const payload = await response.json();
+    if (payload.code !== 0 || !payload.data) throw new Error(payload.msg || '读取国补规则失败');
+    for (const group of subsidyGroups) {
+      subsidyForm[group.key] = {
+        ...DEFAULT_SUBSIDY[group.key],
+        ...(payload.data[group.key] || {}),
+      };
+    }
+    subsidyError.value = '';
+  } catch (error) {
+    subsidyError.value = error.message || '读取国补规则失败';
+  }
+}
+
+async function saveSubsidyConfig() {
+  subsidySaving.value = true;
+  subsidyError.value = '';
+  try {
+    const response = await fetch('/api/price-tags/subsidy-config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        computer: { rate: subsidyForm.computer.rate, cap: subsidyForm.computer.cap },
+        mobile: { rate: subsidyForm.mobile.rate, cap: subsidyForm.mobile.cap },
+      }),
+    });
+    const payload = await response.json();
+    if (payload.code !== 0) throw new Error(payload.msg || '保存国补规则失败');
+    if (payload.data) {
+      for (const group of subsidyGroups) {
+        subsidyForm[group.key] = { ...DEFAULT_SUBSIDY[group.key], ...(payload.data[group.key] || {}) };
+      }
+    }
+    ElMessage.success('国补规则已保存');
+  } catch (error) {
+    subsidyError.value = error.message || '保存国补规则失败';
+  } finally {
+    subsidySaving.value = false;
+  }
+}
+
 function handleVisibilityChange() {
   uptimeNow.value = window.performance.now();
   if (updateStatus.value?.installation?.active) scheduleUpdatePolling();
@@ -724,6 +791,7 @@ onMounted(() => {
   }, 1000);
   loadHealth();
   loadUpdateStatus();
+  loadSubsidyConfig();
   document.addEventListener('visibilitychange', handleVisibilityChange);
 });
 onBeforeUnmount(() => {
@@ -741,8 +809,8 @@ onBeforeUnmount(() => {
     <div class="page-heading">
       <div>
         <span class="eyebrow">联想门店运营系统</span>
-        <h1>系统状态</h1>
-        <p>检查统一服务、业务板块、数据目录和独立数据库的运行状态。</p>
+        <h1>系统配置</h1>
+        <p>检查统一服务、业务板块、数据目录和独立数据库的运行状态，并配置价格展牌打印使用的国补规则。</p>
       </div>
       <el-button :loading="loading" @click="loadHealth">刷新状态</el-button>
     </div>
@@ -1031,7 +1099,45 @@ onBeforeUnmount(() => {
       <div class="legacy-links">
         <a href="/#/computer-labels">电脑标签打印：Excel / SQLite <span>→</span></a>
         <a href="/#/price-labels">外设价签打印：JSON <span>→</span></a>
+        <a href="/#/price-tags">价格展牌打印：展牌与服务 <span>→</span></a>
         <span>付款凭证打印：当前通过本页统一入口恢复</span>
+      </div>
+    </section>
+
+    <section class="subsidy-panel" aria-labelledby="subsidy-title">
+      <div class="subsidy-heading">
+        <div>
+          <span class="card-kicker">全局唯一规则</span>
+          <h2 id="subsidy-title">国补规则</h2>
+          <p>价格展牌打印共用这一套规则。补贴 = min(原价 × 比例, 封顶金额)，国补价 = 原价 − 补贴。修改后需在展牌页面执行一次重算，才会覆盖展牌上已有的国补价。</p>
+        </div>
+        <el-button type="primary" :loading="subsidySaving" @click="saveSubsidyConfig">保存国补规则</el-button>
+      </div>
+
+      <el-alert
+        v-if="subsidyError"
+        :title="subsidyError"
+        type="error"
+        :closable="false"
+        show-icon
+      />
+
+      <div class="subsidy-grid">
+        <div v-for="group in subsidyGroups" :key="group.key" class="subsidy-card">
+          <h3>{{ group.title }}</h3>
+          <p class="subsidy-scope">{{ group.scope }}</p>
+          <label class="subsidy-field">
+            <span>补贴比例</span>
+            <el-input-number v-model="subsidyForm[group.key].rate" :min="0" :max="100" :precision="0" :step="1" controls-position="right" />
+            <em>%</em>
+          </label>
+          <label class="subsidy-field">
+            <span>封顶金额</span>
+            <el-input-number v-model="subsidyForm[group.key].cap" :min="0" :max="100000" :precision="0" :step="100" controls-position="right" />
+            <em>元</em>
+          </label>
+          <p class="subsidy-example">示例：5999 元 → 补贴 {{ subsidyExample(group.key, 5999) }} 元，国补价 {{ (5999 - subsidyExample(group.key, 5999)).toFixed(2) }} 元</p>
+        </div>
       </div>
     </section>
   </section>

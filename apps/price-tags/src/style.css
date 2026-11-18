@@ -1,0 +1,75 @@
+* { box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Source Han Sans SC", "思源黑体", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  background: #eef2f7;
+  color: #172033;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea { font-family: inherit; }
+
+/* 打印：每张展牌占一页，只打预览区 */
+@media print {
+  @page { margin: 0; size: A4; }
+
+  html, body, #app {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  /* 隐藏编辑区与列表，只保留预览 */
+  .tag-stage > .col-list,
+  .tag-stage > .col-editor,
+  .paper-bar,
+  .panel-head,
+  .foot-note,
+  .tag-toast {
+    display: none !important;
+  }
+
+  .tag-stage {
+    display: block !important;
+    padding: 0 !important;
+  }
+
+  .col-preview {
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  .preview-body {
+    display: block !important;
+    padding: 0 !important;
+    background: #fff !important;
+    overflow: visible !important;
+  }
+
+  .a4-page {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    page-break-after: always;
+    padding: 14.25mm 0 0 !important;
+    width: 210mm;
+    min-height: 297mm;
+    gap: 4.5mm;
+  }
+
+  .a4-page:last-child { page-break-after: auto; }
+
+  .a4-slot {
+    border: 0 !important;
+    width: 110mm;
+    height: 110mm;
+  }
+
+  .slot-empty,
+  .subsidy-warn { display: none !important; }
+}

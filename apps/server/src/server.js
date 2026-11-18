@@ -17,6 +17,11 @@ import priceLabelsRouter, {
   getDatabase as getPriceLabelsDatabase,
   initializeDatabase as initializePriceLabelsDatabase
 } from './modules/price-labels/index.js';
+import priceTagsRouter, {
+  apiBase as priceTagsApiBase,
+  getDatabase as getPriceTagsDatabase,
+  initializeDatabase as initializePriceTagsDatabase
+} from './modules/price-tags/index.js';
 import {
   apiBase as salesReportApiBase,
   createSalesReportRouter
@@ -125,6 +130,12 @@ const moduleRuntimes = new Map([
     router: priceLabelsRouter,
     initializeDatabase: initializePriceLabelsDatabase
   }],
+  ['price-tags', {
+    apiBase: priceTagsApiBase,
+    router: priceTagsRouter,
+    initializeDatabase: initializePriceTagsDatabase,
+    jsonParser: express.json({ limit: '8mb' })
+  }],
   ['receipt-assistant', {
     apiBase: receiptAssistantApiBase,
     router: receiptAssistantRouter,
@@ -142,6 +153,7 @@ const persistenceService = createPersistenceService({
   runtimes: new Map([
     ['computer-labels', { getDatabase: getComputerLabelsDatabase }],
     ['price-labels', { getDatabase: getPriceLabelsDatabase }],
+    ['price-tags', { getDatabase: getPriceTagsDatabase }],
     ['receipt-assistant', { getDatabase: getReceiptAssistantDatabase }],
     ['sample-devices', { getDatabase: getSampleDevicesDatabase }]
   ]),
@@ -257,6 +269,7 @@ function moduleStatus(module) {
 const LEGACY_HEALTH_MODULE_IDS = new Set([
   'computer-labels',
   'price-labels',
+  'price-tags',
   'receipt-assistant',
   'employee-badges'
 ]);

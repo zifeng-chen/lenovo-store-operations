@@ -308,12 +308,27 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 .legacy-links a { display: flex; justify-content: space-between; font-weight: 700; }
 .legacy-links a:hover { background: #eaf1f8; color: #174f7f; }
 
+.subsidy-panel { padding: 24px; border: 1px solid var(--line); border-radius: 13px; background: #fff; box-shadow: 0 8px 24px rgba(35,55,80,.045); }
+.subsidy-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+.subsidy-heading h2 { margin: 6px 0; font-size: 18px; }
+.subsidy-heading p { max-width: 800px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.subsidy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 18px; }
+.subsidy-card { padding: 18px; border: 1px solid var(--line); border-radius: 11px; background: #f8fafc; }
+.subsidy-card h3 { margin: 0 0 4px; font-size: 15px; color: #233750; }
+.subsidy-scope { margin: 0 0 14px; color: #718095; font-size: 12px; }
+.subsidy-field { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.subsidy-field > span { width: 68px; flex: none; color: #4f6075; font-size: 13px; }
+.subsidy-field > em { color: #718095; font-size: 12px; font-style: normal; }
+.subsidy-field .el-input-number { flex: 1; }
+.subsidy-example { margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed #d8e2ee; color: #607087; font-size: 12px; line-height: 1.6; }
+
 @media (max-width: 1180px) {
-  .persistence-heading, .legacy-backup-panel { flex-direction: column; }
+  .persistence-heading, .legacy-backup-panel, .subsidy-heading { flex-direction: column; }
   .inspection-meta { grid-template-columns: 1fr; }
   .inspection-meta div { border-right: 0; border-bottom: 1px solid var(--line); }
   .inspection-meta div:last-child { border-bottom: 0; }
   .legacy-links { width: 100%; min-width: 0; }
+  .subsidy-grid { grid-template-columns: 1fr; }
 }
 
 .installation-status { margin-top: 14px; padding: 16px 18px; border: 1px solid #d9e4ef; border-radius: 10px; background: #f8fbfe; }

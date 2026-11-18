@@ -24,12 +24,19 @@ const DATABASE_ENTRIES_BY_VERSION = new Map([
     ['price-labels.database', 'price-labels'],
     ['receipt-assistant.database', 'receipt-assistant'],
   ])],
+  [4, new Map([
+    ['computer-labels.database', 'computer-labels'],
+    ['price-labels.database', 'price-labels'],
+    ['price-tags.database', 'price-tags'],
+    ['receipt-assistant.database', 'receipt-assistant'],
+  ])],
 ])
-export const CURRENT_BACKUP_FORMAT_VERSION = 3
+export const CURRENT_BACKUP_FORMAT_VERSION = 4
 const OPTIONAL_ENTRY_IDS = new Set(['receipt-assistant.ocr-key'])
 const EXTRACTED_NAMES = new Map([
   ['computer-labels.database', 'computer-labels.sqlite'],
   ['price-labels.database', 'price-labels.sqlite'],
+  ['price-tags.database', 'price-tags.sqlite'],
   ['receipt-assistant.database', 'receipt-assistant.sqlite'],
   ['price-placards.database', 'price-placards.sqlite'],
   ['receipt-assistant.ocr-key', 'receipt-ocr.key'],
