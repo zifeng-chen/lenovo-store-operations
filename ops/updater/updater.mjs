@@ -37,6 +37,10 @@ const MAX_CHECKSUM_BYTES = 64 * 1024
 const SMALL_DOWNLOAD_TIMEOUT_MS = 30000
 const MAX_ARCHIVE_ENTRIES = 30000
 const MAX_UNPACKED_BYTES = 1024 * 1024 * 1024
+// tar 在 LC_ALL=C 下会把非 ASCII 文件名输出成 \NNN 八进制转义，既让安全检查把转义里的
+// 反斜杠误判为不安全路径，也让解包还原出错误文件名。统一使用 UTF-8 locale，
+// 使清单校验与实际解包对同一份名字达成一致。
+const ARCHIVE_LOCALE = 'C.utf8'
 // 更新器自身依赖的同目录模块，必须与 updater.mjs 一起安装到宿主目录。
 const UPDATER_DEPENDENCIES = ['error-hints.mjs', 'version-rules.mjs']
 
@@ -489,7 +493,7 @@ function parseChecksums(buffer) {
 }
 
 async function inspectArchive(archivePath, expectedRoot, config) {
-  const environment = { PATH: '/usr/sbin:/usr/bin:/sbin:/bin', LC_ALL: 'C' }
+  const environment = { PATH: '/usr/sbin:/usr/bin:/sbin:/bin', LC_ALL: ARCHIVE_LOCALE }
   const { stdout: namesOutput } = await runFixed(config.tarPath, ['-tzf', archivePath], { timeout: 120000, env: environment, maxBuffer: 32 * 1024 * 1024 })
   const names = namesOutput.trim().split('\n').filter(Boolean)
   assert(names.length > 0 && names.length <= MAX_ARCHIVE_ENTRIES, '发布包文件数量无效', 'ARCHIVE_ENTRY_LIMIT')
@@ -1296,7 +1300,7 @@ async function install(request, config, status) {
     status.update('verifying', { target: targetIdentity })
     const archiveRoot = `lenovo-store-operations-${request.tag}`
     await inspectArchive(archivePath, archiveRoot, config)
-    await runFixed(config.tarPath, ['-xzf', archivePath, '-C', stagingRoot, '--no-same-owner', '--no-same-permissions'], { timeout: 120000 })
+    await runFixed(config.tarPath, ['-xzf', archivePath, '-C', stagingRoot, '--no-same-owner', '--no-same-permissions'], { timeout: 120000, env: { PATH: '/usr/sbin:/usr/bin:/sbin:/bin', LC_ALL: ARCHIVE_LOCALE } })
     fs.unlinkSync(archivePath)
     const candidateRoot = path.join(stagingRoot, archiveRoot)
     validateExtractedTree(candidateRoot)
