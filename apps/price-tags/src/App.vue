@@ -141,7 +141,7 @@ onMounted(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 258px minmax(0, 1fr) 478px;
+  grid-template-columns: 258px minmax(0, 3fr) minmax(0, 4fr);
   gap: 12px;
   padding: 14px;
 }
@@ -154,9 +154,9 @@ onMounted(() => {
 .tag-toast.error { background: #b42318; }
 
 @media (max-width: 1440px) {
-  .tag-stage { grid-template-columns: 238px minmax(0, 1fr) 462px; }
+  .tag-stage { grid-template-columns: 238px minmax(0, 3fr) minmax(0, 4fr); }
 }
 @media (max-width: 1280px) {
-  .tag-stage { grid-template-columns: 210px minmax(0, 1fr) 462px; }
+  .tag-stage { grid-template-columns: 210px minmax(0, 3fr) minmax(0, 4fr); }
 }
 </style>

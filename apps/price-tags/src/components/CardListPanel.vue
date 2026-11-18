@@ -211,5 +211,8 @@ function rowCount(card) {
 .btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
 .btn-primary:hover:not(:disabled) { background: #124a7a; border-color: #124a7a; color: #fff; }
 .btn-danger { color: #b42318; border-color: #f0c9c6; }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:disabled { cursor: not-allowed; }
+.btn-primary:disabled {
+  background: #dfe7f0; border-color: #c3cfdd; color: #5c6f85;
+}
 </style>

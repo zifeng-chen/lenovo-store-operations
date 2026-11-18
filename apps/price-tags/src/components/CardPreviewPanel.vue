@@ -42,24 +42,30 @@ function hasMissingSubsidy(card) {
       </div>
 
       <div v-for="(page, pageIndex) in pages" :key="pageIndex" class="a4-page">
-        <div class="a4-slot">
-          <template v-if="page[0]">
-            <PriceTagCard :card="page[0]" />
-            <div v-if="page[0].id === activeId && hasMissingSubsidy(page[0])" class="subsidy-warn">
-              未输入国补价格
-            </div>
-          </template>
-          <span v-else class="slot-empty">空位</span>
+        <div class="a4-slot-wrap">
+          <div class="a4-slot">
+            <PriceTagCard v-if="page[0]" :card="page[0]" />
+            <span v-else class="slot-empty">空位</span>
+          </div>
+          <div
+            v-if="page[0] && page[0].id === activeId && hasMissingSubsidy(page[0])"
+            class="subsidy-warn"
+          >
+            未输入国补价格
+          </div>
         </div>
 
-        <div class="a4-slot">
-          <template v-if="page[1]">
-            <PriceTagCard :card="page[1]" />
-            <div v-if="page[1].id === activeId && hasMissingSubsidy(page[1])" class="subsidy-warn">
-              未输入国补价格
-            </div>
-          </template>
-          <span v-else class="slot-empty">空位</span>
+        <div class="a4-slot-wrap">
+          <div class="a4-slot">
+            <PriceTagCard v-if="page[1]" :card="page[1]" />
+            <span v-else class="slot-empty">空位</span>
+          </div>
+          <div
+            v-if="page[1] && page[1].id === activeId && hasMissingSubsidy(page[1])"
+            class="subsidy-warn"
+          >
+            未输入国补价格
+          </div>
         </div>
       </div>
 
@@ -103,20 +109,22 @@ function hasMissingSubsidy(card) {
   position: relative; display: flex; align-items: center; justify-content: center;
   width: 110mm; height: 110mm; border: 0.5px dashed #ddd;
 }
+.a4-slot-wrap { display: grid; gap: 6px; justify-items: center; }
 .slot-empty { color: #ccc; font-size: 12px; }
 
-/* 未填国补警示：贴在展牌右边缘内侧，不再外溢到容器外被裁切 */
+/* 未填国补警示：独立一行置于展牌下方，不覆盖展牌内容 */
 .subsidy-warn {
-  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
-  writing-mode: vertical-rl; background: #ff4d4f; color: #fff;
-  border: 2px solid #cf1322; border-radius: 6px; padding: 12px 7px;
-  font-size: 14px; font-weight: 700; letter-spacing: 3px; white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(255,77,79,.4);
-  animation: subsidy-pulse 1.2s ease-in-out infinite; z-index: 2;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 12px; border-radius: 20px;
+  background: #ff4d4f; color: #fff;
+  border: 1.5px solid #cf1322;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 1px; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(255,77,79,.35);
+  animation: subsidy-pulse 1.2s ease-in-out infinite;
 }
 @keyframes subsidy-pulse {
-  0%, 100% { transform: translateY(-50%) scale(1); }
-  50% { transform: translateY(-50%) scale(1.06); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: .72; }
 }
 
 .empty { padding: 40px 0; text-align: center; }
