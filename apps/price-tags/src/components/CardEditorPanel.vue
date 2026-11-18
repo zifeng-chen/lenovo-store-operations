@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { MAX_COLOR_ROWS, MAX_FEATURES, MIN_FEATURES, getTotalColorRows } from '../types.js'
 import { calcSubsidyPrice } from '../subsidy.js'
 import { getBuiltinIcons, iconCategoriesOf } from '../icon-library.js'
+import { getCopiesForIcon } from '../feature-copy.js'
 import { api } from '../api.js'
 
 const props = defineProps({
@@ -67,12 +68,27 @@ watch(
   }
 )
 
+/* 选中图标后自动套用该图标的第一条文案，用户再在下拉框里换；
+   没有文案的图标保持原样，不覆盖用户已手填的内容。 */
+function applyIconCopy(feature) {
+  const copies = getCopiesForIcon(feature.iconName)
+  if (!copies.length) {
+    feature.linkedCopy = ''
+    return
+  }
+  const first = copies[0]
+  feature.linkedCopy = `${first.title}|${first.desc}`
+  feature.title = first.title
+  feature.desc = first.desc
+}
+
 function onIconTypeChange(feature) {
   feature.iconSrc = ''
   feature.linkedCopy = ''
   if (feature.iconType === 'builtin') {
     if (!feature.iconName || !categoryIcons.value.some((icon) => icon.name === feature.iconName)) {
       feature.iconName = categoryIcons.value[0]?.name || ''
+      applyIconCopy(feature)
     }
     feature.iconSize = 100
   } else if (feature.iconSize === 100) {
@@ -85,7 +101,32 @@ function selectIcon(feature, name) {
   if (feature.iconName === name) return
   feature.iconName = name
   feature.iconSize = 100
+  applyIconCopy(feature)
   touch()
+}
+
+/* 下拉框选中一条文案：value 为「标题|副标题」，两条一起填 */
+function onLinkedCopyChange(feature, value) {
+  if (!value) return
+  const [title, desc] = value.split('|')
+  feature.linkedCopy = value
+  feature.title = title || ''
+  feature.desc = desc || ''
+  touch()
+}
+
+function copiesOf(feature) {
+  return getCopiesForIcon(feature.iconName)
+}
+
+/* 下拉框的回显值：老展牌没有存 linkedCopy，但若标题/副标题恰好等于某条内置文案，
+   就把它认回来，避免明明用的是内置文案、下拉框却显示"未选择"。 */
+function currentLinkedValue(feature) {
+  if (feature.linkedCopy) return feature.linkedCopy
+  const hit = getCopiesForIcon(feature.iconName).find(
+    (copy) => copy.title === feature.title && copy.desc === feature.desc
+  )
+  return hit ? `${hit.title}|${hit.desc}` : ''
 }
 
 function uploadIcon(feature, event) {
@@ -418,6 +459,20 @@ async function saveServiceToLibrary(slot) {
                 </div>
               </div>
 
+              <div v-if="feature.iconType === 'builtin' && copiesOf(feature).length" class="form-group">
+                <label>卖点文案<span class="label-hint">选中即填入标题与副标题</span></label>
+                <select
+                  class="input"
+                  :value="currentLinkedValue(feature)"
+                  @change="onLinkedCopyChange(feature, $event.target.value)"
+                >
+                  <option v-if="!currentLinkedValue(feature)" value="">从下方文案中选择，或直接手填</option>
+                  <option v-for="copy in copiesOf(feature)" :key="copy.title + copy.desc" :value="`${copy.title}|${copy.desc}`">
+                    {{ copy.title }} — {{ copy.desc }}
+                  </option>
+                </select>
+              </div>
+
               <div class="form-group">
                 <label>标题</label>
                 <input v-model="feature.title" class="input" @input="touch" />
@@ -711,6 +766,7 @@ async function saveServiceToLibrary(slot) {
 .form-group { margin-bottom: 18px; }
 .form-group:last-child { margin-bottom: 0; }
 .form-group label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 5px; }
+.label-hint { margin-left: 6px; font-weight: 400; font-size: 11px; color: #999; }
 .input {
   width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px;
   font-size: 13px; font-family: inherit; color: #333; outline: none; background: #fff;
