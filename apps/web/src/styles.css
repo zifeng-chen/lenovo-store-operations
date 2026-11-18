@@ -387,10 +387,19 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 /* ==================== 工作台改造：搜索 / 收款 / 外观 ==================== */
 :root { --card-alpha: .92; }
 
-/* ---- 顶部 Hero 与搜索 ---- */
-.dashboard-hero { min-height: 168px; gap: 28px; align-items: center; }
-.hero-copy { min-width: 0; flex: 1 1 auto; }
-.hero-search { flex: 0 0 clamp(320px, 34%, 460px); display: flex; flex-direction: column; gap: 9px; }
+/* ---- 顶部栏：左侧搜索 + 右侧北京时间 ---- */
+.dash-topbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 18px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 16px;
+  background: rgba(16,30,48,.56);
+  backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: 0 14px 36px rgba(4,12,24,.30);
+}
+.dash-search { flex: 1 1 auto; min-width: 0; }
 .search-box {
   display: flex;
   align-items: center;
@@ -416,17 +425,16 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 .engine-name { white-space: nowrap; }
 .engine-caret { font-size: 8px; color: #8a97a8; }
 
+/* Teleport 到 body + fixed 定位：任何卡片的 backdrop-filter 叠加上下文都压不住 */
 .engine-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  z-index: 60;
-  min-width: 176px;
+  position: fixed;
+  z-index: 2147483000;
+  min-width: 186px;
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fff;
-  box-shadow: 0 18px 44px rgba(16,32,52,.22), 0 2px 8px rgba(16,32,52,.10);
+  box-shadow: 0 24px 60px rgba(8,20,36,.34), 0 3px 10px rgba(8,20,36,.14);
 }
 .engine-option {
   width: 100%; display: flex; align-items: center; gap: 9px; padding: 9px 10px;
@@ -444,12 +452,25 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
   background: var(--blue); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .18s ease;
 }
 .search-submit:hover { background: #124a7a; }
-.search-hint { display: flex; align-items: center; gap: 8px; padding-left: 6px; color: rgba(255,255,255,.62); font-size: 11px; }
-.search-hint kbd {
-  padding: 2px 6px; border: 1px solid rgba(255,255,255,.26); border-radius: 5px;
-  background: rgba(255,255,255,.12); color: rgba(255,255,255,.88);
-  font-family: ui-monospace, monospace; font-size: 10px;
+
+/* ---- 右侧北京时间 ---- */
+.dash-clock {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
+  padding-left: 24px;
+  border-left: 1px solid rgba(255,255,255,.14);
+  text-align: right;
 }
+.clock-time {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 30px; font-weight: 800; line-height: 1;
+  letter-spacing: -.02em; color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 14px rgba(0,0,0,.3);
+}
+.clock-sec { margin-left: 2px; color: #ffd479; font-size: 20px; }
+.clock-date { margin-top: 6px; color: rgba(255,255,255,.78); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+.clock-lunar { margin-top: 2px; color: rgba(255,255,255,.52); font-size: 11px; letter-spacing: .02em; }
 
 /* ---- 今日收款：左侧视觉 + 右侧三指标，同一卡片容器 ---- */
 .revenue-row {
@@ -573,8 +594,19 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 @media (max-width: 1180px) {
   .revenue-row { grid-template-columns: 180px minmax(0, 1fr); }
   .facai-img { width: 128px; height: 128px; }
-  .dashboard-hero { flex-direction: column; align-items: stretch; }
-  .hero-search { flex: 1 1 auto; }
+}
+@media (max-width: 900px) {
+  /* 窄屏：时间落到搜索框下方 */
+  .dash-topbar { flex-wrap: wrap; gap: 14px; }
+  .dash-search { flex: 1 1 100%; }
+  .dash-clock {
+    flex: 1 1 100%; flex-direction: row; align-items: baseline; justify-content: flex-start;
+    gap: 12px; padding-left: 0; padding-top: 12px;
+    border-left: 0; border-top: 1px solid rgba(255,255,255,.14);
+    text-align: left;
+  }
+  .clock-time { font-size: 22px; }
+  .clock-sec { font-size: 15px; }
 }
 @media (max-width: 880px) {
   .revenue-row { grid-template-columns: 1fr; }

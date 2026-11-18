@@ -20,6 +20,10 @@ const searchKeyword = ref('');
 const appearanceOpen = ref(false);
 const appearanceTrigger = ref(null);
 const appearancePanelStyle = ref({});
+const engineTrigger = ref(null);
+const engineMenuRef = ref(null);
+const engineMenuStyle = ref({});
+const searchInput = ref(null);
 
 const todayCount = ref(null);
 const todayAmount = ref(null);
@@ -33,6 +37,51 @@ const todayAvg = computed(() => {
   if (!todayCount.value || todayAmount.value === null) return null;
   return todayAmount.value / todayCount.value;
 });
+
+/* ---- 北京时间 + 农历 ---- */
+const BEIJING_TZ = 'Asia/Shanghai';
+const LUNAR_DAYS = ['', '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
+  '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
+  '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'];
+
+// 单独格式化秒不会补零（得到 "7"），因此一次性取完整时间再切分
+const timeFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: BEIJING_TZ, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+});
+const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: BEIJING_TZ, year: 'numeric', month: 'long', day: 'numeric',
+});
+const weekFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: BEIJING_TZ, weekday: 'long',
+});
+const lunarFormatter = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', {
+  timeZone: BEIJING_TZ, year: 'numeric', month: 'long', day: 'numeric',
+});
+
+const clockTime = ref('--:--');
+const clockSecond = ref(':--');
+const clockDate = ref('');
+const clockLunar = ref('');
+
+function renderClock() {
+  const now = new Date();
+  const segments = timeFormatter.format(now).split(':');
+  clockTime.value = `${segments[0]}:${segments[1]}`;
+  clockSecond.value = `:${segments[2] || '00'}`;
+  clockDate.value = `${dateFormatter.format(now)} ${weekFormatter.format(now)}`;
+  try {
+    const parts = lunarFormatter.formatToParts(now);
+    const pick = (type) => parts.find((item) => item.type === type)?.value || '';
+    const dayNumber = Number(String(pick('day')).replace(/\D/g, ''));
+    const dayText = LUNAR_DAYS[dayNumber] || pick('day');
+    const yearName = pick('yearName');
+    clockLunar.value = `农历 ${yearName ? `${yearName}年 ` : ''}${pick('month')}${dayText}`;
+  } catch {
+    clockLunar.value = '';
+  }
+}
+
+let clockTimer = null;
 
 const amountFormatter = new Intl.NumberFormat('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -128,6 +177,7 @@ function selectEngine(id) {
   } catch {
     // 忽略存储失败。
   }
+  searchInput.value?.focus();
 }
 
 function submitSearch() {
@@ -136,8 +186,44 @@ function submitSearch() {
   window.open(`${currentEngine.value.url}${encodeURIComponent(keyword)}`, '_blank', 'noopener,noreferrer');
 }
 
+// 弹窗 Teleport 到 body 并 fixed 定位，任何祖先的 overflow / backdrop-filter 都无法裁切或遮挡
+function placeEngineMenu() {
+  const rect = engineTrigger.value?.getBoundingClientRect();
+  if (!rect) return;
+  const menu = engineMenuRef.value;
+  const menuWidth = menu?.offsetWidth || 186;
+  const menuHeight = menu?.offsetHeight || 140;
+
+  let left = rect.left;
+  if (left + menuWidth > window.innerWidth - 8) {
+    left = Math.max(8, window.innerWidth - menuWidth - 8);
+  }
+
+  let top = rect.bottom + 8;
+  if (top + menuHeight > window.innerHeight - 8 && rect.top - menuHeight - 8 > 8) {
+    top = rect.top - menuHeight - 8;
+  }
+
+  engineMenuStyle.value = {
+    position: 'fixed',
+    top: `${Math.round(top)}px`,
+    left: `${Math.round(left)}px`,
+    zIndex: 2147483000,
+  };
+}
+
+function toggleEngineMenu() {
+  engineMenuOpen.value = !engineMenuOpen.value;
+  if (engineMenuOpen.value) {
+    // 先于绘制测量尺寸，避免首帧位置跳动
+    placeEngineMenu();
+  }
+}
+
 function closeEngineMenu(event) {
-  if (!event.target.closest?.('.engine-picker')) engineMenuOpen.value = false;
+  if (engineMenuOpen.value && !event.target.closest?.('.engine-picker, .engine-menu')) {
+    engineMenuOpen.value = false;
+  }
   if (!event.target.closest?.('#appearancePanel, .appearance-trigger, .glass-btn')) appearanceOpen.value = false;
 }
 
@@ -162,12 +248,16 @@ function toggleAppearance() {
 
 function onViewportChange() {
   if (appearanceOpen.value) placeAppearancePanel();
+  if (engineMenuOpen.value) placeEngineMenu();
 }
 
 let pollTimer = null;
 
 function onVisibilityChange() {
-  if (document.visibilityState === 'visible') loadRevenue();
+  if (document.visibilityState !== 'visible') return;
+  loadRevenue();
+  // 后台标签页的定时器会被节流，回到前台立即校正时间
+  renderClock();
 }
 
 onMounted(() => {
@@ -183,6 +273,10 @@ onMounted(() => {
 
   loadRevenue();
   pollTimer = window.setInterval(loadRevenue, 60000);
+
+  renderClock();
+  clockTimer = window.setInterval(renderClock, 1000);
+
   document.addEventListener('visibilitychange', onVisibilityChange);
   document.addEventListener('click', closeEngineMenu);
   window.addEventListener('resize', onViewportChange);
@@ -191,6 +285,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (pollTimer) window.clearInterval(pollTimer);
+  if (clockTimer) window.clearInterval(clockTimer);
   document.removeEventListener('visibilitychange', onVisibilityChange);
   document.removeEventListener('click', closeEngineMenu);
   window.removeEventListener('resize', onViewportChange);
@@ -200,52 +295,72 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="page-stack">
-    <div class="hero-panel dashboard-hero">
-      <div class="hero-copy">
-        <span class="eyebrow">联想门店运营系统</span>
-        <h1>门店日常工具，集中在一个入口</h1>
-        <p>{{ STORE_MODULES.length }} 个板块保持业务边界独立，只统一品牌、入口、部署、状态监控与后续维护方式。</p>
-      </div>
-
-      <div class="hero-search">
-        <form class="search-box" @submit.prevent="submitSearch">
+    <div class="dash-topbar">
+      <div class="dash-search">
+        <form class="search-box" role="search" @submit.prevent="submitSearch">
           <div class="engine-picker">
             <button
+              ref="engineTrigger"
               class="engine-trigger"
               type="button"
               aria-haspopup="listbox"
               :aria-expanded="engineMenuOpen"
-              @click.stop="engineMenuOpen = !engineMenuOpen"
+              aria-label="选择搜索引擎"
+              @click.stop="toggleEngineMenu"
             >
               <img class="engine-icon" :src="currentEngine.icon" :alt="currentEngine.name" />
               <span class="engine-name">{{ currentEngine.name }}</span>
               <span class="engine-caret" aria-hidden="true">▼</span>
             </button>
-            <div v-show="engineMenuOpen" class="engine-menu" role="listbox" aria-label="选择搜索引擎">
-              <button
-                v-for="engine in ENGINES"
-                :key="engine.id"
-                class="engine-option"
-                :class="{ 'is-current': engine.id === engineId }"
-                type="button"
-                role="option"
-                :aria-selected="engine.id === engineId"
-                @click.stop="selectEngine(engine.id)"
-              >
-                <img class="engine-icon engine-icon--small" :src="engine.icon" :alt="engine.name" />
-                <span>{{ engine.name }}</span>
-                <small v-if="engine.id === 'baidu'">默认</small>
-              </button>
-            </div>
           </div>
-          <input v-model="searchKeyword" class="search-input" type="text" placeholder="搜索网页、商品型号、政策文档…" />
+          <input
+            ref="searchInput"
+            v-model="searchKeyword"
+            class="search-input"
+            type="text"
+            placeholder="搜索网页、商品型号、政策文档…"
+            autocomplete="off"
+          />
           <button class="search-submit" type="submit">搜索</button>
         </form>
-        <div class="search-hint">
-          <span>按 <kbd>Enter</kbd> 直接用「{{ currentEngine.name }}」搜索</span>
+      </div>
+
+      <div class="dash-clock">
+        <div class="clock-time">
+          <span>{{ clockTime }}</span><span class="clock-sec">{{ clockSecond }}</span>
         </div>
+        <div class="clock-date">{{ clockDate }}</div>
+        <div v-if="clockLunar" class="clock-lunar">{{ clockLunar }}</div>
       </div>
     </div>
+
+    <!-- 搜索引擎选项：Teleport 到 body + fixed 定位，避免被卡片叠加上下文遮挡 -->
+    <Teleport to="body">
+      <div
+        v-if="engineMenuOpen"
+        ref="engineMenuRef"
+        class="engine-menu"
+        role="listbox"
+        aria-label="选择搜索引擎"
+        :style="engineMenuStyle"
+        @click.stop
+      >
+        <button
+          v-for="engine in ENGINES"
+          :key="engine.id"
+          class="engine-option"
+          :class="{ 'is-current': engine.id === engineId }"
+          type="button"
+          role="option"
+          :aria-selected="engine.id === engineId"
+          @click.stop="selectEngine(engine.id)"
+        >
+          <img class="engine-icon engine-icon--small" :src="engine.icon" :alt="engine.name" />
+          <span>{{ engine.name }}</span>
+          <small v-if="engine.id === 'baidu'">默认</small>
+        </button>
+      </div>
+    </Teleport>
 
     <div class="revenue-row">
       <div class="facai-stage">
