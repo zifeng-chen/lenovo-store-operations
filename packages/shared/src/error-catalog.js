@@ -454,6 +454,12 @@ export const ERROR_CATALOG = Object.freeze({
     ['联系维护人员按部署文档重新创建该目录。'],
     { retryable: false }
   ),
+  SELF_REFRESH_LOOP: entry(
+    '更新程序自更新未能生效',
+    '升级开始前会把宿主目录里的更新程序同步为当前版本，同步后重启仍不一致时会停止自动重试，避免反复重启占满重启配额。',
+    ['检查 /usr/local/lib/lenovo-store-updater/ 下三个文件的属主是否为 root、权限是否为 755/644。', '确认 /opt/lenovo-store-operations/current/ops/updater/ 目录可读。', '重启 lenovo-store-updater.path 后重新提交升级。'],
+    { retryable: true, severity: 'critical' }
+  ),
   UNSAFE_NATIVE_CACHE: entry(
     '原生模块缓存目录不安全',
     '原生模块编译产物缓存目录必须由 root 独占且不能是符号链接，否则可能被非特权账号替换成任意二进制。',

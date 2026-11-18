@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { STORE_MODULES } from '@lenovo-store/shared';
 import { ENGINE_ICONS } from '../searchEngineIcons.js';
+import FacaiCoinRain from '../components/FacaiCoinRain.vue';
 import facaiTreeUrl from '../assets/facai-tree.png';
 
 const CARD_ALPHA_KEY = 'lenovo-store:card-alpha';
@@ -369,6 +370,7 @@ onBeforeUnmount(() => {
           <img class="facai-img" :src="facaiTreeUrl" alt="发财树" />
           <figcaption class="facai-caption">日进斗金 · <b>今日进宝</b></figcaption>
         </figure>
+        <FacaiCoinRain />
       </div>
 
       <div class="revenue-metrics">

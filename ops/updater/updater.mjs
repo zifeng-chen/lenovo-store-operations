@@ -43,6 +43,9 @@ const MAX_UNPACKED_BYTES = 1024 * 1024 * 1024
 const ARCHIVE_LOCALE = 'C.utf8'
 // 更新器自身依赖的同目录模块，必须与 updater.mjs 一起安装到宿主目录。
 const UPDATER_DEPENDENCIES = ['error-hints.mjs', 'version-rules.mjs']
+const UPDATER_MAX_BYTES = 2 * 1024 * 1024
+// 自更新后进程会主动退出、由 systemd 重新拉起，用一个计数器防止校验异常时无限重启。
+const MAX_SELF_REFRESH_ATTEMPTS = 2
 
 function updaterError(message, code = 'UPDATER_FAILED') {
   const error = new Error(message)
@@ -1037,6 +1040,44 @@ async function waitForHealth(config, expected) {
   throw updaterError(`服务健康检查超时：${lastMessage}`, 'HEALTH_CHECK_FAILED')
 }
 
+function selfRefreshCounterPath(config) {
+  return path.join(path.dirname(config.statePath), 'self-refresh.json')
+}
+
+// 升级由本文件执行，而本文件只有在升级成功后才会被替换，于是「本版的更新器修复
+// 要等下一次升级才生效」。1.1.4 的 locale 修复就是这样失效的，最后只能人工覆盖文件。
+// service 是 Type=oneshot、由 .path 单元拉起，每次请求都是全新进程，所以在进程启动阶段
+// 先把自己同步成 current release 里的版本，再退出让 systemd 重新拉起，当次即可生效。
+// 只从 current release 取，不信任远端包：坏包不会借这条路永久污染宿主目录。
+function refreshSelfBeforeInstall(config) {
+  const currentPath = path.join(config.releaseRoot, 'current')
+  if (!fs.existsSync(currentPath)) return false
+  const releaseRoot = resolveReleaseLink(currentPath, releasesDirectory(config))
+  const sourceRoot = path.join(releaseRoot, 'ops/updater')
+  const sourcePath = path.join(sourceRoot, 'updater.mjs')
+  if (!fs.existsSync(sourcePath)) return false
+  const directory = path.dirname(config.updaterPath)
+  assert(fs.realpathSync(directory) === directory, '更新器安装目录不能是符号链接', 'UNSAFE_UPDATER_PATH')
+
+  const pending = []
+  const files = [['updater.mjs', config.updaterPath, 0o755], ...UPDATER_DEPENDENCIES.map(name => [name, path.join(directory, name), 0o644])]
+  for (const [name, target, mode] of files) {
+    const source = path.join(sourceRoot, name)
+    if (!fs.existsSync(source)) return false
+    const digest = sha256RegularFile(source, UPDATER_MAX_BYTES, `current release 的 ${name}`)
+    const installed = fs.existsSync(target) ? sha256RegularFile(target, UPDATER_MAX_BYTES, `已安装的 ${name}`) : null
+    if (digest !== installed) pending.push({ source, target, mode })
+  }
+  if (pending.length === 0) return false
+
+  const counterPath = selfRefreshCounterPath(config)
+  const attempts = fs.existsSync(counterPath) ? Number(readRootOwnedJson(counterPath, MAX_REQUEST_BYTES, '自更新计数').attempts) || 0 : 0
+  assert(attempts < MAX_SELF_REFRESH_ATTEMPTS, '更新器自更新后仍与 current release 不一致，已停止自动重试以免反复重启，请人工检查安装目录', 'SELF_REFRESH_LOOP')
+  writeJsonAtomic(counterPath, { attempts: attempts + 1, updatedAt: new Date().toISOString() }, { mode: 0o600 })
+  for (const { source, target, mode } of pending) installUpdaterFile(source, target, mode, directory)
+  return true
+}
+
 function installSignedUpdater(candidateRoot, config, expectedSha256) {
   const source = path.join(candidateRoot, 'ops/updater/updater.mjs')
   const sourceStats = fs.lstatSync(source)
@@ -1346,6 +1387,8 @@ async function install(request, config, status) {
     await waitForHealth(config, targetIdentity)
     status.update('finalizing')
     installSignedUpdater(finalPath, config, trustedUpdaterSha256)
+    // 此时宿主目录已与 new release 一致，清掉自更新计数，下一轮重新获得完整的重试额度。
+    removeFileDurably(selfRefreshCounterPath(config))
     transaction = { ...transaction, stage: 'committed', updatedAt: new Date().toISOString() }
     writeJsonAtomic(config.transactionPath, transaction, { mode: 0o600 })
     status.finish('succeeded', { phase: 'completed', current: readReleaseIdentity(finalPath), target: readReleaseIdentity(finalPath) })
@@ -1422,6 +1465,12 @@ async function main() {
   await recoverInterruptedTransaction(config)
   recoverOrphanedProcessing(config)
   recoverStaleRunningStatus(config)
+  // 必须在 claimRequest 之前：自更新会结束当前进程，请求文件保持原样，path 单元会再拉起一次。
+  // 每次运行都先过一遍，与「本次是否要升级」无关；内容一致时直接返回，不产生额外重启。
+  if (refreshSelfBeforeInstall(config)) {
+    console.log('更新器已同步为 current release 中的版本，退出后由 systemd 重新拉起')
+    return
+  }
   const request = claimRequest(config)
   if (!request) return
   writeJsonAtomic(config.transactionPath, {

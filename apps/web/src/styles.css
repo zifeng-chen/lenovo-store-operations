@@ -524,6 +524,16 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 @keyframes facai-float { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-3px) scale(1.012); } }
 @keyframes facai-glow { 0%, 100% { opacity: .68; transform: scale(.94); } 50% { opacity: 1; transform: scale(1.07); } }
 
+/* 金币层铺满整个舞台并压在树之上，pointer-events 关掉避免挡住卡片点击；
+   每枚金币的动画名/时长/延迟由 FacaiCoinRain 按树冠几何逐个写入内联样式 */
+.coin-stage { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.coin-layer { position: absolute; inset: 0; }
+.facai-coin {
+  position: absolute; display: block; will-change: transform, opacity;
+  filter: drop-shadow(0 1px 2px rgba(120,70,0,.45));
+  transform-origin: 50% 50%; backface-visibility: visible;
+}
+
 .revenue-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; padding: 22px 22px 22px 20px; gap: 6px; }
 .rev-metric { position: relative; padding: 0 18px; color: #fff; }
 .rev-metric:first-child { padding-left: 0; }
