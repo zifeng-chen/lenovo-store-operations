@@ -160,13 +160,18 @@ function rowCount(card) {
 .item.is-active { background: #eaf2f9; border-left: 3px solid var(--blue); padding-left: 8px; }
 
 .item-check {
-  width: 14px; height: 14px; flex: 0 0 auto; border: 1.5px solid #c3cfdd;
-  border-radius: 4px; background: #fff; position: relative; cursor: pointer;
+  width: 14px; height: 14px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid #c3cfdd; border-radius: 4px; background: #fff;
+  position: relative; cursor: pointer; box-sizing: border-box;
+  transition: background .15s, border-color .15s;
 }
+.item-check:hover { border-color: var(--blue); }
 .item.is-checked .item-check { background: var(--blue); border-color: var(--blue); }
 .item.is-checked .item-check::after {
-  content: "✓"; position: absolute; inset: 0; display: grid; place-items: center;
-  color: #fff; font-size: 9px; font-weight: 800;
+  content: ""; width: 4px; height: 7px;
+  border: solid #fff; border-width: 0 1.6px 1.6px 0;
+  transform: translateY(-1px) rotate(45deg);
 }
 
 .item-body { min-width: 0; flex: 1; }

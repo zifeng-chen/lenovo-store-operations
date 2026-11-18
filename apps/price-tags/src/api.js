@@ -23,6 +23,9 @@ export const api = {
   recalcSubsidy: () => request('/cards/recalc', { method: 'POST' }),
   accessories: () => request('/accessories'),
   services: () => request('/services'),
+  createService: (payload) => request('/services', { method: 'POST', body: JSON.stringify(payload) }),
+  updateService: (id, payload) => request(`/services/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteService: (id) => request(`/services/${id}`, { method: 'DELETE' }),
   icons: () => request('/icons'),
   subsidyConfig: () => request('/subsidy-config')
 }

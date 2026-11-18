@@ -153,6 +153,63 @@ export function createPriceTagsRouter() {
     res.json({ code: 0, data: rows, msg: 'success' })
   })
 
+  router.post('/services', (req, res) => {
+    const db = getDatabase()
+    const body = req.body || {}
+    const name = String(body.name ?? '').trim()
+    if (!name) {
+      res.status(400).json({ code: 400, data: null, msg: '服务名称不能为空' })
+      return
+    }
+    const info = db.prepare(`
+      INSERT INTO ${SERVICES} (name, price, category, product_category) VALUES (?, ?, ?, ?)
+    `).run(
+      name,
+      Number(body.price) || 0,
+      String(body.category ?? '').trim() || '增值服务',
+      String(body.productCategory ?? '').trim()
+    )
+    const row = db.prepare(`SELECT * FROM ${SERVICES} WHERE id = ?`).get(info.lastInsertRowid)
+    res.json({ code: 0, data: row, msg: '已新增' })
+  })
+
+  router.put('/services/:id', (req, res) => {
+    const db = getDatabase()
+    const body = req.body || {}
+    const current = db.prepare(`SELECT * FROM ${SERVICES} WHERE id = ?`).get(req.params.id)
+    if (!current) {
+      res.status(404).json({ code: 404, data: null, msg: '服务不存在' })
+      return
+    }
+    const name = body.name === undefined ? current.name : String(body.name).trim()
+    if (!name) {
+      res.status(400).json({ code: 400, data: null, msg: '服务名称不能为空' })
+      return
+    }
+    db.prepare(`
+      UPDATE ${SERVICES} SET name = ?, price = ?, category = ?, product_category = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      name,
+      body.price === undefined ? current.price : Number(body.price) || 0,
+      body.category === undefined ? current.category : (String(body.category).trim() || '增值服务'),
+      body.productCategory === undefined ? current.product_category : String(body.productCategory).trim(),
+      req.params.id
+    )
+    const row = db.prepare(`SELECT * FROM ${SERVICES} WHERE id = ?`).get(req.params.id)
+    res.json({ code: 0, data: row, msg: '已保存' })
+  })
+
+  router.delete('/services/:id', (req, res) => {
+    const db = getDatabase()
+    const info = db.prepare(`DELETE FROM ${SERVICES} WHERE id = ?`).run(req.params.id)
+    if (!info.changes) {
+      res.status(404).json({ code: 404, data: null, msg: '服务不存在' })
+      return
+    }
+    res.json({ code: 0, data: { id: Number(req.params.id) }, msg: '已删除' })
+  })
+
   router.get('/subsidy-config', (_req, res) => {
     res.json({ code: 0, data: readSubsidyConfig(getDatabase()), msg: 'success' })
   })

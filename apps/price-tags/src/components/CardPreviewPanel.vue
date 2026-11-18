@@ -45,10 +45,9 @@ function hasMissingSubsidy(card) {
         <div class="a4-slot">
           <template v-if="page[0]">
             <PriceTagCard :card="page[0]" />
-            <template v-if="page[0].id === activeId && hasMissingSubsidy(page[0])">
-              <div class="subsidy-warn left">未输入国补价格</div>
-              <div class="subsidy-warn right">未输入国补价格</div>
-            </template>
+            <div v-if="page[0].id === activeId && hasMissingSubsidy(page[0])" class="subsidy-warn">
+              未输入国补价格
+            </div>
           </template>
           <span v-else class="slot-empty">空位</span>
         </div>
@@ -56,10 +55,9 @@ function hasMissingSubsidy(card) {
         <div class="a4-slot">
           <template v-if="page[1]">
             <PriceTagCard :card="page[1]" />
-            <template v-if="page[1].id === activeId && hasMissingSubsidy(page[1])">
-              <div class="subsidy-warn left">未输入国补价格</div>
-              <div class="subsidy-warn right">未输入国补价格</div>
-            </template>
+            <div v-if="page[1].id === activeId && hasMissingSubsidy(page[1])" class="subsidy-warn">
+              未输入国补价格
+            </div>
           </template>
           <span v-else class="slot-empty">空位</span>
         </div>
@@ -107,20 +105,18 @@ function hasMissingSubsidy(card) {
 }
 .slot-empty { color: #ccc; font-size: 12px; }
 
-/* 未填国补警示：原项目样式 */
+/* 未填国补警示：贴在展牌右边缘内侧，不再外溢到容器外被裁切 */
 .subsidy-warn {
-  position: absolute; top: 50%; transform: translateY(-50%);
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
   writing-mode: vertical-rl; background: #ff4d4f; color: #fff;
-  border: 2px solid #cf1322; border-radius: 6px; padding: 14px 8px;
-  font-size: 16px; font-weight: 700; letter-spacing: 4px; white-space: nowrap;
+  border: 2px solid #cf1322; border-radius: 6px; padding: 12px 7px;
+  font-size: 14px; font-weight: 700; letter-spacing: 3px; white-space: nowrap;
   box-shadow: 0 2px 8px rgba(255,77,79,.4);
-  animation: subsidy-pulse 1.2s ease-in-out infinite;
+  animation: subsidy-pulse 1.2s ease-in-out infinite; z-index: 2;
 }
-.subsidy-warn.left { left: -62px; }
-.subsidy-warn.right { right: -62px; }
 @keyframes subsidy-pulse {
   0%, 100% { transform: translateY(-50%) scale(1); }
-  50% { transform: translateY(-50%) scale(1.12); }
+  50% { transform: translateY(-50%) scale(1.06); }
 }
 
 .empty { padding: 40px 0; text-align: center; }

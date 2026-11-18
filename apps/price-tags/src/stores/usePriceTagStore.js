@@ -141,6 +141,23 @@ export function usePriceTagStore() {
     return result?.changed || 0
   }
 
+  async function addService(payload) {
+    const row = await api.createService(payload)
+    services.value = [...services.value, row]
+    return row
+  }
+
+  async function editService(id, payload) {
+    const row = await api.updateService(id, payload)
+    services.value = services.value.map((item) => (item.id === row.id ? row : item))
+    return row
+  }
+
+  async function removeService(id) {
+    await api.deleteService(id)
+    services.value = services.value.filter((item) => item.id !== id)
+  }
+
   return {
     cards,
     selectedIds,
@@ -167,6 +184,9 @@ export function usePriceTagStore() {
     duplicateCard,
     persist,
     recalcAllSubsidy,
+    addService,
+    editService,
+    removeService,
     getTotalColorRows,
     calcSubsidyPrice
   }

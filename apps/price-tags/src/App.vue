@@ -11,8 +11,10 @@ const toast = ref({ visible: false, message: '', type: 'success' })
 let toastTimer
 
 function notify(message, type = 'success') {
+  const text = message && typeof message === 'object' ? message.message : message
+  const level = message && typeof message === 'object' ? (message.type || type) : type
   clearTimeout(toastTimer)
-  toast.value = { visible: true, message, type }
+  toast.value = { visible: true, message: text, type: level }
   toastTimer = setTimeout(() => { toast.value.visible = false }, 2600)
 }
 
@@ -71,6 +73,15 @@ function handlePrint() {
   window.print()
 }
 
+function handleServiceChange({ type, row }) {
+  if (type === 'create') store.services.value = [...store.services.value, row]
+  else if (type === 'update') {
+    store.services.value = store.services.value.map((item) => (item.id === row.id ? row : item))
+  } else if (type === 'delete') {
+    store.services.value = store.services.value.filter((item) => item.id !== row.id)
+  }
+}
+
 onMounted(() => {
   store.load().catch((error) => notify(error.message, 'error'))
 })
@@ -110,6 +121,7 @@ onMounted(() => {
         :categories="CATEGORIES"
         @change="store.persist"
         @notify="notify"
+        @update-service="handleServiceChange"
       />
 
       <CardPreviewPanel
@@ -129,7 +141,7 @@ onMounted(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 262px minmax(0, 1fr) 452px;
+  grid-template-columns: 258px minmax(0, 1fr) 478px;
   gap: 12px;
   padding: 14px;
 }
@@ -141,7 +153,10 @@ onMounted(() => {
 }
 .tag-toast.error { background: #b42318; }
 
+@media (max-width: 1440px) {
+  .tag-stage { grid-template-columns: 238px minmax(0, 1fr) 462px; }
+}
 @media (max-width: 1280px) {
-  .tag-stage { grid-template-columns: 232px minmax(0, 1fr) 420px; }
+  .tag-stage { grid-template-columns: 210px minmax(0, 1fr) 462px; }
 }
 </style>

@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { MAX_COLOR_ROWS, MAX_FEATURES, MIN_FEATURES, getTotalColorRows } from '../types.js'
 import { calcSubsidyPrice } from '../subsidy.js'
 import { getBuiltinIcons, iconCategoriesOf } from '../icon-library.js'
+import { api } from '../api.js'
 
 const props = defineProps({
   card: { type: Object, default: null },
@@ -12,7 +13,7 @@ const props = defineProps({
   categories: { type: Array, required: true }
 })
 
-const emit = defineEmits(['change', 'notify'])
+const emit = defineEmits(['change', 'notify', 'update-service'])
 
 const collapsed = ref({ features: false, products: false, accessory: false, service: false })
 const featureCollapsed = ref([false, true, true, true])
@@ -36,8 +37,13 @@ const canAddRow = computed(() => totalRows.value < MAX_COLOR_ROWS)
 
 const accessoryCategories = computed(() => [...new Set(props.accessories.map((item) => item.category))])
 
+const serviceProductCategory = (item) => item.product_category ?? item.productCategory ?? ''
+
 const availableServices = computed(() =>
-  props.services.filter((item) => !item.productCategory || item.productCategory === props.card?.category)
+  props.services.filter((item) => {
+    const scope = serviceProductCategory(item)
+    return !scope || scope === props.card?.category
+  })
 )
 const availableServiceCategories = computed(() => [...new Set(availableServices.value.map((item) => item.category))])
 
@@ -196,6 +202,97 @@ function selectService(slot, value) {
 
 function priceFieldValue(value) {
   return value && value > 0 ? value : ''
+}
+
+/* ---------- 服务库管理 ---------- */
+const serviceLibraryOpen = ref(false)
+const serviceDraft = ref({ id: null, name: '', price: '', category: '', productCategory: '' })
+
+function resetServiceDraft() {
+  serviceDraft.value = { id: null, name: '', price: '', category: '', productCategory: '' }
+}
+
+function openServiceLibrary() {
+  resetServiceDraft()
+  serviceLibraryOpen.value = true
+}
+
+function closeServiceLibrary() {
+  serviceLibraryOpen.value = false
+  resetServiceDraft()
+}
+
+function editServiceRow(item) {
+  serviceDraft.value = {
+    id: item.id,
+    name: item.name,
+    price: item.price,
+    category: item.category || '',
+    productCategory: item.product_category || ''
+  }
+}
+
+async function submitService() {
+  const draft = serviceDraft.value
+  const name = draft.name.trim()
+  if (!name) {
+    emit('notify', { type: 'error', message: '请填写服务名称' })
+    return
+  }
+  const payload = {
+    name,
+    price: Number(draft.price) || 0,
+    category: draft.category.trim(),
+    productCategory: draft.productCategory
+  }
+  try {
+    if (draft.id) {
+      const row = await api.updateService(draft.id, payload)
+      emit('update-service', { type: 'update', row })
+      emit('notify', { type: 'success', message: '服务已更新' })
+    } else {
+      const row = await api.createService(payload)
+      emit('update-service', { type: 'create', row })
+      emit('notify', { type: 'success', message: '服务已新增' })
+    }
+    resetServiceDraft()
+  } catch (error) {
+    emit('notify', { type: 'error', message: error.message || '保存失败' })
+  }
+}
+
+async function removeServiceRow(item) {
+  try {
+    await api.deleteService(item.id)
+    emit('update-service', { type: 'delete', row: item })
+    emit('notify', { type: 'success', message: '服务已删除' })
+    if (serviceDraft.value.id === item.id) resetServiceDraft()
+  } catch (error) {
+    emit('notify', { type: 'error', message: error.message || '删除失败' })
+  }
+}
+
+// 把当前槽位填写的服务存入服务库
+async function saveServiceToLibrary(slot) {
+  const name = (slot === 1 ? props.card?.service1Name : props.card?.service2Name || '').trim()
+  const price = slot === 1 ? props.card?.service1Price : props.card?.service2Price
+  if (!name) return
+  if (props.services.some((item) => item.name === name)) {
+    emit('notify', { type: 'error', message: '服务库中已存在同名服务' })
+    return
+  }
+  try {
+    const row = await api.createService({
+      name,
+      price: Number(price) || 0,
+      category: '增值服务',
+      productCategory: props.card?.category || ''
+    })
+    emit('update-service', { type: 'create', row })
+    emit('notify', { type: 'success', message: '已存入服务库' })
+  } catch (error) {
+    emit('notify', { type: 'error', message: error.message || '存入失败' })
+  }
 }
 </script>
 
@@ -429,23 +526,33 @@ function priceFieldValue(value) {
 
       <!-- 服务信息 -->
       <div class="sec">
-        <button class="sec-head" @click="toggleSection('service')">
-          <span class="toggle" :class="{ collapsed: collapsed.service }">▾</span>
-          <span>服务信息</span>
-        </button>
+        <div class="sec-head sec-head-row">
+          <button class="sec-head-main" @click="toggleSection('service')">
+            <span class="toggle" :class="{ collapsed: collapsed.service }">▾</span>
+            <span>服务信息</span>
+          </button>
+          <button class="lib-btn" @click.stop="openServiceLibrary">管理服务库</button>
+        </div>
         <div v-show="!collapsed.service" class="sec-body">
           <div v-for="slot in [1, 2]" :key="slot" class="slot-block">
             <label class="slot-label">服务 {{ slot }}</label>
-            <select class="input" @change="selectService(slot, $event.target.value)">
-              <option value="">-- 选择服务 --</option>
-              <optgroup v-for="category in availableServiceCategories" :key="category" :label="category">
-                <option
-                  v-for="item in availableServices.filter((entry) => entry.category === category)"
-                  :key="item.name"
-                  :value="`${item.name}|||${item.price}`"
-                >{{ item.name }} ¥{{ item.price }}</option>
-              </optgroup>
-            </select>
+            <div class="slot-select-row">
+              <select class="input" @change="selectService(slot, $event.target.value)">
+                <option value="">-- 选择服务 --</option>
+                <optgroup v-for="category in availableServiceCategories" :key="category" :label="category">
+                  <option
+                    v-for="item in availableServices.filter((entry) => entry.category === category)"
+                    :key="item.name"
+                    :value="`${item.name}|||${item.price}`"
+                  >{{ item.name }} ¥{{ item.price }}</option>
+                </optgroup>
+              </select>
+              <button
+                class="lib-btn small"
+                :disabled="!(slot === 1 ? card.service1Name : card.service2Name)"
+                @click="saveServiceToLibrary(slot)"
+              >存入服务库</button>
+            </div>
             <div class="slot-edit">
               <input
                 :value="slot === 1 ? card.service1Name : card.service2Name"
@@ -463,6 +570,43 @@ function priceFieldValue(value) {
             </div>
           </div>
           <p class="tip-text">服务按展牌分类自动过滤，手机展牌不显示平板专属服务</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 服务库管理 -->
+    <div v-if="serviceLibraryOpen" class="lib-mask" @click.self="closeServiceLibrary">
+      <div class="lib-dialog">
+        <header class="lib-head">
+          <h3>管理服务库</h3>
+          <button class="lib-close" @click="closeServiceLibrary">✕</button>
+        </header>
+
+        <div class="lib-form">
+          <input v-model="serviceDraft.name" class="input" placeholder="服务名称" />
+          <input v-model="serviceDraft.price" type="number" class="input" placeholder="价格" />
+          <input v-model="serviceDraft.category" class="input" placeholder="分组（如 增值服务）" />
+          <select v-model="serviceDraft.productCategory" class="input">
+            <option value="">适用全部机型</option>
+            <option v-for="item in categories" :key="item" :value="item">{{ item }}</option>
+          </select>
+          <button class="lib-primary" @click="submitService">
+            {{ serviceDraft.id ? '保存修改' : '新增服务' }}
+          </button>
+          <button v-if="serviceDraft.id" class="lib-btn small" @click="resetServiceDraft">取消编辑</button>
+        </div>
+
+        <div class="lib-list">
+          <div v-for="item in services" :key="item.id" class="lib-row">
+            <div class="lib-row-main">
+              <span class="lib-row-name">{{ item.name }}</span>
+              <span class="lib-row-meta">{{ item.category || '增值服务' }} · {{ item.product_category || '全部机型' }}</span>
+            </div>
+            <span class="lib-row-price">¥{{ item.price }}</span>
+            <button class="lib-btn small" @click="editServiceRow(item)">编辑</button>
+            <button class="lib-btn small danger" @click="removeServiceRow(item)">删除</button>
+          </div>
+          <p v-if="!services.length" class="empty-hint">服务库为空，先在上方新增一条</p>
         </div>
       </div>
     </div>
@@ -498,6 +642,71 @@ function priceFieldValue(value) {
 .sec-head:hover { background: #f8f8f8; }
 .sec-head .toggle { color: #666; font-size: 11px; transition: transform .2s; display: inline-block; }
 .sec-head .toggle.collapsed { transform: rotate(-90deg); }
+
+/* 带右侧操作按钮的标题行 */
+.sec-head-row { cursor: default; }
+.sec-head-row:hover { background: transparent; }
+.sec-head-main {
+  flex: 1; display: flex; align-items: center; gap: 6px; padding: 4px 0;
+  border: 0; background: transparent; font-size: 13px; font-weight: 600;
+  color: #333; cursor: pointer; text-align: left;
+}
+.lib-btn {
+  padding: 4px 10px; border: 1px solid #cfdcea; border-radius: 6px;
+  background: #fff; color: var(--blue); font-size: 11.5px; font-weight: 600;
+  font-family: inherit; cursor: pointer; white-space: nowrap; transition: all .15s;
+}
+.lib-btn:hover { background: #eef4fa; border-color: var(--blue); }
+.lib-btn.small { padding: 5px 9px; font-size: 11px; }
+.lib-btn.danger { color: #b42318; border-color: #f0c9c5; }
+.lib-btn.danger:hover { background: #fdf1f0; border-color: #b42318; }
+.lib-btn:disabled { opacity: .45; cursor: not-allowed; }
+.slot-select-row { display: flex; gap: 6px; align-items: center; }
+.slot-select-row .input { flex: 1; min-width: 0; }
+
+/* 服务库弹窗 */
+.lib-mask {
+  position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center;
+  background: rgba(16,28,44,.42); padding: 24px;
+}
+.lib-dialog {
+  width: min(680px, 100%); max-height: 78vh; display: flex; flex-direction: column;
+  background: #fff; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 18px 48px rgba(0,0,0,.24);
+}
+.lib-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--line); background: #f7f9fc;
+}
+.lib-head h3 { margin: 0; font-size: 13.5px; color: #1a1a1a; }
+.lib-close {
+  width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent;
+  color: #8a97a8; font-size: 13px; cursor: pointer;
+}
+.lib-close:hover { background: #eef2f7; color: #333; }
+.lib-form {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+  padding: 14px 16px; border-bottom: 1px solid var(--line);
+}
+.lib-form .input { font-size: 12px; padding: 7px 10px; }
+.lib-primary {
+  padding: 8px 12px; border: 0; border-radius: 6px; background: var(--blue);
+  color: #fff; font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer;
+}
+.lib-primary:hover { background: #16507f; }
+.lib-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 16px 14px; }
+.lib-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0; border-bottom: 1px solid #f0f3f8;
+}
+.lib-row-main { flex: 1; min-width: 0; }
+.lib-row-name {
+  display: block; font-size: 12.5px; font-weight: 600; color: #1a1a1a;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lib-row-meta { display: block; margin-top: 1px; color: #8a97a8; font-size: 10.5px; }
+.lib-row-price { color: var(--blue); font-size: 12.5px; font-weight: 700; }
+.empty-hint { padding: 24px 0; text-align: center; color: #a8b3c1; font-size: 12px; }
 
 .form-group { margin-bottom: 18px; }
 .form-group:last-child { margin-bottom: 0; }
