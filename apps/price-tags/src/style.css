@@ -1,5 +1,16 @@
 * { box-sizing: border-box; }
 
+/* 模块在门户以独立 iframe 运行，拿不到门户 :root 上的设计变量，必须在此自定义 */
+:root {
+  --ink: #172033;
+  --muted: #66758a;
+  --line: #e4e9f0;
+  --surface: #ffffff;
+  --navy: #162337;
+  --blue: #1a5e9c;
+  --blue-hover: #124a7a;
+}
+
 html, body, #app {
   height: 100%;
   margin: 0;

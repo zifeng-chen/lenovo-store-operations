@@ -73,7 +73,19 @@ function rowCount(card) {
           role="checkbox"
           :aria-checked="selectedIds.has(card.id)"
           @click.stop="emit('toggle-select', card.id)"
-        ></span>
+        >
+          <svg
+            v-if="selectedIds.has(card.id)"
+            class="item-check-icon"
+            viewBox="0 0 1024 1024"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <path
+              d="M841.142857 36.571429H182.857143c-80.457143 0-146.285714 65.828571-146.285714 146.285714v658.285714c0 80.457143 65.828571 146.285714 146.285714 146.285714h658.285714c80.457143 0 146.285714-65.828571 146.285714-146.285714v-658.285714c0-80.457143-65.828571-146.285714-146.285714-146.285714zM753.371429 394.971429L468.114286 672.914286c-7.314286 7.314286-14.628571 7.314286-29.257143 7.314285-7.314286 0-21.942857-7.314286-29.257143-14.628571L263.314286 512c-14.628571-14.628571-14.628571-43.885714 0-58.514286 14.628571-14.628571 43.885714-14.628571 58.514285 0L446.171429 585.142857 694.857143 336.457143c14.628571-14.628571 43.885714-14.628571 58.514286 0 14.628571 14.628571 14.628571 43.885714 0 58.514286z"
+            />
+          </svg>
+        </span>
         <div class="item-body">
           <div class="item-name">{{ card.productTitle || '未命名' }}</div>
           <div class="item-meta">{{ rowCount(card) }} 行价格</div>
@@ -160,19 +172,15 @@ function rowCount(card) {
 .item.is-active { background: #eaf2f9; border-left: 3px solid var(--blue); padding-left: 8px; }
 
 .item-check {
-  width: 14px; height: 14px; flex: 0 0 auto;
+  width: 15px; height: 15px; flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
   border: 1.5px solid #c3cfdd; border-radius: 4px; background: #fff;
   position: relative; cursor: pointer; box-sizing: border-box;
   transition: background .15s, border-color .15s;
 }
 .item-check:hover { border-color: var(--blue); }
-.item.is-checked .item-check { background: var(--blue); border-color: var(--blue); }
-.item.is-checked .item-check::after {
-  content: ""; width: 4px; height: 7px;
-  border: solid #fff; border-width: 0 1.6px 1.6px 0;
-  transform: translateY(-1px) rotate(45deg);
-}
+.item.is-checked .item-check { background: transparent; border-color: transparent; }
+.item-check-icon { width: 100%; height: 100%; display: block; fill: var(--blue); }
 
 .item-body { min-width: 0; flex: 1; }
 .item-name {
@@ -202,17 +210,21 @@ function rowCount(card) {
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-  padding: 6px 13px; border: 1px solid #ddd; border-radius: 6px;
-  background: #fff; color: #555; font-size: 12px; font-weight: 600;
+  padding: 6px 13px; border: 1px solid #d5dde7; border-radius: 6px;
+  background: #fff; color: #4a5b70; font-size: 12px; font-weight: 600;
   cursor: pointer; transition: .16s;
 }
 .btn:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); background: #f4f9fe; }
 .btn-sm { padding: 5px 10px; font-size: 11.5px; }
 .btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
-.btn-primary:hover:not(:disabled) { background: #124a7a; border-color: #124a7a; color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--blue-hover); border-color: var(--blue-hover); color: #fff; }
 .btn-danger { color: #b42318; border-color: #f0c9c6; }
 .btn:disabled { cursor: not-allowed; }
+
+/* 禁用态：保留主题蓝描边与浅蓝底，避免整块糊成灰色 */
+.btn:disabled { background: #f4f8fc; border-color: #c8d8e8; color: #7d92a8; }
 .btn-primary:disabled {
-  background: #dfe7f0; border-color: #c3cfdd; color: #5c6f85;
+  background: #eaf2f9; border-color: #a8c5df; color: var(--blue);
+  box-shadow: inset 0 0 0 1px #a8c5df;
 }
 </style>
