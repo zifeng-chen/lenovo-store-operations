@@ -373,12 +373,15 @@ const copyIconFilter = ref('')
 const copyDraft = ref({ id: null, iconName: '', title: '', desc: '' })
 
 function resetCopyDraft() {
-  copyDraft.value = { id: null, iconName: copyIconFilter.value || '', title: '', desc: '' }
+  // 保留当前选中的图标，连续给同一图标加文案时不用重选
+  copyDraft.value = { id: null, iconName: copyDraft.value.iconName || '', title: '', desc: '' }
 }
 
 function openCopyLibrary(feature) {
-  copyIconFilter.value = feature?.iconName || ''
-  copyDraft.value = { id: null, iconName: feature?.iconName || '', title: '', desc: '' }
+  // 搜索框初始为空，图标选择器显示全部；归属图标优先取当前卖点已选的图标
+  copyIconFilter.value = ''
+  const initialIcon = feature?.iconName || categoryIcons.value[0]?.name || ''
+  copyDraft.value = { id: null, iconName: initialIcon, title: '', desc: '' }
   copyLibraryOpen.value = true
   loadCustomCopies()
 }
@@ -458,10 +461,23 @@ async function saveFeatureToLibrary(feature) {
 }
 
 // 管理面板里按图标过滤
+// 文案库里的图标选择器：按搜索词过滤图标（搜名字或分类）
+const pickerIcons = computed(() => {
+  const kw = copyIconFilter.value.trim().toLowerCase()
+  if (!kw) return categoryIcons.value
+  return categoryIcons.value.filter((icon) => icon.name.toLowerCase().includes(kw))
+})
+
+// 按图标名取图标地址，用于列表里显示缩略图
+function iconSrcOf(name) {
+  return categoryIcons.value.find((icon) => icon.name === name)?.src || ''
+}
+
+// 列表只显示当前选中图标下的文案，避免串到别的图标上
 const filteredCustomCopies = computed(() => {
-  const kw = copyIconFilter.value.trim()
-  if (!kw) return customCopies.value
-  return customCopies.value.filter((row) => row.icon_name === kw)
+  const iconName = copyDraft.value.iconName
+  if (!iconName) return []
+  return customCopies.value.filter((row) => row.icon_name === iconName)
 })
 </script>
 
@@ -486,21 +502,17 @@ const filteredCustomCopies = computed(() => {
         </button>
         <div v-show="!collapsed.card" class="sec-body">
           <div class="form-group">
-            <label>产品名称</label>
-            <div class="switch-wrap">
-              <label class="switch">
-                <input type="checkbox" v-model="card.showProductImage" @change="touch" />
-                <span class="switch-slider"></span>
-              </label>
-              <span class="switch-text">显示 AI 图标</span>
+            <div class="label-row">
+              <label>产品名称</label>
+              <div class="switch-wrap">
+                <label class="switch">
+                  <input type="checkbox" v-model="card.showProductImage" @change="touch" />
+                  <span class="switch-slider"></span>
+                </label>
+                <span class="switch-text">显示 AI 图标</span>
+              </div>
             </div>
             <input v-model="card.productTitle" class="input" @input="touch" />
-          </div>
-          <div class="form-group">
-            <label>分类</label>
-            <select v-model="card.category" class="input" @change="touch">
-              <option v-for="item in categories" :key="item" :value="item">{{ item }}</option>
-            </select>
           </div>
         </div>
       </div>
@@ -810,26 +822,47 @@ const filteredCustomCopies = computed(() => {
 
         <p class="lib-tip">文案按「分类 + 图标」归属，选中该图标后会出现在「卖点文案」下拉框里。当前分类：{{ card?.category }}</p>
 
+        <div class="lib-picker">
+          <div class="lib-picker-head">
+            <span>归属图标</span>
+            <span class="lib-picker-current">
+              <template v-if="copyDraft.iconName">已选：{{ copyDraft.iconName }}</template>
+              <template v-else>尚未选择</template>
+            </span>
+          </div>
+          <input v-model="copyIconFilter" class="input" placeholder="搜索图标名" />
+          <div class="lib-picker-grid">
+            <button
+              v-for="icon in pickerIcons"
+              :key="icon.name"
+              type="button"
+              class="lib-picker-item"
+              :class="{ active: copyDraft.iconName === icon.name }"
+              :title="icon.name"
+              @click="copyDraft.iconName = icon.name"
+            >
+              <img :src="icon.src" :alt="icon.name" />
+              <span>{{ icon.name }}</span>
+            </button>
+          </div>
+        </div>
+
         <div class="lib-form">
-          <select v-model="copyDraft.iconName" class="input">
-            <option value="">选择归属图标</option>
-            <option v-for="icon in categoryIcons" :key="icon.name" :value="icon.name">{{ icon.name }}</option>
-          </select>
           <input v-model="copyDraft.title" class="input" placeholder="标题（建议 ≤14 字）" maxlength="30" />
           <input v-model="copyDraft.desc" class="input" placeholder="副标题（建议 ≤18 字）" maxlength="40" />
-          <button class="lib-primary" @click="submitCopy">
+          <button class="lib-primary" :disabled="!copyDraft.iconName" @click="submitCopy">
             {{ copyDraft.id ? '保存修改' : '新增文案' }}
           </button>
           <button v-if="copyDraft.id" class="lib-btn small" @click="resetCopyDraft">取消编辑</button>
         </div>
 
         <div class="lib-filter">
-          <input v-model="copyIconFilter" class="input" placeholder="按图标名筛选，留空显示全部" />
-          <span class="lib-count">共 {{ filteredCustomCopies.length }} 条</span>
+          <span class="lib-count">当前图标下共 {{ filteredCustomCopies.length }} 条</span>
         </div>
 
         <div class="lib-list">
           <div v-for="row in filteredCustomCopies" :key="row.id" class="lib-row">
+            <img class="lib-row-icon" :src="iconSrcOf(row.icon_name)" :alt="row.icon_name" />
             <div class="lib-row-main">
               <span class="lib-row-name">{{ row.title }}</span>
               <span class="lib-row-meta">{{ row.icon_name }} · {{ row.desc || '（无副标题）' }}</span>
@@ -922,6 +955,33 @@ const filteredCustomCopies = computed(() => {
 .lib-form .input { font-size: 12px; padding: 7px 10px; }
 /* 文案库：弹窗内的说明、筛选条 */
 .lib-tip { margin: 0; padding: 10px 16px 0; font-size: 11.5px; color: #78889b; line-height: 1.5; }
+/* 图标选择器：直接看图选，不靠记名字 */
+.lib-picker { padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.lib-picker-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px; font-size: 12px; font-weight: 600; color: #555;
+}
+.lib-picker-current { font-weight: 400; font-size: 11.5px; color: var(--blue); }
+.lib-picker .input { font-size: 12px; padding: 6px 10px; margin-bottom: 8px; }
+.lib-picker-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 6px; max-height: 178px; overflow-y: auto; padding: 2px;
+}
+.lib-picker-item {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 5px 3px; border: 1px solid #e5e5e5; border-radius: 7px;
+  background: #fff; cursor: pointer; transition: .15s;
+}
+.lib-picker-item:hover { border-color: var(--blue); }
+.lib-picker-item.active { border-color: var(--blue); background: #eaf2f9; box-shadow: inset 0 0 0 1px var(--blue); }
+.lib-picker-item img { width: 26px; height: 26px; object-fit: contain; }
+.lib-picker-item span {
+  font-size: 9px; color: #666; line-height: 1.1; text-align: center;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lib-picker-item.active span { color: var(--blue); font-weight: 600; }
+/* 列表里也带缩略图，一眼看出归属哪个图标 */
+.lib-row-icon { width: 26px; height: 26px; object-fit: contain; flex: none; }
 .lib-filter { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
 .lib-filter .input { flex: 1; font-size: 12px; padding: 7px 10px; }
 .lib-count { font-size: 11.5px; color: #8a97a8; white-space: nowrap; }
@@ -969,6 +1029,10 @@ const filteredCustomCopies = computed(() => {
 .svg-textarea { resize: vertical; font-family: ui-monospace, monospace; font-size: 12px; }
 
 .switch-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+/* 产品名称那一行：label 与开关左右分布，开关不再单独占一行 */
+.label-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.label-row .switch-wrap { margin-bottom: 5px; }
+.label-row .switch-text { margin: 0; font-size: 11.5px; color: #666; }
 .switch { position: relative; width: 36px; height: 20px; flex: none; cursor: pointer; }
 .switch input { display: none; }
 .switch-slider { position: absolute; inset: 0; background: #ddd; border-radius: 20px; transition: .3s; }

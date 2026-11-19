@@ -24,8 +24,8 @@
         <div class="ocr-management-actions"><el-button plain @click="openConfig">配置凭据</el-button><el-button plain @click="openHistory">识别记录</el-button></div>
       </section>
       <section class="panel-section records-section">
-        <div class="section-heading section-heading--compact"><div><span class="section-eyebrow section-eyebrow--dark">销售明细</span><h2>最近记录</h2></div><span class="record-count">共 {{ sales.length }} 条</span></div>
-        <el-table v-loading="loading" :data="sales" height="260" class="sales-table" empty-text="暂无销售记录" row-key="id">
+        <div class="section-heading section-heading--compact"><div><span class="section-eyebrow section-eyebrow--dark">销售明细</span><h2>今日与昨日记录</h2></div><span class="record-count">共 {{ sales.length }} 条</span></div>
+        <el-table v-loading="loading" :data="sales" height="260" class="sales-table" empty-text="今日与昨日暂无销售记录" row-key="id">
           <el-table-column type="expand">
             <template #default="scope">
               <div class="sale-items-panel">
@@ -104,7 +104,7 @@ function applySaleStatusChange(originalStatus,updated){if(originalStatus===updat
 
 async function fetchConfig(){ocrConfig.value=await request('/ocr/config')}
 async function loadUsage(){const id=++usageRequestId;usageLoading.value=true;try{const data=await request('/ocr/usage');if(id===usageRequestId)ocrUsage.value=data;return data}finally{if(id===usageRequestId)usageLoading.value=false}}
-async function refresh(){try{const [all,today,last30]=await Promise.all([request('/sales?days=30'),request('/sales/today'),request('/sales/trend')]);sales.value=all;todayStats.value=today;trend.value=last30}catch(error){throw error}}
+async function refresh(){try{const [all,today,last30]=await Promise.all([request('/sales?days=2'),request('/sales/today'),request('/sales/trend')]);sales.value=all;todayStats.value=today;trend.value=last30}catch(error){throw error}}
 async function saveSale(){const amount=Number(saleAmount.value);if(!Number.isFinite(amount)||amount<=0)return ElMessage.warning('请输入大于 0 的销售金额');saving.value=true;const payload={amount,saleDate:saleDate.value||TODAY_ISO};const s=recognizedStructured.value;if(s){if(s.date)payload.saleDate=s.date;if(Array.isArray(s.items)&&s.items.length)payload.items=s.items.map(i=>({name:i.name,qty:i.qty,unitPrice:i.unitPrice,subtotal:i.subtotal}))}try{await request('/sales',{method:'POST',body:payload});saleAmount.value=null;amountManuallyEdited=false;recognizedStructured.value=null;saleDate.value=TODAY_ISO;const backfilled=payload.saleDate!==TODAY_ISO;const dateText=backfilled?`${Number(payload.saleDate.slice(5,7))}月${Number(payload.saleDate.slice(8,10))}日`:'今天';ElMessage.success(backfilled?`已补录 ${dateText} 的销售记录`:(payload.items?.length?`销售记录已保存（含 ${payload.items.length} 项商品明细）`:'销售记录已保存'))}catch(e){ElMessage.error(message(e,'保存失败，请检查后端服务'));saving.value=false;return}try{await refresh()}catch{ElMessage.warning('记录已保存，但统计刷新失败，请稍后刷新页面')}finally{saving.value=false}}
 async function toggleSale(sale){if(togglingSaleIds.has(sale.id))return;togglingSaleIds.add(sale.id);const originalStatus=sale.status;try{const updated=await request(`/sales/${sale.id}/toggle`,{method:'PUT'});Object.assign(sale,updated);applySaleStatusChange(originalStatus,updated);ElMessage.success(originalStatus===1?'记录已撤销':'记录已恢复');try{await refresh()}catch{ElMessage.warning('状态已更新，本页汇总已同步；服务器统计刷新失败，请稍后重试')}}catch(e){ElMessage.error(message(e,'操作失败，请稍后重试'))}finally{togglingSaleIds.delete(sale.id)}}
 function pick(side){(side==='stub'?stubInput.value:receiptInput.value)?.click()}

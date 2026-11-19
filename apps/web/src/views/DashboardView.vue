@@ -5,7 +5,6 @@ import { ENGINE_ICONS } from '../searchEngineIcons.js';
 import FacaiCoinRain from '../components/FacaiCoinRain.vue';
 import facaiTreeUrl from '../assets/facai-tree.png';
 
-const CARD_ALPHA_KEY = 'lenovo-store:card-alpha';
 const ENGINE_KEY = 'lenovo-store:search-engine';
 
 const ENGINES = [
@@ -14,13 +13,9 @@ const ENGINES = [
   { id: 'google', name: '谷歌', url: 'https://www.google.com/search?q=', icon: ENGINE_ICONS.google },
 ];
 
-const cardAlpha = ref(0.92);
 const engineMenuOpen = ref(false);
 const engineId = ref('baidu');
 const searchKeyword = ref('');
-const appearanceOpen = ref(false);
-const appearanceTrigger = ref(null);
-const appearancePanelStyle = ref({});
 const engineTrigger = ref(null);
 const engineMenuRef = ref(null);
 const engineMenuStyle = ref({});
@@ -33,7 +28,6 @@ const weekTotal = ref(null);
 const weekCount = ref(null);
 
 const currentEngine = computed(() => ENGINES.find((item) => item.id === engineId.value) || ENGINES[0]);
-const cardAlphaPercent = computed(() => Math.round(cardAlpha.value * 100));
 const todayAvg = computed(() => {
   if (!todayCount.value || todayAmount.value === null) return null;
   return todayAmount.value / todayCount.value;
@@ -156,20 +150,6 @@ const deltaText = computed(() => {
   return `较昨日 ${sign}${todayDelta.value.toFixed(1)}%`;
 });
 
-function setCardAlpha(value) {
-  cardAlpha.value = value;
-  document.documentElement.style.setProperty('--card-alpha', value.toFixed(2));
-  try {
-    localStorage.setItem(CARD_ALPHA_KEY, String(value));
-  } catch {
-    // 隐私模式下无法记忆，仅影响下次进入的默认值。
-  }
-}
-
-function onAlphaInput(event) {
-  setCardAlpha(Number(event.target.value) / 100);
-}
-
 function selectEngine(id) {
   engineId.value = id;
   engineMenuOpen.value = false;
@@ -225,30 +205,9 @@ function closeEngineMenu(event) {
   if (engineMenuOpen.value && !event.target.closest?.('.engine-picker, .engine-menu')) {
     engineMenuOpen.value = false;
   }
-  if (!event.target.closest?.('#appearancePanel, .appearance-trigger, .glass-btn')) appearanceOpen.value = false;
-}
-
-// 面板挂到 body 并用 fixed 定位，彻底避开收款卡片等带 backdrop-filter 的叠加上下文
-function placeAppearancePanel() {
-  const rect = appearanceTrigger.value?.getBoundingClientRect();
-  if (!rect) return;
-  const width = 268;
-  const left = Math.min(Math.max(12, rect.right - width), window.innerWidth - width - 12);
-  appearancePanelStyle.value = {
-    position: 'fixed',
-    top: `${rect.bottom + 10}px`,
-    left: `${left}px`,
-    width: `${width}px`,
-  };
-}
-
-function toggleAppearance() {
-  appearanceOpen.value = !appearanceOpen.value;
-  if (appearanceOpen.value) placeAppearancePanel();
 }
 
 function onViewportChange() {
-  if (appearanceOpen.value) placeAppearancePanel();
   if (engineMenuOpen.value) placeEngineMenu();
 }
 
@@ -263,14 +222,11 @@ function onVisibilityChange() {
 
 onMounted(() => {
   try {
-    const storedAlpha = Number(localStorage.getItem(CARD_ALPHA_KEY));
-    if (storedAlpha >= 0.45 && storedAlpha <= 1) cardAlpha.value = storedAlpha;
     const storedEngine = localStorage.getItem(ENGINE_KEY);
     if (storedEngine && ENGINES.some((item) => item.id === storedEngine)) engineId.value = storedEngine;
   } catch {
     // 读取失败时用默认值。
   }
-  document.documentElement.style.setProperty('--card-alpha', cardAlpha.value.toFixed(2));
 
   loadRevenue();
   pollTimer = window.setInterval(loadRevenue, 60000);
@@ -406,16 +362,6 @@ onBeforeUnmount(() => {
         <p>单击卡片即可进入，无需再找入口按钮</p>
       </div>
       <div class="heading-actions">
-        <button
-          ref="appearanceTrigger"
-          class="glass-btn"
-          type="button"
-          :aria-expanded="appearanceOpen"
-          aria-controls="appearancePanel"
-          @click.stop="toggleAppearance"
-        >
-          ⚙ 工作台外观
-        </button>
         <el-button
           class="github-repository-link"
           tag="a"
@@ -448,37 +394,4 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </section>
-
-  <Teleport to="body">
-    <div
-      v-if="appearanceOpen"
-      id="appearancePanel"
-      class="appearance-panel"
-      role="dialog"
-      aria-label="工作台外观"
-      :style="appearancePanelStyle"
-      @click.stop
-    >
-      <label class="appearance-label" for="cardAlphaRange">
-        卡片透明度
-        <output>{{ cardAlphaPercent }}%</output>
-      </label>
-      <input
-        id="cardAlphaRange"
-        class="alpha-range"
-        type="range"
-        min="45"
-        max="100"
-        step="1"
-        :value="cardAlphaPercent"
-        @input="onAlphaInput"
-      />
-      <div class="appearance-preview">
-        <span class="preview-card"></span>
-        <span class="preview-card"></span>
-        <span class="preview-card"></span>
-      </div>
-      <p class="appearance-note">预览三张业务卡片的通透程度，拖动即时生效。</p>
-    </div>
-  </Teleport>
 </template>

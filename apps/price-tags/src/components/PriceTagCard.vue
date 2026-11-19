@@ -162,7 +162,10 @@ defineProps({
 .feature-title { font-size: 11.91px; font-weight: 700; color: #000; line-height: 1.3; white-space: nowrap; }
 .feature-desc { font-size: 10.82px; font-weight: 700; color: #000; margin-top: 1mm; line-height: 1.3; white-space: nowrap; }
 
-.line { margin-top: 6mm; height: 0.5px; background: #333; flex: none; }
+/* 原设计为 0.5px，但卡片整体 scale(11/12) 后只剩 0.458px，
+   不足 1 个设备像素会被浏览器直接丢弃，预览与打印都看不到这条线，故提到 1px（缩放后 0.917px）。
+   行高只增加 0.458px，不影响版式。 */
+.line { margin-top: 6mm; height: 1px; background: #333; flex: none; }
 
 .product-list {
   margin-top: calc(5mm - 4.5px); flex: none; overflow: hidden;
@@ -200,10 +203,11 @@ defineProps({
   line-height: 1.2; margin-bottom: 4.91px;
 }
 .service-logo { height: 6.5mm; width: auto; object-fit: contain; flex: none; }
-.service-line { height: 0.5px; background: #333; flex: 1; margin-left: 3mm; }
+.service-line { height: 1px; background: #333; flex: 1; margin-left: 3mm; }
 .service-row {
   display: flex; justify-content: space-between; font-size: 11px; font-weight: 700;
   color: #000; line-height: 1.2; margin-bottom: 3px;
 }
 .service-price { font-size: 11px; font-weight: 700; color: #000; display: inline-flex; align-items: baseline; gap: 0.5em; }
+
 </style>

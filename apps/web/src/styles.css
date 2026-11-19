@@ -559,33 +559,8 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 .rev-delta.is-flat { background: rgba(255,255,255,.10); color: rgba(255,255,255,.62); }
 .rev-status { padding: 2px 7px; border-radius: 20px; background: rgba(255,255,255,.10); color: rgba(255,255,255,.66); font-size: 10px; font-weight: 700; }
 
-/* ---- 板块标题行与外观抽屉 ---- */
+/* ---- 板块标题行 ---- */
 .heading-actions { display: flex; align-items: center; gap: 10px; }
-.glass-btn {
-  display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px;
-  border: 1px solid #d5dfec; border-radius: 8px; background: #fff; color: #334f70;
-  font-size: 11px; font-weight: 600; cursor: pointer; list-style: none; transition: .18s ease;
-}
-.glass-btn::-webkit-details-marker { display: none; }
-.glass-btn:hover { border-color: #b9cade; background: #f6f9fd; color: #1a5e9c; }
-
-/* 关键：面板通过 Teleport 挂到 body 并固定定位，
-   不受收款卡片 .revenue-row / 业务卡片 .module-card 的 backdrop-filter 叠加上下文影响 */
-.appearance-panel {
-  position: fixed;
-  z-index: 3000;
-  padding: 15px 16px 13px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 18px 44px rgba(16,32,52,.20), 0 2px 8px rgba(16,32,52,.08);
-}
-.appearance-label { display: flex; align-items: center; justify-content: space-between; color: #33404f; font-size: 11.5px; font-weight: 700; }
-.appearance-label output { color: var(--blue); font-family: ui-monospace, monospace; font-size: 12px; font-variant-numeric: tabular-nums; }
-.alpha-range { width: 100%; margin: 11px 0 12px; accent-color: var(--blue); cursor: pointer; }
-.appearance-preview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 9px; border-radius: 9px; background: linear-gradient(125deg, #243d5d, #3f6288); }
-.preview-card { height: 34px; border: 1px solid rgba(255,255,255, calc(var(--card-alpha) * .72)); border-radius: 7px; background: rgba(255,255,255, var(--card-alpha)); backdrop-filter: blur(10px); }
-.appearance-note { margin: 9px 0 0; color: #8494a7; font-size: 10px; line-height: 1.6; }
 
 /* ---- 业务卡片（玻璃拟态 + 透明度联动） ---- */
 .module-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 13px; }
@@ -599,8 +574,6 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
   transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 .module-card:hover { transform: translateY(-2px); box-shadow: 0 16px 34px rgba(6,14,26,.20); }
-.module-card::after { content: "→"; position: absolute; top: 13px; right: 14px; color: #c3cfdd; font-size: 13px; transition: color .18s ease; }
-.module-card:hover::after { color: var(--blue); }
 .module-mark { width: 34px; height: 34px; margin-top: 10px; border-radius: 9px; font-size: 14px; }
 .module-card h3 { margin: 11px 0 6px; font-size: 14px; }
 .module-card p { font-size: 10.5px; line-height: 1.65; }
