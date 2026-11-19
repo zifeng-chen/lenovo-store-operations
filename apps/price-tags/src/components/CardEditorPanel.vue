@@ -69,9 +69,10 @@ watch(
 )
 
 /* 选中图标后自动套用该图标的第一条文案，用户再在下拉框里换；
-   没有文案的图标保持原样，不覆盖用户已手填的内容。 */
+   没有文案的图标保持原样，不覆盖用户已手填的内容。
+   文案按分类隔离：不同分类下可能有同名但内容不同的图标。 */
 function applyIconCopy(feature) {
-  const copies = getCopiesForIcon(feature.iconName)
+  const copies = copiesOf(feature)
   if (!copies.length) {
     feature.linkedCopy = ''
     return
@@ -116,14 +117,14 @@ function onLinkedCopyChange(feature, value) {
 }
 
 function copiesOf(feature) {
-  return getCopiesForIcon(feature.iconName)
+  return getCopiesForIcon(feature.iconName, props.card?.category)
 }
 
 /* 下拉框的回显值：老展牌没有存 linkedCopy，但若标题/副标题恰好等于某条内置文案，
    就把它认回来，避免明明用的是内置文案、下拉框却显示"未选择"。 */
 function currentLinkedValue(feature) {
   if (feature.linkedCopy) return feature.linkedCopy
-  const hit = getCopiesForIcon(feature.iconName).find(
+  const hit = copiesOf(feature).find(
     (copy) => copy.title === feature.title && copy.desc === feature.desc
   )
   return hit ? `${hit.title}|${hit.desc}` : ''
