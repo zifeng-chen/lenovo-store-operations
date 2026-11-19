@@ -35,6 +35,19 @@ button, input, select, textarea { font-family: inherit; }
     background: #fff !important;
   }
 
+  /* 强制按原色打印，避免浏览器省墨模式丢弃细线与色块 */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 分割线：打印引擎对亚像素背景不可靠，统一落到 1px 实线上 */
+  .line {
+    height: 0 !important;
+    background: none !important;
+    border-top: 1px solid #333 !important;
+  }
+
   /* 隐藏编辑区与列表，只保留预览 */
   .tag-stage > .col-list,
   .tag-stage > .col-editor,

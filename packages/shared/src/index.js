@@ -42,7 +42,7 @@ export const STORE_MODULES = Object.freeze([
     id: 'price-tags',
     name: '价格展牌打印',
     shortName: '价格展牌打印',
-    iconText: '展',
+    iconText: '价',
     description: '制作联想产品价格展牌，编辑卖点、价格、配件与服务，按 110mm × 110mm 打印。',
     route: '/price-tags',
     moduleBase: '/modules/price-tags/',

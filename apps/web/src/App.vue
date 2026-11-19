@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue';
 import { STORE_MODULES } from '@lenovo-store/shared';
-import logoUrl from '@lenovo-store/shared/lenovo-logo.svg';
+import logoUrl from '@lenovo-store/shared/store-badge.png';
 
 const suiteVersion = ref('');
 const SIDEBAR_COLLAPSED_KEY = 'lenovo-store:sidebar-collapsed';
@@ -44,7 +44,7 @@ onMounted(async () => {
     <aside class="suite-sidebar">
       <div class="sidebar-top">
         <RouterLink class="suite-brand" to="/" :title="sidebarCollapsed ? '联想门店运营系统' : undefined">
-          <img class="brand-logo ls-brand-logo" :src="logoUrl" alt="联想" />
+          <img class="brand-logo ls-brand-logo" :src="logoUrl" alt="联想门店运营系统" />
           <strong v-show="!sidebarCollapsed">联想门店运营系统</strong>
         </RouterLink>
         <button

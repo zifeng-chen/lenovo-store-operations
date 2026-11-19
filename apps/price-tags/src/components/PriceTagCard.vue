@@ -118,6 +118,8 @@ defineProps({
   overflow: hidden;
   border: 0.5px solid #ccc;
   background: #fff;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
 }
 
 .card {
@@ -162,10 +164,16 @@ defineProps({
 .feature-title { font-size: 11.91px; font-weight: 700; color: #000; line-height: 1.3; white-space: nowrap; }
 .feature-desc { font-size: 10.82px; font-weight: 700; color: #000; margin-top: 1mm; line-height: 1.3; white-space: nowrap; }
 
-/* 原设计为 0.5px，但卡片整体 scale(11/12) 后只剩 0.458px，
-   不足 1 个设备像素会被浏览器直接丢弃，预览与打印都看不到这条线，故提到 1px（缩放后 0.917px）。
-   行高只增加 0.458px，不影响版式。 */
-.line { margin-top: 6mm; height: 1px; background: #333; flex: none; }
+/* 分割线用 border-top 画整 1px：原来用 0.5px 背景色画的空 div，
+   0.5px 再乘以卡片 scale(11/12) 只剩 0.458px，光栅化时会被舍成 0 而不绘制；
+   背景色打印时也可能被省略，border 属于前景绘制，任何打印引擎都会输出 */
+.line {
+  margin-top: 6mm;
+  height: 0;
+  border-top: 1px solid #333;
+  background: none;
+  flex: none;
+}
 
 .product-list {
   margin-top: calc(5mm - 4.5px); flex: none; overflow: hidden;
@@ -203,7 +211,7 @@ defineProps({
   line-height: 1.2; margin-bottom: 4.91px;
 }
 .service-logo { height: 6.5mm; width: auto; object-fit: contain; flex: none; }
-.service-line { height: 1px; background: #333; flex: 1; margin-left: 3mm; }
+.service-line { height: 0; border-top: 1px solid #333; background: none; flex: 1; margin-left: 3mm; }
 .service-row {
   display: flex; justify-content: space-between; font-size: 11px; font-weight: 700;
   color: #000; line-height: 1.2; margin-bottom: 3px;

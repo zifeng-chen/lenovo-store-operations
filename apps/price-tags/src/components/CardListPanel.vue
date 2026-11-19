@@ -16,18 +16,21 @@ const emit = defineEmits([
   'select-all', 'deselect-all', 'create', 'delete', 'duplicate', 'delete-selected', 'print'
 ])
 
-const expandedItems = computed(() =>
-  props.groupedCards.find((group) => group.category === props.expandedCategory)?.items || []
-)
-const pinnedGroups = computed(() =>
-  props.groupedCards.filter((group) => group.category !== props.expandedCategory)
-)
 const allSelected = computed(() =>
   props.totalCount > 0 && props.selectedCount === props.totalCount
 )
-const activeCount = computed(() =>
-  expandedItems.value.filter((card) => props.selectedIds.has(card.id)).length
-)
+
+function isOpen(category) {
+  return props.expandedCategory === category
+}
+
+function groupCount(group) {
+  return group.items.filter((card) => props.selectedIds.has(card.id)).length
+}
+
+function toggleGroup(category) {
+  emit('update:expandedCategory', isOpen(category) ? '' : category)
+}
 
 function rowCount(card) {
   return (card.products || []).reduce((sum, product) => sum + (product.colors?.length || 0), 0)
@@ -51,63 +54,52 @@ function rowCount(card) {
     </div>
 
     <div class="list">
-      <button
-        class="group-head"
-        :class="{ open: expandedCategory }"
-        @click="emit('update:expandedCategory', expandedCategory ? '' : '笔记本')"
-      >
-        <span class="arrow">▾</span>
-        <span>{{ expandedCategory || '全部分类' }}</span>
-        <span class="count">{{ activeCount }}/{{ expandedItems.length }}</span>
-      </button>
+      <div v-for="group in groupedCards" :key="group.category" class="group">
+        <button class="group-head" :class="{ open: isOpen(group.category) }" @click="toggleGroup(group.category)">
+          <span class="arrow">{{ isOpen(group.category) ? '▾' : '▸' }}</span>
+          <span>{{ group.category }}</span>
+          <span class="count">{{ groupCount(group) }}/{{ group.items.length }}</span>
+        </button>
 
-      <div
-        v-for="card in expandedItems"
-        :key="card.id"
-        class="item"
-        :class="{ 'is-active': card.id === activeId, 'is-checked': selectedIds.has(card.id) }"
-        @click="emit('select', card.id)"
-      >
-        <span
-          class="item-check"
-          role="checkbox"
-          :aria-checked="selectedIds.has(card.id)"
-          @click.stop="emit('toggle-select', card.id)"
-        >
-          <svg
-            v-if="selectedIds.has(card.id)"
-            class="item-check-icon"
-            viewBox="0 0 1024 1024"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
+        <template v-if="isOpen(group.category)">
+          <div
+            v-for="card in group.items"
+            :key="card.id"
+            class="item"
+            :class="{ 'is-active': card.id === activeId, 'is-checked': selectedIds.has(card.id) }"
+            @click="emit('select', card.id)"
           >
-            <path
-              d="M841.142857 36.571429H182.857143c-80.457143 0-146.285714 65.828571-146.285714 146.285714v658.285714c0 80.457143 65.828571 146.285714 146.285714 146.285714h658.285714c80.457143 0 146.285714-65.828571 146.285714-146.285714v-658.285714c0-80.457143-65.828571-146.285714-146.285714-146.285714zM753.371429 394.971429L468.114286 672.914286c-7.314286 7.314286-14.628571 7.314286-29.257143 7.314285-7.314286 0-21.942857-7.314286-29.257143-14.628571L263.314286 512c-14.628571-14.628571-14.628571-43.885714 0-58.514286 14.628571-14.628571 43.885714-14.628571 58.514285 0L446.171429 585.142857 694.857143 336.457143c14.628571-14.628571 43.885714-14.628571 58.514286 0 14.628571 14.628571 14.628571 43.885714 0 58.514286z"
-            />
-          </svg>
-        </span>
-        <div class="item-body">
-          <div class="item-name">{{ card.productTitle || '未命名' }}</div>
-          <div class="item-meta">{{ rowCount(card) }} 行价格</div>
-        </div>
-        <div class="item-actions">
-          <button class="icon-btn" title="复制" @click.stop="emit('duplicate', card.id)">⧉</button>
-          <button class="icon-btn danger" title="删除" @click.stop="emit('delete', card.id)">✕</button>
-        </div>
+            <span
+              class="item-check"
+              role="checkbox"
+              :aria-checked="selectedIds.has(card.id)"
+              @click.stop="emit('toggle-select', card.id)"
+            >
+              <svg
+                v-if="selectedIds.has(card.id)"
+                class="item-check-icon"
+                viewBox="0 0 1024 1024"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  d="M841.142857 36.571429H182.857143c-80.457143 0-146.285714 65.828571-146.285714 146.285714v658.285714c0 80.457143 65.828571 146.285714 146.285714 146.285714h658.285714c80.457143 0 146.285714-65.828571 146.285714-146.285714v-658.285714c0-80.457143-65.828571-146.285714-146.285714-146.285714zM753.371429 394.971429L468.114286 672.914286c-7.314286 7.314286-14.628571 7.314286-29.257143 7.314285-7.314286 0-21.942857-7.314286-29.257143-14.628571L263.314286 512c-14.628571-14.628571-14.628571-43.885714 0-58.514286 14.628571-14.628571 43.885714-14.628571 58.514285 0L446.171429 585.142857 694.857143 336.457143c14.628571-14.628571 43.885714-14.628571 58.514286 0 14.628571 14.628571 14.628571 43.885714 0 58.514286z"
+                />
+              </svg>
+            </span>
+            <div class="item-body">
+              <div class="item-name">{{ card.productTitle || '未命名' }}</div>
+              <div class="item-meta">{{ rowCount(card) }} 行价格</div>
+            </div>
+            <div class="item-actions">
+              <button class="icon-btn" title="复制" @click.stop="emit('duplicate', card.id)">⧉</button>
+              <button class="icon-btn danger" title="删除" @click.stop="emit('delete', card.id)">✕</button>
+            </div>
+          </div>
+
+          <p v-if="!group.items.length" class="empty">该分类下暂无展牌</p>
+        </template>
       </div>
-
-      <p v-if="!expandedItems.length" class="empty">该分类下暂无展牌</p>
-
-      <button
-        v-for="group in pinnedGroups"
-        :key="group.category"
-        class="group-head pinned"
-        @click="emit('update:expandedCategory', group.category)"
-      >
-        <span class="arrow">▸</span>
-        <span>{{ group.category }}</span>
-        <span class="count">{{ group.items.length }}</span>
-      </button>
     </div>
 
     <footer class="list-foot">
@@ -151,13 +143,14 @@ function rowCount(card) {
 
 .list { flex: 1; overflow-y: auto; min-height: 0; }
 
+.group { border-bottom: 1px solid var(--line); }
 .group-head {
   width: 100%; display: flex; align-items: center; gap: 7px; padding: 8px 12px;
   border: 0; border-bottom: 1px solid var(--line); background: #f7f9fc;
   font-size: 12px; font-weight: 700; color: #33404f; cursor: pointer; text-align: left;
 }
 .group-head:hover { background: #f1f5fa; }
-.group-head.pinned { color: #5a6b80; }
+.group-head.open { color: var(--blue); }
 .group-head .arrow { font-size: 9px; color: #8a97a8; }
 .group-head .count {
   margin-left: auto; padding: 1px 6px; border-radius: 20px;

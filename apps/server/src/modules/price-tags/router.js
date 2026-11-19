@@ -289,7 +289,8 @@ export function createPriceTagsRouter() {
     res.json({ code: 0, data: { id: Number(req.params.id) }, msg: '已删除' })
   })
 
-  router.get('/subsidy-config', (_req, res) => {    res.json({ code: 0, data: readSubsidyConfig(getDatabase()), msg: 'success' })
+  router.get('/subsidy-config', (_req, res) => {
+    res.json({ code: 0, data: readSubsidyConfig(getDatabase()), msg: 'success' })
   })
 
   router.put('/subsidy-config', (req, res) => {

@@ -47,12 +47,12 @@ function hasMissingSubsidy(card) {
             <PriceTagCard v-if="page[0]" :card="page[0]" />
             <span v-else class="slot-empty">空位</span>
           </div>
-          <div
+          <span
             v-if="page[0] && page[0].id === activeId && hasMissingSubsidy(page[0])"
             class="subsidy-warn"
           >
             未输入国补价格
-          </div>
+          </span>
         </div>
 
         <div class="a4-slot-wrap">
@@ -60,12 +60,12 @@ function hasMissingSubsidy(card) {
             <PriceTagCard v-if="page[1]" :card="page[1]" />
             <span v-else class="slot-empty">空位</span>
           </div>
-          <div
+          <span
             v-if="page[1] && page[1].id === activeId && hasMissingSubsidy(page[1])"
             class="subsidy-warn"
           >
             未输入国补价格
-          </div>
+          </span>
         </div>
       </div>
 
@@ -109,16 +109,24 @@ function hasMissingSubsidy(card) {
   position: relative; display: flex; align-items: center; justify-content: center;
   width: 110mm; height: 110mm; border: 0.5px dashed #ddd;
 }
-.a4-slot-wrap { display: grid; gap: 6px; justify-items: center; }
+/* 左右各留 26px：给侧边国补警示留出位置，避免被预览容器裁切 */
+.a4-slot-wrap {
+  position: relative;
+  display: grid; gap: 6px; justify-items: center;
+  padding: 0 26px;
+}
 .slot-empty { color: #ccc; font-size: 12px; }
 
-/* 未填国补警示：独立一行置于展牌下方，不覆盖展牌内容 */
+/* 未填国补警示：贴在对应展牌左侧边，竖排，既不遮挡展牌内容也能明确归属 */
 .subsidy-warn {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 12px; border-radius: 20px;
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  writing-mode: vertical-rl; text-orientation: upright;
+  padding: 10px 4px; border-radius: 8px;
   background: #ff4d4f; color: #fff;
   border: 1.5px solid #cf1322;
-  font-size: 11.5px; font-weight: 700; letter-spacing: 1px; white-space: nowrap;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 2px; line-height: 1;
+  white-space: nowrap; pointer-events: none; z-index: 3;
   box-shadow: 0 2px 8px rgba(255,77,79,.35);
   animation: subsidy-pulse 1.2s ease-in-out infinite;
 }

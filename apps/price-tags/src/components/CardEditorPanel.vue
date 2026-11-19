@@ -88,6 +88,10 @@ watch(
       if (feature.iconType === 'builtin' && !valid.has(feature.iconName)) {
         feature.iconName = categoryIcons.value[0]?.name || ''
       }
+      if (feature.iconType === 'builtin' && feature.iconName) {
+        const hit = copiesOf(feature).find((c) => c.title === feature.title && c.desc === feature.desc)
+        feature.linkedCopy = hit ? `${hit.title}|${hit.desc}` : ''
+      }
     }
     touch()
   }
@@ -1028,6 +1032,7 @@ const filteredCustomCopies = computed(() => {
 .input:focus { border-color: #9cc0e0; box-shadow: 0 0 0 3px rgba(26,94,156,.10); }
 .svg-textarea { resize: vertical; font-family: ui-monospace, monospace; font-size: 12px; }
 
+select.input { padding-right: 26px; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%2366758a' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; background-size: 12px; }
 .switch-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 /* 产品名称那一行：label 与开关左右分布，开关不再单独占一行 */
 .label-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

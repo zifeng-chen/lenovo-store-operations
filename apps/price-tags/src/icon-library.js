@@ -1,6 +1,7 @@
 // 内置图标库：按展牌分类提供，每类内再按卖点主题分组（显示 / 性能 / 影像 / AI 等）。
 // 前段为原有图标（i 开头文件名），后段为 2026-11 从原始价签整理的新图标（IC 开头文件名），
 // 以卖点文案标题作为中文名；与原有图标图形重复的已并入原图标，不再另立条目。
+
 const ICON_BASE = `${import.meta.env.BASE_URL}icons/`
 export const BUILTIN_ICONS_BY_CATEGORY = {
   '笔记本': [
