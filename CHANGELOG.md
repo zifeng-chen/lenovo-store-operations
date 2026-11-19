@@ -4,11 +4,17 @@
 
 ## 2026-11-19
 
-- 发布 `1.2.7`：修复工作台「近 7 日累计」一直显示 `--` 的缓存问题。
+- 发布 `1.2.8`：真正修掉「近 7 日累计」恒显示 `--`，`1.2.7` 的初版修法不彻底。
+- **`1.2.7` 为什么没修好**：当时只给 `/api` 加了 `Cache-Control: no-store`。但 `no-store` 管的是「客户端要不要存」，管不了「客户端带条件请求头时服务端怎么回」——Express 只要在响应上放了 `ETag`，收到 `If-None-Match` 仍会回 `304`。实测 `1.2.7` 上带 `If-None-Match` 依旧是 `304` 空 body。
+- **`1.2.8` 的修法**：在 `app` 上 `app.set('etag', false)`，从源头不生成 ETag，API 也就不再进入条件协商。已用独立 Express 实例实测：响应无 `ETag`，带 `If-None-Match` 仍返回 `200` 与完整体。
+- 静态资源不受影响：它们靠内容哈希文件名加 `immutable` 缓存头，本就不依赖 ETag。
+
+## 2026-11-19
+
+- 发布 `1.2.7`：定位并初修工作台「近 7 日累计」一直显示 `--` 的问题（修法不彻底，见上条）。
 - **根因是 304 空响应**。Express 默认给每个 `res.json()` 生成 ETag，但除 `/api/system/health` 外的 GET 接口都没有设 `Cache-Control`。浏览器第二次请求会带 `If-None-Match`，服务端回 `304` 且 **body 为空**；前端 `readJson` 里 `response.ok` 对 304 仍为 `true`，随后 `response.json()` 解析空字符串抛异常，被 `catch` 吞掉并把 `weekTotal` 置为 `null`，于是恒显示 `--`。
 - **为什么只坏「近 7 日累计」**：`/sales/today` 每天数据在变，ETag 命中率低；`/sales/trend` 查的是 30 天固定窗口，刷新后必然命中 304，所以稳定复现。
-- **修法**：在 `/api` 前缀上加全局中间件，统一 `Cache-Control: no-store`，从源头消除条件请求。未改动任何前端逻辑。
-- 验证：`npm run check` 全绿；修复后 `If-None-Match` 请求不再返回 304。
+- **本次改动**：在 `/api` 前缀上加全局中间件，统一 `Cache-Control: no-store`。未改动任何前端逻辑。
 
 ## 2026-11-19
 

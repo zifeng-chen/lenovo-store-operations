@@ -181,6 +181,11 @@ const systemPersistenceRouter = createSystemPersistenceRouter({
   }
 });
 
+/* API 的 GET 接口若带 ETag，浏览器第二次请求会带 If-None-Match，服务端回 304
+   空 body；而 fetch 的 response.ok 对 304 仍是 true，前端随后调 json() 解析空
+   字符串就抛异常，表现为「第一次正常、之后一直是 --」。这里关掉 Express 的
+   ETag 生成，API 就不再进入条件协商。静态资源自带内容哈希文件名，不依赖 ETag。 */
+app.set('etag', false);
 app.disable('x-powered-by');
 app.set('trust proxy', 'loopback');
 app.enable('strict routing');
@@ -314,10 +319,6 @@ app.get('/api/system/health', (req, res) => {
   });
 });
 
-/* Express 会为每个 json 响应自动生成 ETag。GET 接口若没显式禁缓存，
-   浏览器第二次请求会带 If-None-Match，服务端回 304 空 body；而 fetch 的
-   response.ok 对 304 依然为 true，前端接着调 json() 解析空字符串就会抛异常，
-   表现为数据「第一次能看到、之后就一直是 --」。API 响应一律不缓存。 */
 app.use('/api', (_req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
