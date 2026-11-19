@@ -4,6 +4,14 @@
 
 ## 2026-11-19
 
+- 发布 `1.2.7`：修复工作台「近 7 日累计」一直显示 `--` 的缓存问题。
+- **根因是 304 空响应**。Express 默认给每个 `res.json()` 生成 ETag，但除 `/api/system/health` 外的 GET 接口都没有设 `Cache-Control`。浏览器第二次请求会带 `If-None-Match`，服务端回 `304` 且 **body 为空**；前端 `readJson` 里 `response.ok` 对 304 仍为 `true`，随后 `response.json()` 解析空字符串抛异常，被 `catch` 吞掉并把 `weekTotal` 置为 `null`，于是恒显示 `--`。
+- **为什么只坏「近 7 日累计」**：`/sales/today` 每天数据在变，ETag 命中率低；`/sales/trend` 查的是 30 天固定窗口，刷新后必然命中 304，所以稳定复现。
+- **修法**：在 `/api` 前缀上加全局中间件，统一 `Cache-Control: no-store`，从源头消除条件请求。未改动任何前端逻辑。
+- 验证：`npm run check` 全绿；修复后 `If-None-Match` 请求不再返回 304。
+
+## 2026-11-19
+
 - 发布 `1.2.6`：工作台收款卡片数字改用 Furore 字体，字号由 31px 放大到 41px。
 - **收款卡片数字换字体**。引入 Furore（`apps/web/src/assets/furore.otf`，16KB，`@font-face` 声明在全局样式末尾），只作用于数字；`¥` 符号仍用等宽字体，避免符号被拉宽。字重保持 400（原生，不用合成粗体）。
 - **字距改为 `calc(.04em + 1.2px)`**。Furore 是几何无衬线体，数字之间没有内建间隙，沿用原来的 `-.03em` 负字距会让笔画粘在一起（各数字字宽差异很大：`1` 为 0.349em，`0/5/6/8/9` 为 0.728em，按等宽字体调出的字距并不适用）。同时给 `.rev-num` 加 `padding-right: calc(.04em + 1.2px)`，抵消末位字距造成的尾部空隙。

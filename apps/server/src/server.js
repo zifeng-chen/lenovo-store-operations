@@ -314,6 +314,15 @@ app.get('/api/system/health', (req, res) => {
   });
 });
 
+/* Express 会为每个 json 响应自动生成 ETag。GET 接口若没显式禁缓存，
+   浏览器第二次请求会带 If-None-Match，服务端回 304 空 body；而 fetch 的
+   response.ok 对 304 依然为 true，前端接着调 json() 解析空字符串就会抛异常，
+   表现为数据「第一次能看到、之后就一直是 --」。API 响应一律不缓存。 */
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 app.use('/api/system/update', systemUpdateRouter);
 app.use('/api/system', systemPersistenceRouter);
 
