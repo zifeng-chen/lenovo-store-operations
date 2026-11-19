@@ -493,7 +493,7 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 /* ---- 今日收款：左侧视觉 + 右侧三指标，同一卡片容器 ---- */
 .revenue-row {
   display: grid;
-  grid-template-columns: 212px minmax(0, 1fr);
+  grid-template-columns: 170px minmax(0, 1fr);
   align-items: stretch;
   border: 1px solid rgba(255,255,255,.18);
   border-radius: 18px;
@@ -512,13 +512,13 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
   background: radial-gradient(70% 60% at 50% 78%, rgba(255,214,120,.10), transparent 70%);
 }
 .facai-glow {
-  position: absolute; left: 50%; top: 46%; width: 150px; height: 150px; margin: -75px 0 0 -75px;
+  position: absolute; left: 50%; top: 46%; width: 132px; height: 132px; margin: -66px 0 0 -66px;
   border-radius: 50%; background: radial-gradient(circle, rgba(255,202,96,.34), transparent 68%);
   filter: blur(2px); animation: facai-glow 4.2s ease-in-out infinite; pointer-events: none;
 }
 .facai-figure { position: relative; margin: 0; display: grid; place-items: center; gap: 2px; padding: 16px 10px; }
 .facai-img {
-  display: block; width: 150px; height: 150px; object-fit: contain;
+  display: block; width: 132px; height: 132px; object-fit: contain;
   filter: drop-shadow(0 8px 18px rgba(0,0,0,.34)) saturate(1.05);
   animation: facai-float 5.6s ease-in-out infinite; transform-origin: 50% 88%;
 }
@@ -548,12 +548,32 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 .rev-label i { width: 6px; height: 6px; border-radius: 50%; background: #f5c451; box-shadow: 0 0 0 3px rgba(245,196,81,.16); }
 .rev-value {
   margin-top: 9px; display: flex; align-items: baseline; gap: 5px;
-  font-family: ui-monospace, Consolas, monospace; font-size: 31px; font-weight: 800;
-  line-height: 1; letter-spacing: -.03em; color: #fff; text-shadow: 0 2px 14px rgba(0,0,0,.28);
+  /* 41px 是 1400 宽窗口下放得下最坏金额 ¥99,999.99 的上限；
+     更窄的窗口按线性回收字号，避免数字撑破单列压到相邻指标上 */
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: clamp(20px, calc(5.77vw - 39.08px), 29px);
+  font-weight: 400;
+  line-height: 1; color: #fff; text-shadow: 0 2px 14px rgba(0,0,0,.28);
 }
+/* Furore 是几何无衬线体，字面宽、数字间无内建间隙，需要正字距把笔画撑开；
+   padding-right 抵消末位字距带来的尾部空隙，避免右对齐时视觉错位 */
+.rev-num {
+  font-family: Furore, ui-monospace, Consolas, monospace;
+  font-weight: 400; letter-spacing: calc(.04em + 1.2px);
+  padding-right: calc(.04em + 1.2px);
+  display: inline-block; white-space: pre;
+}
+.rev-cur { font-family: ui-monospace, Consolas, monospace; font-weight: 400; }
 .rev-value small { font-family: inherit; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.62); letter-spacing: 0; }
 .rev-value.rev-money { color: #ffd479; }
-.rev-value--compact { font-size: 24px; }
+.rev-value--compact { font-size: 32px; }
+@media (min-width: 1181px) {
+  .rev-value { font-size: clamp(29px, calc(5.45vw - 35.28px), 41px); }
+  .rev-value--compact { font-size: clamp(24px, calc(4.4vw - 28px), 32px); }
+}
+@media (max-width: 1180px) {
+  .rev-value--compact { font-size: clamp(17px, calc(4.4vw - 30px), 24px); }
+}
 .rev-foot { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: rgba(255,255,255,.48); font-size: 10.5px; }
 .rev-foot b { color: rgba(255,255,255,.78); font-weight: 700; }
 .rev-delta { padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; }
@@ -592,6 +612,9 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 .principle-panel p { color: rgba(255,255,255,.62); }
 .principle-icon { background: rgba(255,255,255,.12); color: #ffd479; }
 
+/* 41px 在最窄的桌面断点上会把「今日收款金额」挤出列宽，
+   逐级下调字号而不是让数字压到相邻列 */
+
 @media (max-width: 1180px) {
   .revenue-row { grid-template-columns: 180px minmax(0, 1fr); }
   .facai-img { width: 128px; height: 128px; }
@@ -617,4 +640,12 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 }
 @media (prefers-reduced-motion: reduce) {
   .facai-img, .facai-glow { animation: none; }
+}
+
+@font-face {
+  font-family: "Furore";
+  src: url("./assets/furore.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
 }

@@ -85,6 +85,11 @@ function formatAmount(value) {
   return `¥${amountFormatter.format(value)}`;
 }
 
+function formatAmountDigits(value) {
+  if (value === null || !Number.isFinite(value)) return '--';
+  return amountFormatter.format(value);
+}
+
 function toLocalISODate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -332,14 +337,14 @@ onBeforeUnmount(() => {
       <div class="revenue-metrics">
         <div class="rev-metric">
           <span class="rev-label"><i></i>今日收款笔数</span>
-          <div class="rev-value"><span>{{ todayCount === null ? '--' : todayCount }}</span><small>笔</small></div>
+          <div class="rev-value"><span class="rev-num">{{ todayCount === null ? '--' : todayCount }}</span><small>笔</small></div>
           <div class="rev-foot">
             <span>{{ todayCount === null ? '数据暂不可用' : `共 ${todayCount} 笔有效收款` }}</span>
           </div>
         </div>
         <div class="rev-metric">
           <span class="rev-label"><i></i>今日收款金额</span>
-          <div class="rev-value rev-money">{{ formatAmount(todayAmount) }}</div>
+          <div class="rev-value rev-money"><span class="rev-cur">¥</span><span class="rev-num">{{ formatAmountDigits(todayAmount) }}</span></div>
           <div class="rev-foot">
             <span class="rev-delta" :class="deltaClass">{{ deltaText }}</span>
             <span>笔均 <b>{{ formatAmount(todayAvg) }}</b></span>
@@ -347,7 +352,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="rev-metric">
           <span class="rev-label"><i></i>近 7 日累计</span>
-          <div class="rev-value rev-value--compact">{{ formatAmount(weekTotal) }}</div>
+          <div class="rev-value rev-value--compact"><span class="rev-cur">¥</span><span class="rev-num">{{ formatAmountDigits(weekTotal) }}</span></div>
           <div class="rev-foot">
             <span>{{ weekCount === null ? '--' : `${weekCount} 笔` }}</span>
             <span class="rev-status">来自付款凭证打印</span>
