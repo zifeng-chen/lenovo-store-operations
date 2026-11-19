@@ -27,6 +27,7 @@ const PREFIX_TABLES = {
     services: tableName('price-tags', 'services'),
     selection: tableName('price-tags', 'selection'),
     config: tableName('price-tags', 'config'),
+    feature_copies: tableName('price-tags', 'feature_copies'),
   },
   'receipt-assistant': {
     sales: tableName('receipt-assistant', 'sales'),
@@ -107,6 +108,7 @@ const ROW_LIMITS = {
   'price-tags.services': 5000,
   'price-tags.selection': 5000,
   'price-tags.config': 100,
+  'price-tags.feature_copies': 20000,
   'receipt-assistant.sales': 2000000,
   'receipt-assistant.sale_items': 4000000,
   'receipt-assistant.ocr_config': 1,

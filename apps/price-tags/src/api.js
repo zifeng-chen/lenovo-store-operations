@@ -26,6 +26,10 @@ export const api = {
   createService: (payload) => request('/services', { method: 'POST', body: JSON.stringify(payload) }),
   updateService: (id, payload) => request(`/services/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteService: (id) => request(`/services/${id}`, { method: 'DELETE' }),
+  featureCopies: (category) => request(`/feature-copies${category ? `?category=${encodeURIComponent(category)}` : ''}`),
+  createFeatureCopy: (payload) => request('/feature-copies', { method: 'POST', body: JSON.stringify(payload) }),
+  updateFeatureCopy: (id, payload) => request(`/feature-copies/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteFeatureCopy: (id) => request(`/feature-copies/${id}`, { method: 'DELETE' }),
   icons: () => request('/icons'),
   subsidyConfig: () => request('/subsidy-config')
 }

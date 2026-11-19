@@ -1,5 +1,5 @@
 import express from 'express'
-import { CARDS, CONFIG, SELECTION, SERVICES, getDatabase } from './database.js'
+import { CARDS, CONFIG, COPIES, SELECTION, SERVICES, getDatabase } from './database.js'
 import { tableName } from '../../db/unified-database.js'
 
 const PRICE_LABEL_PRODUCTS = tableName('price-labels', 'products')
@@ -210,8 +210,86 @@ export function createPriceTagsRouter() {
     res.json({ code: 0, data: { id: Number(req.params.id) }, msg: '已删除' })
   })
 
-  router.get('/subsidy-config', (_req, res) => {
-    res.json({ code: 0, data: readSubsidyConfig(getDatabase()), msg: 'success' })
+  /* 自建卖点文案：按「分类 + 图标名」归属，选中图标后与内置文案一起出现在下拉框 */
+  router.get('/feature-copies', (req, res) => {
+    const db = getDatabase()
+    const category = String(req.query.category ?? '').trim()
+    const rows = category
+      ? db.prepare(`SELECT * FROM ${COPIES} WHERE category = ? ORDER BY icon_name ASC, id ASC`).all(category)
+      : db.prepare(`SELECT * FROM ${COPIES} ORDER BY category ASC, icon_name ASC, id ASC`).all()
+    res.json({ code: 0, data: rows, msg: 'success' })
+  })
+
+  router.post('/feature-copies', (req, res) => {
+    const db = getDatabase()
+    const body = req.body || {}
+    const category = String(body.category ?? '').trim()
+    const iconName = String(body.iconName ?? '').trim()
+    const title = String(body.title ?? '').trim()
+    const desc = String(body.desc ?? '').trim()
+    if (!category) {
+      res.status(400).json({ code: 400, data: null, msg: '缺少所属分类' })
+      return
+    }
+    if (!iconName) {
+      res.status(400).json({ code: 400, data: null, msg: '请先选择归属图标' })
+      return
+    }
+    if (!title) {
+      res.status(400).json({ code: 400, data: null, msg: '标题不能为空' })
+      return
+    }
+    const dup = db.prepare(`SELECT id FROM ${COPIES} WHERE category = ? AND icon_name = ? AND title = ? AND desc = ?`)
+      .get(category, iconName, title, desc)
+    if (dup) {
+      res.status(409).json({ code: 409, data: null, msg: '该图标下已有相同文案' })
+      return
+    }
+    const info = db.prepare(`
+      INSERT INTO ${COPIES} (category, icon_name, title, desc) VALUES (?, ?, ?, ?)
+    `).run(category, iconName, title, desc)
+    const row = db.prepare(`SELECT * FROM ${COPIES} WHERE id = ?`).get(info.lastInsertRowid)
+    res.json({ code: 0, data: row, msg: '已新增' })
+  })
+
+  router.put('/feature-copies/:id', (req, res) => {
+    const db = getDatabase()
+    const body = req.body || {}
+    const current = db.prepare(`SELECT * FROM ${COPIES} WHERE id = ?`).get(req.params.id)
+    if (!current) {
+      res.status(404).json({ code: 404, data: null, msg: '文案不存在' })
+      return
+    }
+    const title = body.title === undefined ? current.title : String(body.title).trim()
+    if (!title) {
+      res.status(400).json({ code: 400, data: null, msg: '标题不能为空' })
+      return
+    }
+    db.prepare(`
+      UPDATE ${COPIES} SET category = ?, icon_name = ?, title = ?, desc = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      body.category === undefined ? current.category : String(body.category).trim(),
+      body.iconName === undefined ? current.icon_name : String(body.iconName).trim(),
+      title,
+      body.desc === undefined ? current.desc : String(body.desc).trim(),
+      req.params.id
+    )
+    const row = db.prepare(`SELECT * FROM ${COPIES} WHERE id = ?`).get(req.params.id)
+    res.json({ code: 0, data: row, msg: '已保存' })
+  })
+
+  router.delete('/feature-copies/:id', (req, res) => {
+    const db = getDatabase()
+    const info = db.prepare(`DELETE FROM ${COPIES} WHERE id = ?`).run(req.params.id)
+    if (!info.changes) {
+      res.status(404).json({ code: 404, data: null, msg: '文案不存在' })
+      return
+    }
+    res.json({ code: 0, data: { id: Number(req.params.id) }, msg: '已删除' })
+  })
+
+  router.get('/subsidy-config', (_req, res) => {    res.json({ code: 0, data: readSubsidyConfig(getDatabase()), msg: 'success' })
   })
 
   router.put('/subsidy-config', (req, res) => {

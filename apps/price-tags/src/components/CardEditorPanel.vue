@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { MAX_COLOR_ROWS, MAX_FEATURES, MIN_FEATURES, getTotalColorRows } from '../types.js'
 import { calcSubsidyPrice } from '../subsidy.js'
 import { getBuiltinIcons, iconCategoriesOf } from '../icon-library.js'
@@ -35,6 +35,31 @@ const categoryIcons = computed(() => getBuiltinIcons(props.card?.category))
 const categoryIconGroups = computed(() => iconCategoriesOf(props.card?.category))
 const totalRows = computed(() => (props.card ? getTotalColorRows(props.card) : 0))
 const canAddRow = computed(() => totalRows.value < MAX_COLOR_ROWS)
+
+/* ---------- 自建卖点文案 ---------- */
+const customCopies = ref([])
+
+async function loadCustomCopies() {
+  if (!props.card?.category) return
+  try {
+    customCopies.value = await api.featureCopies(props.card.category)
+  } catch {
+    customCopies.value = []
+  }
+}
+
+// 自建文案按图标名归组，与内置文案合并后供下拉框使用
+const customByIcon = computed(() => {
+  const map = {}
+  for (const row of customCopies.value) {
+    if (!map[row.icon_name]) map[row.icon_name] = []
+    map[row.icon_name].push({ title: row.title, desc: row.desc, custom: true, id: row.id })
+  }
+  return map
+})
+
+onMounted(loadCustomCopies)
+watch(() => props.card?.category, loadCustomCopies)
 
 const accessoryCategories = computed(() => [...new Set(props.accessories.map((item) => item.category))])
 
@@ -116,8 +141,13 @@ function onLinkedCopyChange(feature, value) {
   touch()
 }
 
+/* 下拉候选 = 该图标的自建文案 + 内置文案，自建排前面（用户自己加的通常更常用）；
+   同标题同副标题的内置文案不重复出现。 */
 function copiesOf(feature) {
-  return getCopiesForIcon(feature.iconName, props.card?.category)
+  const custom = customByIcon.value[feature.iconName] || []
+  const builtin = getCopiesForIcon(feature.iconName, props.card?.category)
+  const seen = new Set(custom.map((c) => `${c.title}|${c.desc}`))
+  return [...custom, ...builtin.filter((c) => !seen.has(`${c.title}|${c.desc}`))]
 }
 
 /* 下拉框的回显值：老展牌没有存 linkedCopy，但若标题/副标题恰好等于某条内置文案，
@@ -336,6 +366,103 @@ async function saveServiceToLibrary(slot) {
     emit('notify', { type: 'error', message: error.message || '存入失败' })
   }
 }
+
+/* ---------- 卖点文案库管理 ---------- */
+const copyLibraryOpen = ref(false)
+const copyIconFilter = ref('')
+const copyDraft = ref({ id: null, iconName: '', title: '', desc: '' })
+
+function resetCopyDraft() {
+  copyDraft.value = { id: null, iconName: copyIconFilter.value || '', title: '', desc: '' }
+}
+
+function openCopyLibrary(feature) {
+  copyIconFilter.value = feature?.iconName || ''
+  copyDraft.value = { id: null, iconName: feature?.iconName || '', title: '', desc: '' }
+  copyLibraryOpen.value = true
+  loadCustomCopies()
+}
+
+function closeCopyLibrary() {
+  copyLibraryOpen.value = false
+  resetCopyDraft()
+}
+
+function editCopyRow(row) {
+  copyDraft.value = { id: row.id, iconName: row.icon_name, title: row.title, desc: row.desc }
+}
+
+async function submitCopy() {
+  const draft = copyDraft.value
+  const iconName = draft.iconName.trim()
+  const title = draft.title.trim()
+  if (!iconName) {
+    emit('notify', { type: 'error', message: '请选择归属图标' })
+    return
+  }
+  if (!title) {
+    emit('notify', { type: 'error', message: '请填写标题' })
+    return
+  }
+  const payload = {
+    category: props.card?.category || '',
+    iconName,
+    title,
+    desc: draft.desc.trim()
+  }
+  try {
+    if (draft.id) {
+      await api.updateFeatureCopy(draft.id, payload)
+      emit('notify', { type: 'success', message: '文案已更新' })
+    } else {
+      await api.createFeatureCopy(payload)
+      emit('notify', { type: 'success', message: '文案已新增' })
+    }
+    await loadCustomCopies()
+    resetCopyDraft()
+  } catch (error) {
+    emit('notify', { type: 'error', message: error.message || '保存失败' })
+  }
+}
+
+async function removeCopyRow(row) {
+  try {
+    await api.deleteFeatureCopy(row.id)
+    await loadCustomCopies()
+    emit('notify', { type: 'success', message: '文案已删除' })
+    if (copyDraft.value.id === row.id) resetCopyDraft()
+  } catch (error) {
+    emit('notify', { type: 'error', message: error.message || '删除失败' })
+  }
+}
+
+// 把当前卖点填的标题/副标题直接存进文案库
+async function saveFeatureToLibrary(feature) {
+  const title = (feature.title || '').trim()
+  if (!title || !feature.iconName) {
+    emit('notify', { type: 'error', message: '请先选择图标并填写标题' })
+    return
+  }
+  try {
+    await api.createFeatureCopy({
+      category: props.card?.category || '',
+      iconName: feature.iconName,
+      title,
+      desc: (feature.desc || '').trim()
+    })
+    await loadCustomCopies()
+    emit('notify', { type: 'success', message: '已存入文案库' })
+  } catch (error) {
+    emit('notify', { type: 'error', message: error.message || '存入失败' })
+  }
+}
+
+// 管理面板里按图标过滤
+const filteredCustomCopies = computed(() => {
+  const kw = copyIconFilter.value.trim()
+  if (!kw) return customCopies.value
+  return customCopies.value.filter((row) => row.icon_name === kw)
+})
 </script>
 
 <template>
@@ -469,9 +596,13 @@ async function saveServiceToLibrary(slot) {
                 >
                   <option v-if="!currentLinkedValue(feature)" value="">从下方文案中选择，或直接手填</option>
                   <option v-for="copy in copiesOf(feature)" :key="copy.title + copy.desc" :value="`${copy.title}|${copy.desc}`">
-                    {{ copy.title }} — {{ copy.desc }}
+                    {{ copy.custom ? '★ ' : '' }}{{ copy.title }} — {{ copy.desc }}
                   </option>
                 </select>
+                <div class="copy-actions">
+                  <button class="btn-link" @click="saveFeatureToLibrary(feature)">存为常用文案</button>
+                  <button class="btn-link" @click="openCopyLibrary(feature)">管理文案库</button>
+                </div>
               </div>
 
               <div class="form-group">
@@ -490,6 +621,8 @@ async function saveServiceToLibrary(slot) {
             class="btn-add-feat"
             @click="addFeature"
           >＋ 添加卖点（{{ MIN_FEATURES }}–{{ MAX_FEATURES }} 个）</button>
+
+          <button class="btn-manage-copy" @click="openCopyLibrary(null)">⚙ 管理文案库</button>
         </div>
       </div>
 
@@ -666,6 +799,48 @@ async function saveServiceToLibrary(slot) {
         </div>
       </div>
     </div>
+
+    <!-- 卖点文案库管理 -->
+    <div v-if="copyLibraryOpen" class="lib-mask" @click.self="closeCopyLibrary">
+      <div class="lib-dialog">
+        <header class="lib-head">
+          <h3>管理卖点文案库</h3>
+          <button class="lib-close" @click="closeCopyLibrary">✕</button>
+        </header>
+
+        <p class="lib-tip">文案按「分类 + 图标」归属，选中该图标后会出现在「卖点文案」下拉框里。当前分类：{{ card?.category }}</p>
+
+        <div class="lib-form">
+          <select v-model="copyDraft.iconName" class="input">
+            <option value="">选择归属图标</option>
+            <option v-for="icon in categoryIcons" :key="icon.name" :value="icon.name">{{ icon.name }}</option>
+          </select>
+          <input v-model="copyDraft.title" class="input" placeholder="标题（建议 ≤14 字）" maxlength="30" />
+          <input v-model="copyDraft.desc" class="input" placeholder="副标题（建议 ≤18 字）" maxlength="40" />
+          <button class="lib-primary" @click="submitCopy">
+            {{ copyDraft.id ? '保存修改' : '新增文案' }}
+          </button>
+          <button v-if="copyDraft.id" class="lib-btn small" @click="resetCopyDraft">取消编辑</button>
+        </div>
+
+        <div class="lib-filter">
+          <input v-model="copyIconFilter" class="input" placeholder="按图标名筛选，留空显示全部" />
+          <span class="lib-count">共 {{ filteredCustomCopies.length }} 条</span>
+        </div>
+
+        <div class="lib-list">
+          <div v-for="row in filteredCustomCopies" :key="row.id" class="lib-row">
+            <div class="lib-row-main">
+              <span class="lib-row-name">{{ row.title }}</span>
+              <span class="lib-row-meta">{{ row.icon_name }} · {{ row.desc || '（无副标题）' }}</span>
+            </div>
+            <button class="lib-btn small" @click="editCopyRow(row)">编辑</button>
+            <button class="lib-btn small danger" @click="removeCopyRow(row)">删除</button>
+          </div>
+          <p v-if="!filteredCustomCopies.length" class="empty-hint">还没有自建文案，先在上方新增一条</p>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -745,6 +920,23 @@ async function saveServiceToLibrary(slot) {
   padding: 14px 16px; border-bottom: 1px solid var(--line);
 }
 .lib-form .input { font-size: 12px; padding: 7px 10px; }
+/* 文案库：弹窗内的说明、筛选条 */
+.lib-tip { margin: 0; padding: 10px 16px 0; font-size: 11.5px; color: #78889b; line-height: 1.5; }
+.lib-filter { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.lib-filter .input { flex: 1; font-size: 12px; padding: 7px 10px; }
+.lib-count { font-size: 11.5px; color: #8a97a8; white-space: nowrap; }
+/* 卖点编辑区：文案下拉下方的小按钮 */
+.copy-actions { display: flex; gap: 12px; margin-top: 6px; }
+.btn-link {
+  padding: 0; border: 0; background: none; color: var(--blue);
+  font-size: 11.5px; font-family: inherit; cursor: pointer;
+}
+.btn-link:hover { text-decoration: underline; }
+.btn-manage-copy {
+  width: 100%; margin-top: 8px; padding: 8px; border: 1px dashed #d5dde7; border-radius: 6px;
+  background: #fafcfe; color: #5a6b7d; font-size: 12px; font-family: inherit; cursor: pointer; transition: .15s;
+}
+.btn-manage-copy:hover { border-color: var(--blue); color: var(--blue); background: #f2f8fd; }
 .lib-primary {
   padding: 8px 12px; border: 0; border-radius: 6px; background: var(--blue);
   color: #fff; font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer;
