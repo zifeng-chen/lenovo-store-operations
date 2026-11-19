@@ -4,6 +4,8 @@
 
 ## 2026-11-19
 
+- **文档补充系统工作台截图，不发版**：新增 `docs/images/workbench.png`（1680×1050 实拍，压缩到 1400×875），`README.md` 标题下方与 `docs/architecture.md` 运行时拓扑一节各引用一次。截图取自真实运行实例 `v1.2.5`，包含左侧导航、聚合搜索、实时时钟、发财树收款看板与 8 张板块卡片。
+- **记录截图方法**：本机 `/usr/bin/firefox` 是 snap 包，headless 下 `RenderCompositorSWGL failed mapping default framebuffer` 会让 `--screenshot` 静默不出图；在独立 profile 的 `user.js` 中关闭 `gfx.webrender.*`、`layers.acceleration`、`webgl` 并设 `fission.autostart=false` 后恢复正常。Chromium 在本机直接报 `GPU process isn't usable`，不可用。
 - **文档重构，不发版**：`README.md` 从 57KB 精简到约 120 行，只保留定位、板块一览、逻辑交互图、快速开始、文档导航、技术栈、项目结构与安全边界，其余细节按主题拆到 `docs/`。原文里大量按板块罗列的逐条功能说明迁到 `docs/modules.md` 的接口表，部署与运维细节迁到 `docs/operations.md`。
 - **新增 `docs/architecture.md`（架构与交互逻辑）**：5 张 Mermaid 图，分别是运行时拓扑、模块分层与数据归属、页面加载时序、样机指令下发时序、在线更新时序；并附模块与后端/数据归属对照表、打印实现对照表、数据一致性约束。
 - **新增 `docs/modules.md`（模块接口与数据表）**：按板块列出路由、SPA 路径、全部 HTTP 接口（逐个从 `router.js` 核对，非凭记忆）、数据表与备份覆盖范围；补充通用约定，说明新增持久化板块必须同时改动的四处登记点。

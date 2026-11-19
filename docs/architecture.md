@@ -6,6 +6,10 @@
 
 一个 Node.js 进程同时承担 Portal 静态托管、8 个业务 SPA 的静态托管、后端 API、样机 Agent 契约与 WebSocket，以及系统维护接口。生产环境只有 8900 一个对外端口。
 
+工作台（Portal 首页）是对外的唯一入口，导航、看板与板块卡片都由这一层承载：
+
+![系统工作台](images/workbench.png)
+
 ```mermaid
 flowchart TB
     subgraph Client["浏览器（门店电脑）"]
