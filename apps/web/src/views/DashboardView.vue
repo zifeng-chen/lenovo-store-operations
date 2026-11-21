@@ -24,6 +24,7 @@ const searchInput = ref(null);
 const todayCount = ref(null);
 const todayAmount = ref(null);
 const todayDelta = ref(null);
+const yesterdayAmount = ref(null);
 const weekTotal = ref(null);
 const weekCount = ref(null);
 
@@ -125,6 +126,7 @@ async function loadRevenue() {
     if (last7.length >= 2) {
       const yesterday = Number(last7[last7.length - 2]?.total) || 0;
       const current = Number(last7[last7.length - 1]?.total) || 0;
+      yesterdayAmount.value = yesterday;
       if (yesterday > 0) todayDelta.value = ((current - yesterday) / yesterday) * 100;
       else todayDelta.value = current > 0 ? null : 0;
     } else {
@@ -134,6 +136,7 @@ async function loadRevenue() {
     weekTotal.value = null;
     weekCount.value = null;
     todayDelta.value = null;
+    yesterdayAmount.value = null;
   }
 }
 
@@ -144,15 +147,23 @@ const deltaClass = computed(() => {
   return 'is-flat';
 });
 
+/* 文本只描述趋势，不直出百分比：门店基数很小时（例如昨日 291 元、今日 8259 元）
+   涨幅会算出一万四千个百分点，数字本身没有决策价值，还容易读成噪声 */
 const deltaText = computed(() => {
   if (todayDelta.value === null) {
     const hasAny = (todayAmount.value || 0) > 0;
-    if (hasAny) return '较昨日 新增';
+    if (hasAny) return '较昨日 由零起步';
     return '较昨日 --';
   }
-  if (todayDelta.value === 0) return '较昨日 持平';
-  const sign = todayDelta.value > 0 ? '+' : '';
-  return `较昨日 ${sign}${todayDelta.value.toFixed(1)}%`;
+  if (todayDelta.value === 0) return '与昨日持平';
+  if (todayDelta.value > 0) return '高于昨日';
+  if ((todayAmount.value || 0) === 0) return '今日尚未收款';
+  return '低于昨日';
+});
+
+const yesterdayText = computed(() => {
+  if (yesterdayAmount.value === null) return '昨日 --';
+  return `昨日 ${formatAmount(yesterdayAmount.value)}`;
 });
 
 function selectEngine(id) {
@@ -346,7 +357,8 @@ onBeforeUnmount(() => {
           <span class="rev-label"><i></i>今日收款金额</span>
           <div class="rev-value rev-money"><span class="rev-cur">¥</span><span class="rev-num">{{ formatAmountDigits(todayAmount) }}</span></div>
           <div class="rev-foot">
-            <span class="rev-delta" :class="deltaClass">{{ deltaText }}</span>
+            <span class="rev-trend" :class="deltaClass">{{ deltaText }}</span>
+            <span>{{ yesterdayText }}</span>
             <span>笔均 <b>{{ formatAmount(todayAvg) }}</b></span>
           </div>
         </div>

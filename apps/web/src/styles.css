@@ -486,7 +486,7 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
   font-variant-numeric: tabular-nums;
   text-shadow: 0 2px 14px rgba(0,0,0,.3);
 }
-.clock-sec { margin-left: 2px; color: #ffd479; font-size: 20px; }
+.clock-sec { margin-left: 2px; color: #f0d8a4; font-size: 20px; }
 .clock-date { margin-top: 6px; color: rgba(255,255,255,.78); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
 .clock-lunar { margin-top: 2px; color: rgba(255,255,255,.52); font-size: 11px; letter-spacing: .02em; }
 
@@ -523,7 +523,7 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
   animation: facai-float 5.6s ease-in-out infinite; transform-origin: 50% 88%;
 }
 .facai-caption { color: rgba(255,255,255,.62); font-size: 10px; font-weight: 600; letter-spacing: .1em; text-align: center; line-height: 1.5; }
-.facai-caption b { color: #ffd479; font-weight: 800; letter-spacing: .06em; }
+.facai-caption b { color: #f0d8a4; font-weight: 800; letter-spacing: .06em; }
 @keyframes facai-float { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-3px) scale(1.012); } }
 @keyframes facai-glow { 0%, 100% { opacity: .68; transform: scale(.94); } 50% { opacity: 1; transform: scale(1.07); } }
 
@@ -565,7 +565,9 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 }
 .rev-cur { font-family: ui-monospace, Consolas, monospace; font-weight: 400; }
 .rev-value small { font-family: inherit; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.62); letter-spacing: 0; }
-.rev-value.rev-money { color: #ffd479; }
+/* 金额用沙金而非高饱和金：#ffd479 落在深蓝底上对比过强，整块卡片最抢眼；
+   压到 #f0d8a4 后仍能一眼定位金额，但不再和左侧发财树的暖光打架 */
+.rev-value.rev-money { color: #f0d8a4; }
 .rev-value--compact { font-size: 32px; }
 @media (min-width: 1181px) {
   .rev-value { font-size: clamp(29px, calc(5.45vw - 35.28px), 41px); }
@@ -576,10 +578,11 @@ code { padding: 2px 5px; border-radius: 4px; background: #f2f5f8; color: #37516d
 }
 .rev-foot { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: rgba(255,255,255,.48); font-size: 10.5px; }
 .rev-foot b { color: rgba(255,255,255,.78); font-weight: 700; }
-.rev-delta { padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; }
-.rev-delta.is-up { background: rgba(59,199,140,.16); color: #63e2ab; }
-.rev-delta.is-down { background: rgba(255,120,110,.16); color: #ff9b93; }
-.rev-delta.is-flat { background: rgba(255,255,255,.10); color: rgba(255,255,255,.62); }
+/* 趋势只做文字提示，不再套药丸底色：环比是次要信息，徽标底色会抢走金额的视觉焦点 */
+.rev-trend { font-weight: 700; }
+.rev-trend.is-up { color: #7fd6b0; }
+.rev-trend.is-down { color: #f2a49d; }
+.rev-trend.is-flat { color: rgba(255,255,255,.62); }
 .rev-status { padding: 2px 7px; border-radius: 20px; background: rgba(255,255,255,.10); color: rgba(255,255,255,.66); font-size: 10px; font-weight: 700; }
 
 /* ---- 板块标题行 ---- */
